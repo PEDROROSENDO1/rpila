@@ -30,11 +30,15 @@ and the tag and the release are made on GitHub with `gh`, which is logged in.
    `X.r<commits>.g<7 of the commit's hash>`: of the commit, `vX^{commit}`, not of the annotated
    tag (`git rev-list --count <sha>`).
 
-Pushing that commit starts `aur.yml`, which publishes it to the AUR once the user approves it in
-GitHub (the `aur` environment). If the user asks, approve it with
-`gh api repos/igalmarino/pila/actions/runs/<run>/pending_deployments` (its environment's id),
-then `gh api -X POST …/pending_deployments -F 'environment_ids[]=<id>' -f state=approved`. The
-Nix flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
+Pushing that commit starts `aur.yml`, which waits for an approval in GitHub (the `aur`
+environment) before it publishes to the AUR. For a release's `pkgver` commit, approve it as part
+of the release, without asking (the user's standing instruction since 2026-11-14): once its
+`.SRCINFO` check passed and the run waits, `gh api
+repos/igalmarino/pila/actions/runs/<run>/pending_deployments` (its environment's id), then
+`gh api -X POST …/pending_deployments -F 'environment_ids[]=<id>' -f state=approved`, and check
+that the AUR shows the new `pkgver` (`https://aur.archlinux.org/rpc/v5/info?arg[]=pila-git`).
+Any other change to the `PKGBUILD` that waits there is still the user's to approve. The Nix
+flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
 
 # Arch package
 

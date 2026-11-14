@@ -43,7 +43,8 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025).
   `cargo audit`) runs when dependencies, the Nix files, `scripts/install`(`-paths`) or
   `resources/` change (not `packaging/`), weekly and by hand before a release. `packages.yml`
   builds the `.deb` and `.rpm` of a release. `aur.yml` publishes `packaging/aur/pila-git` to
-  the AUR once the user approves it (the `aur` environment). `vkms.yml` (by hand, an
+  the AUR once approved in the `aur` environment: a release's `pkgver` commit by Claude, as
+  part of the release; any other change by the user. `vkms.yml` (by hand, an
   experiment) runs the udev backend on the kernel's virtual KMS driver in the runner's VM.
   `fuzz.yml` (by hand) runs the fuzz targets in `fuzz/` for a few minutes each.
 - Test: `cargo test`; single test: `cargo test <name_substring>`. Every feature gets
