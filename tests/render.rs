@@ -1050,3 +1050,31 @@ fn corner_radius_leaves_an_app_that_draws_its_own_shadow_to_it() {
         }
     }
 }
+
+/// A window that draws its own shadow (GTK) keeps its own corners under the
+/// global radius, but a blur behind it still has them rounded: a square
+/// backdrop would show in the corners the app leaves clear.
+#[test]
+fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
+    let config = format!(
+        "corner-radius = 20\n{}",
+        glass_window_rule(638, 300, "blur = true")
+    );
+    let mut pila = TestPila::with_config(&config);
+    let client = pila.client();
+    two_halves(&client);
+    client
+        .window("glass")
+        .color([0, 0, 0, 0])
+        .decorations(Decorations::Client)
+        .csd_shadow(20)
+        .create();
+    pila.wait_focus("glass");
+    let (x, y, _, h) = rect(&pila.window("glass")["geometry"]);
+    assert_eq!((x, y), (638, 300));
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
+    assert_eq!(pila.pixel(639.0, (y + h - 2) as f64), CLEAR, "bottom left");
+    assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
+}

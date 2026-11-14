@@ -555,7 +555,7 @@ impl BlurCache {
                     &surface,
                     Behind::Window(index),
                     &window.blur,
-                    window.rounding.as_ref(),
+                    window.backdrop_rounding.as_ref(),
                 );
             }
             for (index, layer) in scene.upper.iter().enumerate().rev() {

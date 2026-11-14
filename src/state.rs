@@ -812,23 +812,30 @@ impl Pila {
         // Pila's rounded cut and the client's shadow make a double corner.
         // A rule's radius still rounds it.
         let draws_own_shadow = !window.geometry().contains_rect(window.bbox());
-        let (radius, alpha, shadow_rule) = crate::rules::with_window_props(window, |props| {
+        let (rule_radius, alpha, shadow_rule) = crate::rules::with_window_props(window, |props| {
             (
-                props.corner_radius.unwrap_or(if draws_own_shadow {
-                    0
-                } else {
-                    self.config.corner_radius
-                }),
+                props.corner_radius,
                 props.opacity.unwrap_or(1.0) as f32,
                 props.shadow,
             )
         });
-        let rounding = crate::rounded::Rounding::new(
-            Rectangle::new(loc, window.geometry().size),
-            bar_rect,
-            radius,
-            maximized || fullscreen,
-        );
+        let shape = |radius| {
+            crate::rounded::Rounding::new(
+                Rectangle::new(loc, window.geometry().size),
+                bar_rect,
+                radius,
+                maximized || fullscreen,
+            )
+        };
+        let radius = rule_radius.unwrap_or(self.config.corner_radius);
+        let rounding = shape(if draws_own_shadow && rule_radius.is_none() {
+            0
+        } else {
+            radius
+        });
+        // A blur behind it still has rounded corners: the app leaves its own
+        // corners clear, and a square backdrop would show there.
+        let backdrop_rounding = shape(radius);
         let title_bar = bar_rect.map(|rect| SceneTitleBar {
             rect,
             focused: focused == Some(window),
@@ -870,6 +877,7 @@ impl Pila {
             title_bar,
             flash: crate::bell::flash(window, loc),
             rounding,
+            backdrop_rounding,
             shadow,
             alpha,
             effect: now.and_then(|now| self.window_effect(window, now)),

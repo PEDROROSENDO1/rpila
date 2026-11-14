@@ -1061,7 +1061,9 @@ Key flows and invariants:
 - **Rounded corners** (`rounded.rs`, `corner-radius`, default 0): `Pila::scene` gives each
   window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; the global
   radius not for a client that draws its own shadow, `bbox` past its geometry, as for shadows,
-  since it draws its own corners: a rule's radius still applies; radius
+  since it draws its own corners: a rule's radius still applies; a blur behind it still gets
+  the configured radius, `SceneWindow::backdrop_rounding`, as the corners it leaves clear would
+  show a square backdrop; radius
   at most half the shorter side and, with a bar, its height). `render::single_window_elements`
   then builds the window's elements itself (`rounded_window_elements`: popups first and unclipped, as
   `Window::render_elements` does) and wraps its own surface elements that reach into a

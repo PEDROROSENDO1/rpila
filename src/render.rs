@@ -205,6 +205,9 @@ pub struct SceneWindow {
     pub flash: Option<(SolidColorBuffer, Rectangle<i32, Logical>)>,
     /// Its rounded corners, if any (`rounded.rs`).
     pub rounding: Option<Rounding>,
+    /// The corners of a blur behind it: `rounding`'s, or the configured
+    /// radius for a window that keeps its own corners (`Pila::scene_window`).
+    pub backdrop_rounding: Option<Rounding>,
     /// The shadow pila draws under it, if any (`rounded.rs`).
     pub shadow: Option<Shadow>,
     /// Its opacity (a window rule's `opacity`), title bar included.
