@@ -25,7 +25,10 @@ Integration tests (`tests/*.rs`, harness in `tests/common/`) run a headless Pila
   `Options::soft_file_limit`, with a lower soft limit of open files. It sets
   `PILA_HEADLESS_CHECK_REDRAWS=1`: Pila panics ("changed and no redraw was asked for it") if
   an output shows something new that no redraw request for it explains (`headless.rs`,
-  `check_redraws`); the fix is a redraw request where the change is made (`redraw.rs`).
+  `check_redraws`); the fix is a redraw request where the change is made (`redraw.rs`). It
+  also sets `PILA_HEADLESS_CHECK_INVARIANTS=1`: Pila panics ("invariant broken") if input
+  stays stuck for half a second, a popup grab with no popup left or the keyboard on a layer
+  surface that takes none (`headless.rs`, `broken_invariant`).
 
 `tests/FEATURES.md` maps every feature to its tests (or says why it has none), and
 `features_inventory_is_complete` fails if a test it names is gone or an integration test

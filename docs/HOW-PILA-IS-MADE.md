@@ -83,6 +83,8 @@ Some things break without any visible sign, so the suite checks them:
 
 - Pila redraws on demand, per output. Under test it panics if an output shows something new
   that no redraw request accounts for (`PILA_HEADLESS_CHECK_REDRAWS`).
+- Input can't get stuck: under test Pila panics if a menu's grab outlives the menu, or the
+  keyboard stays on a panel that takes none (`PILA_HEADLESS_CHECK_INVARIANTS`).
 - While the session is locked, a code path that would give input to anything but the lock
   screen panics in debug builds.
 - A test fails if the docs name a file or a function that no longer exists.

@@ -128,7 +128,12 @@ Key flows and invariants:
   asked for its last frame yet), nor while an idle callback of `defer_redraws` or
   `redraw_after_frames` hasn't run (`Pila::deferred_redraw_idles`): those redraws are asked for,
   not yet queued. The state counts both too: such an animation as `running`, such a redraw as
-  `redraw_pending`, so a test's `settle` doesn't stop before them.
+  `redraw_pending`, so a test's `settle` doesn't stop before them. With
+  `PILA_HEADLESS_CHECK_INVARIANTS=1` (also set by the harness), every 50 ms
+  `broken_invariant` checks that input can't get stuck: no popup grab (pointer or keyboard)
+  outlives every popup, and the keyboard isn't on a layer surface that takes none; one broken
+  for 500 ms (a client may be slow to destroy a dismissed menu) is a panic. A new kind of grab
+  or focus Pila takes gets its invariant there.
 - **Nested-only (winit):** named cursor shapes are drawn by the host (`apply_cursor`),
   but while the cursor is magnified (`shake_cursor.rs`) Pila draws them from its own theme
   and hides the host's; client cursor surfaces are drawn by Pila (`cursor.rs`). Winit doesn't report the pointer

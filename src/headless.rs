@@ -12,6 +12,14 @@
 //! each render pass and every `CHECK_EVERY`, and Pila panics if one has some
 //! that no request explains within `CHECK_GRACE`. A change that asked for
 //! none would only show at an unrelated redraw.
+//!
+//! With `PILA_HEADLESS_CHECK_INVARIANTS=1` (the harness sets it too) Pila
+//! checks every `CHECK_EVERY` that input is in a state it can leave
+//! (`broken_invariant`): no popup grab outlives its popups, and the keyboard
+//! isn't left on a layer surface that takes none. One that stays broken for
+//! `INVARIANT_GRACE` (a client may take a moment to destroy a dismissed menu)
+//! is a panic: a stuck grab or a lost keyboard otherwise only shows as the
+//! next click or key going nowhere.
 
 use std::{
     os::unix::fs::MetadataExt,
@@ -190,6 +198,7 @@ pub struct HeadlessData {
 /// the same loop iteration, or from a timer due at the same moment).
 const CHECK_EVERY: Duration = Duration::from_millis(50);
 const CHECK_GRACE: Duration = Duration::from_millis(20);
+const INVARIANT_GRACE: Duration = Duration::from_millis(500);
 
 /// Gamma ramps of virtual outputs are this long.
 pub const GAMMA_SIZE: u32 = 256;
@@ -488,6 +497,28 @@ pub fn init_headless(
         timer: None,
         check_redraws: checking,
     })));
+    if std::env::var_os("PILA_HEADLESS_CHECK_INVARIANTS").is_some_and(|v| v == "1") {
+        info!("checking input invariants");
+        let mut broken_since: Option<(Instant, String)> = None;
+        let timer = Timer::from_duration(CHECK_EVERY);
+        state
+            .loop_handle
+            .insert_source(timer, move |_, _, state| {
+                match (broken_invariant(state), &broken_since) {
+                    (None, _) => broken_since = None,
+                    (Some(what), Some((since, was))) if *was == what => {
+                        assert!(
+                            since.elapsed() < INVARIANT_GRACE,
+                            "invariant broken for {:?}: {what}",
+                            since.elapsed()
+                        );
+                    }
+                    (Some(what), _) => broken_since = Some((Instant::now(), what)),
+                }
+                TimeoutAction::ToDuration(CHECK_EVERY)
+            })
+            .map_err(|err| err.error)?;
+    }
     if checking {
         info!("checking that every change asks for its redraws");
         let timer = Timer::from_duration(CHECK_EVERY);
@@ -783,6 +814,52 @@ fn render_all(state: &mut Pila) {
         data.schedule();
     }
     check_redraws(state);
+}
+
+/// `PILA_HEADLESS_CHECK_INVARIANTS` (see the module docs): what's wrong
+/// with the input state, if anything.
+fn broken_invariant(state: &Pila) -> Option<String> {
+    use smithay::{
+        desktop::{layer_map_for_output, PopupManager, PopupPointerGrab},
+        wayland::{seat::WaylandFocus, shell::wlr_layer::KeyboardInteractivity},
+    };
+    // Popups open on windows (mapped, minimized or parked) and layer surfaces.
+    let mut roots: Vec<_> = state
+        .space
+        .elements()
+        .chain(state.off_space_windows())
+        .filter_map(|w| w.wl_surface().map(|s| s.into_owned()))
+        .collect();
+    for output in state.space.outputs() {
+        let map = layer_map_for_output(output);
+        roots.extend(map.layers().map(|l| l.wl_surface().clone()));
+    }
+    let popups = roots
+        .iter()
+        .any(|root| PopupManager::popups_for_surface(root).next().is_some());
+
+    let pointer_popup_grab = state.seat.get_pointer().is_some_and(|pointer| {
+        pointer
+            .with_grab(|_, grab| grab.downcast_ref::<PopupPointerGrab<Pila>>().is_some())
+            .unwrap_or(false)
+    });
+    if pointer_popup_grab && !popups {
+        return Some("the pointer has a popup grab and no popup is left".into());
+    }
+    // Popup grabs are the only keyboard grabs Pila takes.
+    let keyboard_grab = state.seat.get_keyboard().is_some_and(|k| k.is_grabbed());
+    if keyboard_grab && !popups {
+        return Some("the keyboard has a popup grab and no popup is left".into());
+    }
+    let focus = state.keyboard_focus()?;
+    let surface = focus.wl_surface()?;
+    let (_, layer) = state.layer_for_surface(&surface)?;
+    (layer.cached_state().keyboard_interactivity == KeyboardInteractivity::None).then(|| {
+        format!(
+            "the keyboard is on {:?}, a layer surface that takes none",
+            layer.namespace()
+        )
+    })
 }
 
 /// `PILA_HEADLESS_CHECK_REDRAWS` (see the module docs): the outputs no
