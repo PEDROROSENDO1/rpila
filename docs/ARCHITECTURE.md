@@ -1029,7 +1029,8 @@ Key flows and invariants:
   changes instead.
 - **Maximize/fullscreen** state lives in the toplevel's *pending* xdg state (`fill_state`
   reads it). `set_fill_state` is the single entry point; it stores the pre-fill geometry in
-  the window's user data (`RestoreGeometry`) and restores it on exit; a window that
+  the window's user data (`RestoreGeometry`: its place and the size it was last asked for,
+  pending, not the one it has drawn, which may still be a filled one) and restores it on exit; a window that
   started filled (no saved geometry) is restored to two thirds of its output, centered.
   A client's request (`update_fill`) and a taskbar's (`toplevel_management.rs`) go through
   `request_fill_state`, which does nothing when asked for the state the window is in (GTK 4

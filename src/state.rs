@@ -1384,7 +1384,15 @@ impl Pila {
             output_geo.loc.y += bar;
             output_geo.size.h -= bar;
             if let (Some(loc), false) = (mapped_loc, was_maximized || was_fullscreen) {
-                *restore.borrow_mut() = Some(Rectangle::new(loc, window.geometry().size));
+                // The size it was last asked for, which it may not have drawn
+                // yet (a quick unmaximize, then fullscreen): what it has
+                // drawn may still be a filled one.
+                let size = window
+                    .toplevel()
+                    .and_then(|t| t.with_pending_state(|s| s.size))
+                    .filter(|size| size.w > 0 && size.h > 0)
+                    .unwrap_or_else(|| window.geometry().size);
+                *restore.borrow_mut() = Some(Rectangle::new(loc, size));
             }
             // A snapped window returns to where it was before snapping.
             if let Some(before) = self.forget_snap(window) {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A window unmaximized and then made fullscreen quickly comes back to its own size:** if the app
+  hadn't drawn its unmaximized size yet when it went fullscreen, Pila took the size it still had
+  drawn, the maximized one, for the one to come back to. It now keeps the size it asked the app
+  for. Found by running the test suite repeatedly under load.
 - **A snapped window dragged out of its half stays under the pointer:** since 0.5.4 it came back
   to its size only once the pointer had moved, and it lost that first stretch of the drag: it
   ended up a little above the pointer with Pila's title bar, and well above it when dragged by an

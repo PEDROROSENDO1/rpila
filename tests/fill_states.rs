@@ -325,3 +325,46 @@ fn asking_twice_to_fill_then_undoing_it_comes_back_where_it_was() {
         });
     }
 }
+
+/// Maximized and back, then fullscreen and back, faster than the app draws:
+/// what it comes back to is the size Pila asked for, not one the app hadn't
+/// caught up with (it came back at the maximized size).
+#[test]
+fn a_fill_before_the_app_redraws_comes_back_to_the_size_asked_for() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let a = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let before = rect(&pila.window("a")["geometry"]);
+    // The app acks configures but doesn't draw yet.
+    client.set_auto_draw(a, false);
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        window_in(s, "a").unwrap()["maximized"] == true
+    });
+    pila.combo("Super+m");
+    pila.wait("not maximized", |s| {
+        window_in(s, "a").unwrap()["maximized"] == false
+    });
+    // It draws the maximized size now, late.
+    client.wait("two configures", |s| s.windows[a.0].configures.len() >= 3);
+    client.draw(a, Some((1280, 800 - 28)));
+    pila.wait("the late maximized buffer", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]).2 == 1280
+    });
+    pila.combo("Super+f");
+    pila.wait("fullscreen", |s| {
+        window_in(s, "a").unwrap()["fullscreen"] == true
+    });
+    pila.combo("Super+f");
+    pila.wait("not fullscreen", |s| {
+        window_in(s, "a").unwrap()["fullscreen"] == false
+    });
+    // Now it draws what it's asked.
+    client.set_auto_draw(a, true);
+    client.draw(a, None);
+    pila.wait("back to the size asked for", |s| {
+        let g = rect(&window_in(s, "a").unwrap()["geometry"]);
+        (g.2, g.3) == (before.2, before.3)
+    });
+}
