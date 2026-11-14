@@ -1467,6 +1467,10 @@ pub struct Config {
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
+    /// Mistakes that leave the file valid but surely not doing what was
+    /// meant (an `[[output]]` named twice): shown by `--check-config` and in
+    /// a notification when it's loaded.
+    pub warnings: Vec<String>,
 }
 
 /// Terminals tried in order when `terminal` isn't set.
@@ -1683,6 +1687,17 @@ impl Config {
             .into_iter()
             .map(OutputFile::validate)
             .collect::<Result<Vec<_>, _>>()?;
+        let mut warnings = Vec::new();
+        for (i, output) in outputs.iter().enumerate() {
+            // Once a name, at its second section.
+            let before = outputs[..i].iter().filter(|o| o.name == output.name);
+            if before.count() == 1 {
+                warnings.push(format!(
+                    "[[output]] {:?} is there more than once: only the first is used, put its settings in one",
+                    output.name
+                ));
+            }
+        }
 
         let defaults = InputConfig::default();
         let input = InputConfig {
@@ -1731,6 +1746,7 @@ impl Config {
             cursor,
             window_rules,
             layer_rules,
+            warnings,
         })
     }
 
@@ -2255,6 +2271,23 @@ mod tests {
         }
         let err = Config::from_toml("[input]\nwheel-binding-cooldown = 1001", &no_env).unwrap_err();
         assert!(err.contains("wheel-binding-cooldown"), "{err}");
+    }
+
+    #[test]
+    fn an_output_named_twice_is_a_warning_once() {
+        let config = Config::from_toml(
+            "[[output]]\nname = \"DP-1\"\nscale = 1.5\n\
+             [[output]]\nname = \"DP-1\"\nmode = \"2560x1440@60\"\n\
+             [[output]]\nname = \"DP-1\"\n\
+             [[output]]\nname = \"eDP-1\"\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(config.warnings.len(), 1, "{:?}", config.warnings);
+        assert!(config.warnings[0].contains("\"DP-1\""));
+        // As before: the first section is the one used.
+        assert_eq!(config.output("DP-1", None).unwrap().scale, Some(1.5));
+        assert!(Config::from_toml("", &no_env).unwrap().warnings.is_empty());
     }
 
     #[test]

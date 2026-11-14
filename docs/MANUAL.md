@@ -333,7 +333,9 @@ cp /usr/share/doc/pila/config.example.toml ~/.config/pila/config.toml
 **Changes apply when you save**, all but `autostart`, which only runs when Pila starts. If the
 saved file has a mistake, Pila keeps the configuration it was running with and shows a
 notification with the line and what's wrong (and writes it to the log). If the file is invalid
-when Pila starts, Pila starts with the defaults and says why.
+when Pila starts, Pila starts with the defaults and says why. A file that's valid but surely
+doesn't do what you meant, such as two `[[output]]` sections for one monitor (only the first
+counts: put its settings in one), is used, and a notification says what's wrong.
 
 `pila --check-config` checks the file without starting Pila, the keyboard layout included, and
 prints what's wrong.

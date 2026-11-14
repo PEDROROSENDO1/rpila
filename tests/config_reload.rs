@@ -56,6 +56,21 @@ fn an_invalid_file_at_startup_is_notified() {
     assert!(pila.log().contains("no-such-field"));
 }
 
+/// A file that's valid but has a mistake Pila can tell (an `[[output]]`
+/// named twice) is used and the mistake shown, at startup and on reload.
+#[test]
+fn a_config_warning_is_notified() {
+    let twice = "[[output]]\nname = \"DP-1\"\nscale = 2\n[[output]]\nname = \"DP-1\"\nscale = 1\n";
+    let mut pila = TestPila::with_config(&format!("workspaces = 2\n{twice}"));
+    assert_eq!(pila.state()["workspaces"], 2);
+    pila.wait_log("summary=\"Config warning\"");
+    assert!(pila.log().contains("only the first is used"));
+    pila.wait_log("watching the config for changes");
+    pila.write_config(&format!("workspaces = 3\n{twice}"));
+    pila.wait_log("summary=\"Config reloaded with a warning\"");
+    assert_eq!(pila.state()["workspaces"], 3);
+}
+
 #[test]
 fn a_missing_notify_send_is_logged_once() {
     let mut pila = TestPila::start_with(Options {

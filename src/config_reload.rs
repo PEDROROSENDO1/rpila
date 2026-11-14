@@ -126,9 +126,15 @@ impl Pila {
         let path = self.config_path.clone();
         match Config::read(path.as_deref(), self.config.default_mod) {
             Ok(config) => {
+                let warnings = config.warnings.join("\n");
                 self.apply_config(config);
                 info!("config reloaded");
-                self.notify("Config reloaded", "");
+                if warnings.is_empty() {
+                    self.notify("Config reloaded", "");
+                } else {
+                    warn!(%warnings, "config warning");
+                    self.notify_error("Config reloaded with a warning", &warnings);
+                }
             }
             Err(err) => {
                 warn!(%err, "config not reloaded; keeping the running one");

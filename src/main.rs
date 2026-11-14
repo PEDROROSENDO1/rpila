@@ -94,6 +94,9 @@ fn run_config_check(path: Option<&std::path::Path>) -> i32 {
     } else {
         println!("{shown}: no such file; pila uses the defaults");
     }
+    for warning in &config.warnings {
+        println!("warning: {warning}");
+    }
     0
 }
 
@@ -326,6 +329,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Invalid config, using the defaults",
             err,
         );
+    } else if !state.config.warnings.is_empty() {
+        let warnings = state.config.warnings.join("\n");
+        tracing::warn!(%warnings, "config warning");
+        state::notify_after_startup(&state.loop_handle, "Config warning", warnings);
     }
     // Nested, a pila on the side mustn't touch the login session's file.
     if backend != BackendKind::Winit {

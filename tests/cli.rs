@@ -83,6 +83,23 @@ fn check_config_refuses_an_invalid_file_and_says_why() {
     );
 }
 
+/// Two `[[output]]` sections for one monitor: only the first is used, so
+/// the file is valid but the second one's settings would be lost silently.
+#[test]
+fn check_config_warns_about_an_output_named_twice() {
+    let path = temp_config(
+        "output-twice",
+        "[[output]]\nname = \"DP-1\"\nscale = 1.5\n[[output]]\nname = \"DP-1\"\nmode = \"2560x1440@60\"\n",
+    );
+    let out = pila(&["--check-config", "--config", path.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains(": OK") && text.contains("warning") && text.contains("\"DP-1\""),
+        "{text}"
+    );
+}
+
 #[test]
 fn check_config_refuses_a_bad_keymap() {
     let path = temp_config("keymap", "[keyboard]\nlayout = \"no-such-layout\"\n");

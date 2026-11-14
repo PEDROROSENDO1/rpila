@@ -39,7 +39,10 @@ Key flows and invariants:
   transform, position, adaptive sync; nested only scale; then `fit_to_outputs`) with
   wlr-output-management's runtime overrides on top (`Pila::outputs.overrides`; an edited section drops its monitor's). Anything that reads
   `self.config` when used (bindings, Mod, terminal) needs nothing; `autostart` isn't
-  re-run. A new setting must either be read when used or be re-applied there. Keep in
+  re-run. A new setting must either be read when used or be re-applied there. A valid file
+  with a mistake Pila can tell (an `[[output]]` named twice: `Config::output` takes the first)
+  carries it in `Config::warnings`: `--check-config` prints it, startup and a reload notify it
+  (a reload "with a warning", for as long as an error). Keep in
   sync: `DEFAULT_BINDINGS` and `DEFAULT_GESTURES` and the defaults listed in
   `config.example.toml` (the actions, `NAMED_ACTIONS` and `ACTIONS_WITH_ARGUMENT`, checked against its list); the `USAGE` string in `main.rs` with the
   CLI flags and env vars; and the user docs, `docs/MANUAL.md` and the man page `docs/pila.1`
