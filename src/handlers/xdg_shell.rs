@@ -455,20 +455,15 @@ impl Pila {
     ) {
         match self.window_for_surface(surface.wl_surface()) {
             Some(window) => {
-                let now = fill_state(&window);
-                let (maximized, fullscreen) = f(now.0, now.1);
-                // Asked for the state it's in (GTK 4 unsets fullscreen as a
-                // drag on its own title bar starts): nothing to restore or
-                // place, or a window that isn't filled would jump to its
-                // default place.
-                // The protocol still answers with a configure.
-                if (maximized, fullscreen) == now {
-                    if surface.is_initial_configure_sent() {
-                        surface.send_configure();
-                    }
-                    return;
+                let (maximized, fullscreen) = fill_state(&window);
+                let (maximized, fullscreen) = f(maximized, fullscreen);
+                // Asked for the state it's in: nothing changes, but the
+                // protocol still answers with a configure.
+                if !self.request_fill_state(&window, maximized, fullscreen)
+                    && surface.is_initial_configure_sent()
+                {
+                    surface.send_configure();
                 }
-                self.set_fill_state(&window, maximized, fullscreen);
             }
             None if surface.is_initial_configure_sent() => {
                 surface.send_configure();

@@ -571,3 +571,75 @@ fn a_dock_menu_that_goes_away_leaves_no_grab_behind() {
         );
     }
 }
+
+/// Every request for the state a window is already in changes nothing,
+/// from a taskbar (here) or the app itself (`fill_states`): not its place,
+/// size or focus, and not where it comes back to afterwards.
+#[test]
+fn taskbar_requests_for_the_current_state_change_nothing() {
+    let (mut pila, _app, taskbar) = taskbar_with(&["b", "a"]);
+    pila.combo("Super+Shift+Right");
+    pila.combo("Super+Shift+Down");
+    let place = |s: &serde_json::Value| rect(&window_in(s, "a").unwrap()["geometry"]);
+    let moved = pila.wait("a moved", |s| place(s).0 != 440);
+    let before = place(&moved);
+    let a = handle(&taskbar, "a");
+    let unchanged = |pila: &mut TestPila, what: &str| {
+        pila.stays(what, std::time::Duration::from_millis(250), |s| {
+            let w = window_in(s, "a").unwrap();
+            place(s) == before
+                && w["maximized"] == false
+                && w["fullscreen"] == false
+                && w["minimized"] == false
+                && s["focused"] == "a"
+        });
+    };
+
+    // Not filled, not minimized, focused: undoing any of it is nothing.
+    a.unset_maximized();
+    taskbar.flush();
+    unchanged(&mut pila, "after unset_maximized");
+    a.unset_fullscreen();
+    taskbar.flush();
+    unchanged(&mut pila, "after unset_fullscreen");
+    a.unset_minimized();
+    taskbar.flush();
+    unchanged(&mut pila, "after unset_minimized");
+    a.activate(&taskbar.seat());
+    taskbar.flush();
+    unchanged(&mut pila, "after activate");
+
+    // Asked twice, then undone: back where it was.
+    for (set, unset, key) in [
+        ("set_maximized", "unset_maximized", "maximized"),
+        ("set_fullscreen", "unset_fullscreen", "fullscreen"),
+        ("set_minimized", "unset_minimized", "minimized"),
+    ] {
+        for _ in 0..2 {
+            match set {
+                "set_maximized" => a.set_maximized(),
+                "set_fullscreen" => a.set_fullscreen(None),
+                _ => a.set_minimized(),
+            }
+            taskbar.flush();
+            pila.wait(&format!("{key} after {set}"), |s| {
+                window_in(s, "a").unwrap()[key] == true
+            });
+        }
+        match unset {
+            "unset_maximized" => a.unset_maximized(),
+            "unset_fullscreen" => a.unset_fullscreen(),
+            _ => a.unset_minimized(),
+        }
+        taskbar.flush();
+        pila.wait(&format!("back where it was after {unset}"), |s| {
+            window_in(s, "a").unwrap()[key] == false && place(s) == before
+        });
+        if key == "minimized" {
+            // Shown again, not focused: give it back the focus.
+            a.activate(&taskbar.seat());
+            taskbar.flush();
+            pila.wait_focus("a");
+        }
+    }
+}

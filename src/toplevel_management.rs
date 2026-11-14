@@ -366,11 +366,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, String> for Pila {
             handle::Request::UnsetMinimized => state.show_window(&window),
             handle::Request::SetMaximized => {
                 let (_, fullscreen) = fill_state(&window);
-                state.set_fill_state(&window, true, fullscreen);
+                state.request_fill_state(&window, true, fullscreen);
             }
             handle::Request::UnsetMaximized => {
                 let (_, fullscreen) = fill_state(&window);
-                state.set_fill_state(&window, false, fullscreen);
+                state.request_fill_state(&window, false, fullscreen);
             }
             handle::Request::SetFullscreen { output } => {
                 let (maximized, _) = fill_state(&window);
@@ -379,7 +379,7 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, String> for Pila {
             }
             handle::Request::UnsetFullscreen => {
                 let (maximized, _) = fill_state(&window);
-                state.set_fill_state(&window, maximized, false);
+                state.request_fill_state(&window, maximized, false);
             }
             // Where a taskbar shows the window's icon: only for minimize
             // animations, which pila doesn't do.

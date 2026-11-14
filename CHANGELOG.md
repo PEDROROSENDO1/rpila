@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **A taskbar's "unmaximize" or "leave fullscreen" on a window that isn't either no longer moves
+  it:** like GTK 4's request fixed in 0.5.5, it took the window to its default place, two thirds of
+  the screen, centered. Requests from taskbars and docks (wlr-foreign-toplevel) for the state a
+  window is already in now change nothing, as the app's own ones do.
+
 ## 0.5.5 (2026-11-14)
 
 - **A GTK 4 window dragged by its own title bar no longer jumps:** GTK asks to leave fullscreen

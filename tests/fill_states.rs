@@ -289,3 +289,39 @@ fn unfilling_a_window_that_isnt_filled_leaves_it_where_it_is() {
         rect(&window_in(s, "a").unwrap()["geometry"]) == before
     });
 }
+
+/// A client asking twice to maximize or go fullscreen, then undoing it,
+/// gets its window back where it was: the second request doesn't take the
+/// filled rect for the one to come back to.
+#[test]
+fn asking_twice_to_fill_then_undoing_it_comes_back_where_it_was() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let a = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+Right");
+    pila.combo("Super+Shift+Down");
+    let moved = pila.wait("moved", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]).0 != 440
+    });
+    let before = rect(&window_in(&moved, "a").unwrap()["geometry"]);
+    for key in ["maximized", "fullscreen"] {
+        for _ in 0..2 {
+            if key == "maximized" {
+                client.request(a, |t| t.set_maximized());
+            } else {
+                client.request(a, |t| t.set_fullscreen(None));
+            }
+            pila.wait(key, |s| window_in(s, "a").unwrap()[key] == true);
+        }
+        if key == "maximized" {
+            client.request(a, |t| t.unset_maximized());
+        } else {
+            client.request(a, |t| t.unset_fullscreen());
+        }
+        pila.wait(&format!("back from {key}"), |s| {
+            let w = window_in(s, "a").unwrap();
+            w[key] == false && rect(&w["geometry"]) == before
+        });
+    }
+}

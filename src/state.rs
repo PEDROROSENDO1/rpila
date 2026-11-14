@@ -1320,6 +1320,24 @@ impl Pila {
 
     /// Set a window's maximized/fullscreen states. Entering either state from
     /// a normal window remembers its geometry; leaving both restores it.
+    /// `set_fill_state` for a client's or a taskbar's request: asked for the
+    /// state the window is already in, nothing happens (GTK 4 unsets
+    /// fullscreen as a drag on its own title bar starts), since
+    /// `set_fill_state` would place a window that isn't filled. Returns
+    /// whether the state changed.
+    pub fn request_fill_state(
+        &mut self,
+        window: &Window,
+        maximized: bool,
+        fullscreen: bool,
+    ) -> bool {
+        if fill_state(window) == (maximized, fullscreen) {
+            return false;
+        }
+        self.set_fill_state(window, maximized, fullscreen);
+        true
+    }
+
     pub fn set_fill_state(&mut self, window: &Window, maximized: bool, fullscreen: bool) {
         self.set_fill_state_on(window, maximized, fullscreen, None);
     }
