@@ -18,7 +18,8 @@ Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
                         config's autostart (default: the terminal)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
-                        or ~/.config/pila/config.toml; see config.example.toml)
+                        or ~/.config/pila/config.toml, written from
+                        config.example.toml the first time it's missing)
   --backend <BACKEND>   winit: a window in another Wayland/X11 session;
                         udev: DRM/KMS on a TTY; headless: virtual outputs
                         and a control socket, for automated tests
@@ -283,6 +284,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BackendKind::Winit => ModKey::Alt,
         BackendKind::Udev | BackendKind::Headless => ModKey::Super,
     };
+    // No `--config` and no file yet: start the user's from the example (all
+    // commented out, so nothing changes). A path given by hand may be a typo.
+    if config_path.is_none() {
+        if let Some(path) = Config::default_path() {
+            match config::create_default_file(&path) {
+                Ok(true) => {
+                    tracing::info!(path = %path.display(), "created the config from the example")
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    tracing::warn!(path = %path.display(), %err, "can't create the config from the example")
+                }
+            }
+        }
+    }
     let config_path = Config::path(config_path.as_deref());
     let (config, config_error) = Config::load(config_path.as_deref(), default_mod);
     tracing::info!(

@@ -274,3 +274,40 @@ fn a_reload_with_an_unchanged_file_keeps_windows_as_they_are() {
     );
     assert_eq!(after["focused"], "a");
 }
+
+/// With no config file at the default path, Pila writes the example there
+/// (every line commented out: nothing changes) and follows it from then on.
+#[test]
+fn a_missing_config_is_created_from_the_example_and_followed() {
+    let mut pila = TestPila::start_with(Options {
+        default_config_path: true,
+        ..Options::default()
+    });
+    pila.wait_log("created the config from the example");
+    assert_eq!(
+        std::fs::read_to_string(&pila.config_path).unwrap(),
+        include_str!("../config.example.toml")
+    );
+    let client = pila.client();
+    let a = client.window("a").create();
+    pila.wait_focus("a");
+    pila.write_config("[bindings]\n\"Mod+x\" = \"close\"\n");
+    pila.wait_log("config reloaded");
+    pila.combo("Super+x");
+    client.wait("close request", |s| s.windows[a.0].close_requested);
+}
+
+#[test]
+fn an_existing_config_is_left_as_it_is() {
+    let mut pila = TestPila::start_with(Options {
+        default_config_path: true,
+        config: "# mine\n".into(),
+        ..Options::default()
+    });
+    pila.wait_log("watching the config for changes");
+    assert_eq!(
+        std::fs::read_to_string(&pila.config_path).unwrap(),
+        "# mine\n"
+    );
+    assert!(!pila.log().contains("created the config from the example"));
+}

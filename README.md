@@ -344,7 +344,8 @@ output, which fails.
 ## Configuring Pila
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`, or the file
-given with `--config`). [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) documents every option
+given with `--config`), and writes the example there the first time it's missing.
+[`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) documents every option
 and the default key bindings: the modifier key, terminal and launcher, programs to start with
 Pila (`autostart`), keyboard layout and repeat, key bindings, touchpad gestures
 (`[gestures]`), touchpad and mouse settings, the cursor (`[cursor]`), each monitor's mode,

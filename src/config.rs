@@ -1,6 +1,7 @@
 //! Configuration: `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila`,
 //! or `--config PATH`), then `PILA_*` environment overrides. See
-//! `config.example.toml` for every option.
+//! `config.example.toml` for every option; it's `EXAMPLE`, which `main`
+//! writes to the default path when nothing is there (`create_default_file`).
 //!
 //! The default bindings and gestures are `DEFAULT_BINDINGS` and
 //! `DEFAULT_GESTURES` (Mod is Super on a TTY and Alt nested, unless configured;
@@ -1492,6 +1493,36 @@ impl Default for Config {
     }
 }
 
+/// `config.example.toml`: every option, all commented out. Pila writes it to
+/// the default path when nothing is there (`create_default_file`).
+pub const EXAMPLE: &str = include_str!("../config.example.toml");
+
+/// Write `EXAMPLE` to `path`, creating its directories, unless something is
+/// there already (a file, or a symlink, even a broken one). `Ok(true)` when it
+/// wrote it.
+pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
+    use std::io::Write;
+    // `symlink_metadata`: a link whose file isn't there yet is the user's.
+    if path.symlink_metadata().is_ok() {
+        return Ok(false);
+    }
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    // `create_new`: never over a file that appeared meanwhile.
+    let mut file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
+        Err(err) => return Err(err),
+    };
+    file.write_all(EXAMPLE.as_bytes())?;
+    Ok(true)
+}
+
 impl Config {
     /// The config file pila reads without `--config`.
     pub fn default_path() -> Option<PathBuf> {
@@ -1776,11 +1807,66 @@ impl Config {
 mod tests {
     use super::*;
 
+    /// A fresh directory for a test's files, removed when it's done.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("pila-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            TempDir(dir)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn the_default_file_is_the_example_and_its_directories_are_made() {
+        let dir = TempDir::new("default-file");
+        let path = dir.0.join("config/pila/config.toml");
+        assert!(create_default_file(&path).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), EXAMPLE);
+    }
+
+    #[test]
+    fn the_default_file_never_replaces_what_is_there() {
+        let dir = TempDir::new("default-file-kept");
+        let path = dir.0.join("config.toml");
+        std::fs::write(&path, "mod = \"ctrl\"\n").unwrap();
+        assert!(!create_default_file(&path).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "mod = \"ctrl\"\n");
+
+        // A dotfiles manager's link to a file that isn't there (yet).
+        let link = dir.0.join("linked.toml");
+        std::os::unix::fs::symlink(dir.0.join("dotfiles/pila.toml"), &link).unwrap();
+        assert!(!create_default_file(&link).unwrap());
+        assert!(!dir.0.join("dotfiles").exists());
+    }
+
+    #[test]
+    fn a_default_file_that_cant_be_written_is_an_error() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new("default-file-ro");
+        std::fs::set_permissions(&dir.0, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root writes anyway: nothing to test then.
+        if std::fs::write(dir.0.join("probe"), "").is_ok() {
+            return;
+        }
+        assert!(create_default_file(&dir.0.join("pila/config.toml")).is_err());
+    }
+
     /// `config.example.toml` lists every action (its comment above
     /// `[bindings]`), so a new one can't be left out of it.
     #[test]
     fn every_action_is_in_the_example_config() {
-        let example = include_str!("../config.example.toml");
+        let example = EXAMPLE;
         let names = NAMED_ACTIONS
             .iter()
             .map(|(name, _)| *name)
@@ -2519,7 +2605,7 @@ mod tests {
 
     #[test]
     fn example_config_is_valid() {
-        if let Err(err) = Config::from_toml(include_str!("../config.example.toml"), &no_env) {
+        if let Err(err) = Config::from_toml(EXAMPLE, &no_env) {
             panic!("config.example.toml: {err}");
         }
     }
@@ -2546,7 +2632,7 @@ mod tests {
         // Its values are all commented out, so what's active can't drift
         // from the defaults: only table headers are left, which keep an
         // uncommented line in its table.
-        let example = include_str!("../config.example.toml");
+        let example = EXAMPLE;
         for (n, line) in example.lines().enumerate() {
             let line = line.trim();
             let header = line.starts_with('[') && line.ends_with(']');
@@ -2565,7 +2651,7 @@ mod tests {
     fn example_defaults_uncomment_into_their_tables() {
         // A tester took the `#` off a line of the defaults list, which then
         // sat above [bindings] and so landed in [input.mouse].
-        let example = include_str!("../config.example.toml");
+        let example = EXAMPLE;
         let uncomment = |line: &str| {
             assert!(example.contains(line), "{line:?} not in the example");
             example.replacen(line, line.trim_start_matches('#'), 1)
@@ -2619,7 +2705,7 @@ mod tests {
     fn example_rules_are_valid() {
         // The commented-out rules at the end of config.example.toml, with
         // their `# ` taken off.
-        let example = include_str!("../config.example.toml");
+        let example = EXAMPLE;
         let start = example
             .find("# [[window-rule]]")
             .expect("the example has rules");

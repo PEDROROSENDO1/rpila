@@ -23,7 +23,10 @@ flows below).
 Key flows and invariants:
 
 - **Configuration** (`config.rs`): a TOML file (`~/.config/pila/config.toml` or
-  `--config`, documented in `config.example.toml`) parsed by `Config::from_toml` (pure,
+  `--config`, documented in `config.example.toml`, which `main` writes to the default path
+  when nothing is there, without `--config`: `config::create_default_file`, before the event
+  loop; never over a file or a symlink, and a failure only logged) parsed by
+  `Config::from_toml` (pure,
   unit-tested; `PILA_*` env vars override it), loaded at startup by `Config::load`, which
   falls back to defaults on errors (`main` notifies of them once the session has had time to
   start a notification daemon, `state::notify_after_startup`), and reloaded when the file changes

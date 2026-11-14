@@ -308,7 +308,10 @@ screen\-sharing portals and shells started as services.
 .IR ~/.config/pila/config.toml " (or " $XDG_CONFIG_HOME/pila/config.toml )
 The configuration. Every option is described in
 .IR config.example.toml ,
-installed with the documentation by Pila's packages.
+installed with the documentation by Pila's packages; the first time Pila starts without the
+file (and without
+.BR \-\-config ),
+it writes that example there, every line commented out.
 .TP
 .IR ~/.local/state/pila/pila.log " (or " $XDG_STATE_HOME/pila/pila.log )
 The log of a session started by

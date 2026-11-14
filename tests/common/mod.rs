@@ -48,6 +48,10 @@ pub struct Options {
     pub config_symlink: bool,
     /// The soft limit of open files pila starts with (its hard one stays).
     pub soft_file_limit: Option<u64>,
+    /// No `--config`: pila reads `$XDG_CONFIG_HOME/pila/config.toml`
+    /// (`config_path`), which holds `config` as it is if that isn't empty
+    /// and nothing at all otherwise (none of the defaults above).
+    pub default_config_path: bool,
 }
 
 pub struct TestPila {
@@ -104,17 +108,29 @@ impl TestPila {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create the runtime dir");
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let config_dir = dir.join("config");
-        std::fs::create_dir_all(&config_dir).unwrap();
+        let config_dir = if options.default_config_path {
+            dir.join("xdg-config/pila")
+        } else {
+            dir.join("config")
+        };
         let config_path = config_dir.join("config.toml");
-        let config_file = if options.config_symlink {
+        let config_file = if options.default_config_path {
+            if !options.config.is_empty() {
+                std::fs::create_dir_all(&config_dir).unwrap();
+                std::fs::write(&config_path, &options.config).unwrap();
+            }
+            config_path.clone()
+        } else if options.config_symlink {
             let dotfiles = dir.join("dotfiles");
             std::fs::create_dir_all(&dotfiles).unwrap();
             dotfiles.join("pila.toml")
         } else {
             config_path.clone()
         };
-        std::fs::write(&config_file, full_config(&options.config)).unwrap();
+        if !options.default_config_path {
+            std::fs::create_dir_all(&config_dir).unwrap();
+            std::fs::write(&config_file, full_config(&options.config)).unwrap();
+        }
         if options.config_symlink {
             std::os::unix::fs::symlink(&config_file, &config_path).unwrap();
         }
@@ -122,10 +138,10 @@ impl TestPila {
         let log = std::fs::File::create(&log_path).unwrap();
 
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_pila"));
-        cmd.arg("--backend")
-            .arg("headless")
-            .arg("--config")
-            .arg(&config_path);
+        cmd.arg("--backend").arg("headless");
+        if !options.default_config_path {
+            cmd.arg("--config").arg(&config_path);
+        }
         if let Some(outputs) = &options.outputs {
             cmd.arg("--headless-outputs").arg(outputs);
         }

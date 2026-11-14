@@ -313,17 +313,18 @@ desktop around Pila handles those devices. The keyboard settings apply either wa
 
 ## The configuration file
 
-Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). Without one,
-it uses its defaults. To start one, copy the example, which packages install in
-`/usr/share/doc/pila` (it's also in Pila's source):
+Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). The first time
+it starts without one, it writes the example there, `config.example.toml`. Every line in it is
+commented out, so it changes nothing until you edit it. Each value says whether it's the default
+or an example; take the `#` off a line to use it.
+
+A newer Pila doesn't touch the file you have. To compare it with the newest example, which
+packages install in `/usr/share/doc/pila` (it's also in Pila's source), or to start over:
 
 ```bash
-mkdir -p ~/.config/pila
+diff ~/.config/pila/config.toml /usr/share/doc/pila/config.example.toml
 cp /usr/share/doc/pila/config.example.toml ~/.config/pila/config.toml
 ```
-
-Every line in the example is commented out, so the copy changes nothing until you edit it. Each
-value says whether it's the default or an example; take the `#` off a line to use it.
 
 **Changes apply when you save**, all but `autostart`, which only runs when Pila starts. If the
 saved file has a mistake, Pila keeps the configuration it was running with and shows a

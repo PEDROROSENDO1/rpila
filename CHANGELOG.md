@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Pila writes your configuration file the first time:** with no `~/.config/pila/config.toml`
+  (or `$XDG_CONFIG_HOME/pila/config.toml`), it creates it from `config.example.toml`, every line
+  commented out, so nothing changes until you edit it, and changes apply as you save from the
+  first session on. It never replaces a file you have, nor a symlink of a dotfiles manager, and
+  `--config` paths are left alone.
 - **The click after a dock or panel menu isn't lost anymore:** once a menu went away, Pila ended
   its grab only at the next input event and spent that event on it, so the pointer stayed where
   the menu was and the next click landed there (in Noctalia's dock, the right click after
