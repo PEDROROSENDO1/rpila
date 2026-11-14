@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **The click after a dock or panel menu isn't lost anymore:** once a menu went away, Pila ended
+  its grab only at the next input event and spent that event on it, so the pointer stayed where
+  the menu was and the next click landed there (in Noctalia's dock, the right click after
+  "Minimise" opened nothing). The keyboard also goes back to a window when the menu belonged to a
+  panel that takes none.
 - **A minimized window keeps its icon in per-monitor taskbars** (Noctalia's, by default): Pila told
   them it had left its monitor, and so did a window on another workspace. Both now stay on the
   monitor they come back to.

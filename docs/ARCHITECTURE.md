@@ -406,6 +406,12 @@ Key flows and invariants:
   `PopupKeyboardGrab`/`PopupPointerGrab`; they are the only keyboard grabs Pila takes.
   A popup grab ignores focus changes, so `focus_window` dismisses it first
   (`dismiss_popup_grab`), and `focused_window` resolves a focused popup to its window.
+  Smithay ends a popup grab only at the next input event and spends it (a motion that ends
+  the pointer grab moves nothing), so after a popup is destroyed `end_finished_popup_grab`
+  (idle, after the request) ends a finished grab at once: the manager's cleanup, a motion
+  where the pointer is (passed on if a menu is still open), then a fresh pointer focus, and
+  the keyboard to the most recent window if Smithay gave it back to a layer surface that
+  takes none (a dock's menu).
 - **Window lifecycle:** `new_toplevel` pushes the window onto `Pila::windows.unmapped` (not the
   space). A client unmapping it (a null-buffer commit, `unmap_if_buffer_removed`) takes it
   out of the space, taskbars (`remove_foreign_toplevel`, which also stops its capture

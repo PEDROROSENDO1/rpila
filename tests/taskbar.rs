@@ -3,6 +3,7 @@
 
 mod common;
 
+use common::protocols::{LayerSpec, Placement};
 use common::*;
 use wayland_protocols::ext::{
     foreign_toplevel_list::v1::client::ext_foreign_toplevel_list_v1::ExtForeignToplevelListV1,
@@ -491,4 +492,75 @@ fn a_window_off_the_screen_stays_on_its_output() {
     taskbar.roundtrip();
     let leaves = count(&taskbar.lock(), "OutputLeave");
     assert_eq!(leaves, 0, "a left its output: {:?}", taskbar.events_of(&a));
+}
+
+/// A dock's menu (a grabbing popup of a layer surface) runs an entry, here
+/// minimizing the focused window, and goes away: its grab ends with it. The
+/// next motion moves the pointer (the one that ended the grab used to be
+/// spent on it, so Noctalia's dock lost the click after "Minimise"), and the
+/// keyboard goes back to a window.
+#[test]
+fn a_dock_menu_that_goes_away_leaves_no_grab_behind() {
+    for minimize in [false, true] {
+        let mut pila = TestPila::start();
+        let app = pila.client();
+        app.window("a").size(400, 300).create();
+        pila.wait_focus("a");
+        app.window("b").size(300, 200).create();
+        pila.wait_focus("b");
+
+        let shell = pila.client();
+        let _manager: ZwlrForeignToplevelManagerV1 =
+            shell.bind("zwlr_foreign_toplevel_manager_v1", 3);
+        let (dock, _) = shell.layer_surface(
+            "dock",
+            &LayerSpec {
+                anchor:
+                    wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::Anchor::Bottom,
+                size: (300, 60),
+                ..LayerSpec::default()
+            },
+            [0, 0, 255, 255],
+        );
+        shell.wait_surface_configured(dock);
+        let b = handle(&shell, "b");
+        // A right click on the dock (centered at the bottom: 490..790,
+        // 740..800) opens its menu above it, grabbing.
+        pila.move_to(640.0, 770.0);
+        pila.press("right");
+        shell.wait("the press", |s| {
+            s.events
+                .iter()
+                .any(|e| matches!(e, common::client::Ev::Button { pressed: true, .. }))
+        });
+        let placement = Placement {
+            size: (200, 100),
+            anchor_rect: (150, 0, 1, 1),
+            anchor: wayland_protocols::xdg::shell::client::xdg_positioner::Anchor::Top,
+            gravity: wayland_protocols::xdg::shell::client::xdg_positioner::Gravity::Top,
+            ..Placement::default()
+        };
+        let (menu, popup) = shell.popup("menu", Err(dock), &placement, true, [0, 255, 0, 255]);
+        shell.wait_surface_configured(menu);
+        pila.release("right");
+        pila.wait("the menu's grab", |s| s["pointer"]["grab"] == "popup");
+
+        // An entry: a click in the menu, then its request, and the menu goes.
+        pila.move_to(640.0, 700.0);
+        pila.click("left");
+        if minimize {
+            b.set_minimized();
+        }
+        popup.destroy();
+        shell.flush();
+        let back_to = if minimize { "a" } else { "b" };
+        pila.wait(&format!("the keyboard on {back_to}"), |s| {
+            s["focused"] == back_to && s["keyboard_grabbed"] == false
+        });
+        pila.move_to(700.0, 770.0);
+        pila.wait(
+            &format!("the pointer on the dock (minimize: {minimize})"),
+            |s| s["pointer"]["x"] == 700.0 && s["pointer"]["grabbed"] == false,
+        );
+    }
 }

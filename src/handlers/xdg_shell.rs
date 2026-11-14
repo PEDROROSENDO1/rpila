@@ -97,6 +97,9 @@ impl XdgShellHandler for Pila {
     // from its window's bounds already: every output.
     fn popup_destroyed(&mut self, _surface: PopupSurface) {
         self.queue_redraw();
+        // Inside the client's request: see to the menu's grab after it.
+        self.loop_handle
+            .insert_idle(|state| state.end_finished_popup_grab());
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

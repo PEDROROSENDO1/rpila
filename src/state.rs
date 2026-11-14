@@ -1243,6 +1243,60 @@ impl Pila {
         keyboard.unset_grab(self);
     }
 
+    /// After a popup went away: if that ended a menu's grab (none of its
+    /// popups is left), release it now. Smithay ends a popup grab only at the
+    /// next input event, and spends that event on it: the motion that ends
+    /// the pointer grab doesn't move the pointer, so the next click lands
+    /// where the menu was. The keyboard goes back to a window if the menu had
+    /// it (a dock's menu that minimized the focused window: the next one).
+    pub fn end_finished_popup_grab(&mut self) {
+        if self.is_locked() {
+            return;
+        }
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        let popup_grab = pointer
+            .with_grab(|_, grab| {
+                grab.downcast_ref::<smithay::desktop::PopupPointerGrab<Pila>>()
+                    .is_some()
+            })
+            .unwrap_or(false);
+        if !popup_grab {
+            return;
+        }
+        // The grab sees its popups gone after the manager's cleanup; then a
+        // motion where the pointer is: the grab passes it on if a menu is
+        // still open (a submenu went away), and ends itself if not.
+        self.popups.cleanup();
+        self.refresh_pointer_focus();
+        if pointer.is_grabbed() {
+            return;
+        }
+        // It restored the focus it had when the grab started.
+        self.refresh_pointer_focus();
+        if let Some(keyboard) = self.seat.get_keyboard() {
+            if keyboard.is_grabbed() {
+                keyboard.unset_grab(self);
+            }
+        }
+        // Smithay gives the keyboard back to the menu's parent: right for a
+        // window, not for a panel or dock that takes no keyboard.
+        let refocus = match self.keyboard_focus().filter(|focus| focus.is_alive()) {
+            Some(focus) => focus
+                .wl_surface()
+                .and_then(|surface| self.layer_for_surface(&surface))
+                .is_some_and(|(_, layer)| {
+                    layer.cached_state().keyboard_interactivity
+                        == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::None
+                }),
+            None => true,
+        };
+        if refocus {
+            self.focus_recent_window();
+        }
+    }
+
     /// Fit maximized windows to the usable area again after it changed (a
     /// panel appeared, resized or went away, or the output was resized).
     pub fn refit_maximized(&mut self) {
