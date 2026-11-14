@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **A minimized window keeps its icon in per-monitor taskbars** (Noctalia's, by default): Pila told
+  them it had left its monitor, and so did a window on another workspace. Both now stay on the
+  monitor they come back to.
+
 ## 0.5.4 (2026-11-14)
 
 - **Mod and the mouse wheel switch workspaces:** a notch down goes to the next workspace, up to

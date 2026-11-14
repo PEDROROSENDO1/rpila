@@ -430,3 +430,65 @@ fn a_new_workspace_count_adds_and_removes_workspaces() {
             .any(|l| l.object == wayland_client::Proxy::id(&two) && l.event == "Removed")
     });
 }
+
+/// A minimized window, or one on another workspace, stays on the output it
+/// comes back to: per-monitor taskbars (Noctalia's, by default) keep its icon,
+/// a minimized one's above all.
+#[test]
+fn a_window_off_the_screen_stays_on_its_output() {
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        ..Options::default()
+    });
+    pila.move_to(100.0, 100.0);
+    let app = pila.client();
+    app.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+o");
+    pila.wait("a on B", |s| {
+        window_in(s, "a").is_some_and(|w| w["output"] == "B")
+    });
+    let taskbar = pila.client();
+    let _manager: ZwlrForeignToplevelManagerV1 =
+        taskbar.bind("zwlr_foreign_toplevel_manager_v1", 3);
+    taskbar.flush();
+    let a = handle(&taskbar, "a");
+    let id = wayland_client::Proxy::id(&a);
+    let output_b = wayland_client::Proxy::id(&taskbar.output("B")).to_string();
+    let id_count = id.clone();
+    let count = move |s: &common::client::Shared, kind: &str| {
+        s.log
+            .iter()
+            .filter(|l| l.object == id_count && l.event.starts_with(kind))
+            .count()
+    };
+    let (on_b, id_b) = (output_b.clone(), id.clone());
+    taskbar.wait("a is on B", move |s| {
+        s.log.iter().any(|l| {
+            l.object == id_b && l.event.starts_with("OutputEnter") && l.event.contains(&on_b)
+        })
+    });
+
+    a.set_minimized();
+    taskbar.flush();
+    taskbar.wait("the minimized state", |s| {
+        s.log.iter().any(|l| {
+            l.object == id && l.event.starts_with("State") && has_state(&l.event, MINIMIZED)
+        })
+    });
+    a.unset_minimized();
+    taskbar.flush();
+    pila.wait("shown", |s| {
+        window_in(s, "a").unwrap()["minimized"] == false
+    });
+    // On another workspace.
+    a.activate(&taskbar.seat());
+    taskbar.flush();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+Page_Down");
+    pila.wait("a on 2", |s| window_in(s, "a").unwrap()["workspace"] == 2);
+    pila.settle();
+    taskbar.roundtrip();
+    let leaves = count(&taskbar.lock(), "OutputLeave");
+    assert_eq!(leaves, 0, "a left its output: {:?}", taskbar.events_of(&a));
+}

@@ -26,7 +26,7 @@ use smithay::{
             DisplayHandle, GlobalDispatch, New, Resource,
         },
     },
-    utils::SERIAL_COUNTER,
+    utils::{Rectangle, SERIAL_COUNTER},
 };
 use tracing::debug;
 
@@ -202,10 +202,24 @@ impl Pila {
         if fullscreen {
             states.push(State::Fullscreen as u32);
         }
-        let outputs = if minimized {
-            Vec::new()
-        } else {
+        let outputs = if self.space.element_location(window).is_some() {
             self.space.outputs_for_element(window)
+        } else {
+            // Minimized or on another workspace: the outputs it comes back
+            // to, so per-monitor taskbars keep it.
+            let rect = Rectangle::new(
+                crate::workspaces::space_location(window),
+                window.geometry().size,
+            );
+            self.space
+                .outputs()
+                .filter(|o| {
+                    self.space
+                        .output_geometry(o)
+                        .is_some_and(|geometry| geometry.overlaps(rect))
+                })
+                .cloned()
+                .collect()
         };
         Some(Info {
             identifier,

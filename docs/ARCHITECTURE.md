@@ -728,7 +728,9 @@ Key flows and invariants:
   (`foreign_toplevel::window_for_identifier`). Listeners are updated by diffing in
   `refresh_toplevels` (from `after_frames`, after `space.refresh()`): title, app id, states
   (Activated = keyboard focus, Minimized from `minimize.rs`, Maximized/Fullscreen from
-  `fill_state`) and the outputs each client's handle was told; new windows get a handle
+  `fill_state`) and the outputs each client's handle was told (a window off the `Space`,
+  minimized or on another workspace, reports the outputs it comes back to, from
+  `workspaces::space_location`: per-monitor taskbars keep it); new windows get a handle
   per manager, destroyed ones `closed` (`remove_foreign_toplevel`). Requests map onto
   `focus_window`/`restore_window`, `minimize_window`/`show_window`, `set_fill_state(_on)`
   and `close_window`, and are ignored while locked.
