@@ -33,6 +33,22 @@ A feature adds a scenario there (a `mark "name begin/end"` section in the worklo
 with `section`, `has`, `lacks` on a debug log target) only if it's bare-metal only or puts load
 on rendering; what only eyes can judge (how it looks) is still asked of the user.
 
+# scripts/apps
+
+`scripts/apps [gtk4|foot|kitty|weston-terminal|xterm ...]` runs real apps, one at a time, each
+on a sealed headless Pila (as `scripts/shells`, one 1920x1080 output, with
+`PILA_HEADLESS_CHECK_INVARIANTS`), and drives their windows with real input through the control
+socket: a drag by the title bar (Pila's, or the app's own) and Mod+drag move them exactly as
+far as the pointer, a click on the title bar moves nothing, and maximized or snapped, a drag
+by the title bar brings them back to their size under the pointer; after each step no grab is
+left, the keyboard is on the window and no popup is open. It judges Pila's log as
+`scripts/shells` does and prints PASS/FAIL. Results are in `pila-apps/<app>/`. It's for what
+the synthetic test client can't show, since real apps do things it doesn't (GTK 4 asks to leave
+fullscreen as a drag on its own title bar starts; a bug like that is then reproduced in a test,
+with the GTK-like client of `tests/common/client.rs` where it helps). Run it after changing
+grabs, decorations, fill states or input, and before a release; a behavior that only real apps
+show gets a step. Standard-library Python, like the other helpers.
+
 # scripts/shells
 
 `scripts/shells [noctalia|dms]` runs each desktop shell Pila supports (Noctalia, Dux Shell) on

@@ -77,6 +77,10 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025).
   `pila-check.log`) is for you: run it before asking the user to check anything; the user
   runs plain `scripts/check` from a TTY (log in `pila-tty.log`) for bare metal. What it
   checks and when a feature adds a scenario: `scripts/CLAUDE.md`.
+- Real apps: `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm ...]` drags, clicks,
+  maximizes and snaps real apps' windows with real input on a sealed headless Pila and checks
+  they follow the pointer and leave no grab (`scripts/CLAUDE.md`): after changing grabs,
+  decorations, fill states or input, and before a release.
 - Desktop shells: `scripts/shells [noctalia|dms]` walks Noctalia's and Dux Shell's IPC
   through every feature that depends on Pila, on a sealed-off headless Pila
   (`scripts/CLAUDE.md`): after changing a protocol a shell uses, after a Smithay bump and

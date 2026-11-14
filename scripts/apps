@@ -1,0 +1,325 @@
+#!/usr/bin/env python3
+"""Real apps on a headless Pila, driven the way a hand does: what the
+integration tests' synthetic client can't show, since real apps do things it
+doesn't (GTK 4 asks to leave fullscreen as a drag on its own title bar starts).
+
+Each app runs alone on a sealed headless Pila (as scripts/shells: a temporary
+HOME, XDG directories, runtime directory and D-Bus session bus), one
+1920x1080 output, with Pila's input invariants on
+(PILA_HEADLESS_CHECK_INVARIANTS: a stuck grab or a lost keyboard is a panic).
+Through Pila's control socket, real pointer and keyboard input:
+
+  - a drag by the title bar (Pila's, or the app's own) moves the window as far
+    as the pointer, exactly;
+  - a click on the title bar, without moving, moves nothing;
+  - Mod + left drag anywhere in it moves it as far as the pointer;
+  - maximized, and snapped to a half, a drag by the title bar brings it back to
+    its size under the pointer;
+  - after each step: no grab left, the keyboard on the window, no popup.
+
+Then it judges Pila's log (no panic, no client disconnected for a protocol
+error) and prints PASS/FAIL per check; exits 1 if any failed.
+
+  scripts/apps                       every app that's installed
+  scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
+                                     weston-terminal, xterm)
+
+Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
+(app.log) and a screenshot at the end (grim, if installed). Uses
+target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
+(package dbus); xterm needs Xwayland. Standard library only.
+"""
+
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+
+# name: (command, how it decorates itself: "pila" draws the title bar, "app"
+# draws its own)
+APPS = {
+    "gtk4": (["gtk4-widget-factory"], "app"),
+    "foot": (["foot"], "pila"),
+    "kitty": (["kitty"], "pila"),
+    "weston-terminal": (["weston-terminal"], "app"),
+    "xterm": (["xterm"], "pila"),
+}
+
+BAR = 28  # Pila's title bar height
+DRAG = (100, 60)  # how far each drag goes
+STEPS = 20
+
+
+# --- Inside Pila (`--workload`) -------------------------------------------------
+
+class Workload:
+    def __init__(self, app, out):
+        self.app = app
+        self.out = out
+        self.log = open(os.path.join(out, "steps.log"), "w", buffering=1)
+        runtime = os.environ["XDG_RUNTIME_DIR"]
+        self.control = os.path.join(runtime, os.environ["WAYLAND_DISPLAY"] + ".control")
+
+    def mark(self, text):
+        # Pila's log has the program's output: the judge reads these there.
+        print(f"apps: {text}", flush=True)
+
+    def check(self, label, ok, detail=""):
+        self.mark(f"check {'ok' if ok else 'failed'}: {label}{'' if ok else ' (' + detail + ')'}")
+        return ok
+
+    def ctl(self, **request):
+        s = socket.socket(socket.AF_UNIX)
+        s.connect(self.control)
+        s.sendall(json.dumps(request).encode() + b"\n")
+        data = b""
+        while not data.endswith(b"\n"):
+            chunk = s.recv(1 << 20)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        return json.loads(data) if data.strip() else {}
+
+    def state(self):
+        return self.ctl(cmd="state")
+
+    def window(self, state=None):
+        state = state or self.state()
+        windows = [w for w in state.get("windows", []) if not w.get("override_redirect")]
+        return windows[0] if windows else None
+
+    def wait(self, cond, timeout=5.0):
+        end = time.monotonic() + timeout
+        while True:
+            state = self.state()
+            try:
+                if cond(state):
+                    return state
+            except (KeyError, TypeError, IndexError):
+                pass
+            if time.monotonic() > end:
+                return None
+            time.sleep(0.05)
+
+    def geometry(self, state=None):
+        g = self.window(state)["geometry"]
+        return g["x"], g["y"], g["w"], g["h"]
+
+    def header(self, state=None):
+        """A point on the title bar: Pila's above the geometry, or the app's
+        own, at its top. A quarter in, away from the title and buttons."""
+        w = self.window(state)
+        x, y, width, _ = self.geometry(state)
+        if w.get("title_bar"):
+            return x + width // 4, y - BAR // 2
+        return x + width // 4, y + 12
+
+    def move(self, x, y):
+        self.ctl(cmd="move", x=x + 0.5, y=y + 0.5)
+
+    def drag(self, start, by, button="left"):
+        """Press at `start`, move by `by` in small steps, release."""
+        self.move(*start)
+        time.sleep(0.1)
+        self.ctl(cmd="button", button=button, state="press")
+        time.sleep(0.05)
+        for i in range(1, STEPS + 1):
+            self.move(start[0] + by[0] * i / STEPS, start[1] + by[1] * i / STEPS)
+            time.sleep(0.02)
+        time.sleep(0.05)
+        self.ctl(cmd="button", button=button, state="release")
+
+    def settled(self, label):
+        """After a step: no grab left, the keyboard on the window, no popup."""
+        state = self.wait(lambda s: not s["pointer"]["grabbed"] and s["focused"] == self.window(s)["app_id"]
+                          and not s["popups"], 3)
+        if state is None:
+            state = self.state()
+            self.check(f"{label}: no grab left, the keyboard on the window, no popup", False,
+                       f"grab {state['pointer']['grab']}, focused {state['focused']}, "
+                       f"{len(state['popups'])} popups")
+        return state
+
+    def run(self):
+        command, _ = APPS[self.app]
+        self.mark(f"{self.app} begin")
+        appdir = os.path.join(self.out, "app.log")
+        subprocess.Popen(command, stdout=open(appdir, "w"), stderr=subprocess.STDOUT)
+        state = self.wait(lambda s: self.window(s) is not None and self.window(s)["geometry"]["w"] > 0, 20)
+        if not self.check(f"{self.app} opens a window", state is not None, "none within 20 s"):
+            return self.finish()
+        # Let it settle (fonts, a second configure).
+        time.sleep(1.5)
+        state = self.state()
+        w = self.window(state)
+        self.mark(f"window {w['app_id']}, {'Pila' if w.get('title_bar') else 'its own'} title bar, "
+                  f"geometry {self.geometry(state)}")
+        self.wait(lambda s: s["focused"] == self.window(s)["app_id"], 3)
+
+        # A drag by the title bar.
+        before = self.geometry()
+        self.drag(self.header(), DRAG)
+        state = self.settled("drag by the title bar")
+        after = self.geometry(state)
+        moved = (after[0] - before[0], after[1] - before[1])
+        self.check("a drag by the title bar moves it as far as the pointer",
+                   moved == DRAG and after[2:] == before[2:],
+                   f"moved {moved}, size {before[2:]} -> {after[2:]}")
+
+        # A click on it, without moving.
+        before = self.geometry()
+        self.move(*self.header())
+        time.sleep(0.1)
+        self.ctl(cmd="button", button="left", state="click")
+        time.sleep(0.5)
+        state = self.settled("click on the title bar")
+        self.check("a click on the title bar moves nothing", self.geometry(state) == before,
+                   f"{before} -> {self.geometry(state)}")
+
+        # Mod + left drag from the middle.
+        before = self.geometry()
+        middle = (before[0] + before[2] // 2, before[1] + before[3] // 2)
+        self.ctl(cmd="key", key="Super_L", state="press")
+        self.drag(middle, (-DRAG[0], -DRAG[1]))
+        self.ctl(cmd="key", key="Super_L", state="release")
+        state = self.settled("Mod+drag")
+        after = self.geometry(state)
+        moved = (after[0] - before[0], after[1] - before[1])
+        self.check("Mod + left drag moves it as far as the pointer", moved == (-DRAG[0], -DRAG[1]),
+                   f"moved {moved}")
+
+        # Maximized and snapped, then dragged by the title bar.
+        size = self.geometry()[2:]
+        for combo, what in [("Super+m", "maximized"), ("Super+Left", "snapped")]:
+            self.ctl(cmd="combo", keys=combo)
+            filled = self.wait(lambda s: self.geometry(s)[2:] != size
+                               and (self.window(s)["maximized"] or self.window(s)["snapped"]), 3)
+            if not self.check(f"{combo} gets it {what}", filled is not None):
+                continue
+            time.sleep(0.5)
+            start = self.header()
+            # How far down the press is from the top of the geometry.
+            pressed_at = start[1] - self.geometry()[1]
+            self.drag(start, (40, 120))
+            back = self.wait(lambda s: self.geometry(s)[2:] == size, 3)
+            self.settled(f"drag out of {what}")
+            state = back or self.state()
+            x, y, width, _ = self.geometry(state)
+            px, py = start[0] + 40, start[1] + 120
+            top = y - BAR if self.window(state).get("title_bar") else y
+            # A snapped window keeps the pointer where it was pressed on its
+            # title bar; a maximized one is put under it at a set height.
+            keeps = abs((py - y) - pressed_at) <= 2 if what == "snapped" else top <= py < y + 40
+            self.check(f"{what}, a drag by the title bar brings it back to its size under the pointer",
+                       back is not None and x <= px < x + width and keeps
+                       and not self.window(state)["maximized"] and not self.window(state)["snapped"],
+                       f"size {self.geometry(state)[2:]} (was {size}), pointer ({px}, {py}) "
+                       f"vs {self.geometry(state)}, pressed {pressed_at} px from its top, "
+                       f"now {py - y}")
+        return self.finish()
+
+    def finish(self):
+        if shutil.which("grim"):
+            subprocess.run(["grim", os.path.join(self.out, "end.png")], check=False)
+        self.mark(f"{self.app} done")
+        time.sleep(0.3)
+        self.ctl(cmd="quit")
+
+
+# --- Outside: a sealed headless Pila per app, and the judge ----------------------
+
+def judge(app, out):
+    log = open(os.path.join(out, "pila.log"), errors="replace").read()
+    results = []
+
+    def result(ok, label):
+        results.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'}  {label}")
+
+    if f"apps: {app} done" not in log:
+        result(False, f"the steps finished (Pila quit or crashed before; see {out}/pila.log)")
+    result("panicked" not in log and "pila crashed" not in log,
+           "Pila didn't panic (input invariants included)")
+    errors = [line for line in log.splitlines() if "client disconnected by a protocol error" in line]
+    result(not errors, "no client was disconnected for a protocol error")
+    for line in errors[:3]:
+        print(f"      {line.strip()[:160]}")
+    for line in log.splitlines():
+        if "apps: window " in line:
+            print(f"      {line.split('apps: ', 1)[1]}")
+        elif "apps: check ok: " in line:
+            result(True, line.split("apps: check ok: ", 1)[1])
+        elif "apps: check failed: " in line:
+            result(False, line.split("apps: check failed: ", 1)[1])
+    return all(results)
+
+
+def main(argv):
+    if len(argv) >= 3 and argv[0] == "--workload":
+        Workload(argv[1], argv[2]).run()
+        return 0
+    if argv and argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    unknown = [a for a in argv if a not in APPS]
+    if unknown:
+        print(f"unknown app {unknown[0]!r}: one of {', '.join(APPS)}", file=sys.stderr)
+        return 2
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pila = os.environ.get("PILA_BIN") or os.path.join(repo, "target/release/pila")
+    if not os.access(pila, os.X_OK):
+        print(f"no {pila}: build it (cargo build --release) or set PILA_BIN", file=sys.stderr)
+        return 2
+    for tool in ("dbus-run-session",):
+        if not shutil.which(tool):
+            print(f"{tool} is missing (package dbus)", file=sys.stderr)
+            return 2
+    ok = True
+    for app in argv or list(APPS):
+        command, _ = APPS[app]
+        if not shutil.which(command[0]):
+            print(f"\nSKIP  {app} ({command[0]} not installed)")
+            continue
+        print(f"\nRunning {app} on a headless Pila...")
+        out = os.path.join(repo, "pila-apps", app)
+        shutil.rmtree(out, ignore_errors=True)
+        os.makedirs(out)
+        sealed = tempfile.mkdtemp(prefix="pila-apps-")
+        home, run = os.path.join(sealed, "home"), os.path.join(sealed, "run")
+        os.makedirs(home)
+        os.makedirs(run, mode=0o700)
+        config = os.path.join(sealed, "config.toml")
+        with open(config, "w") as f:
+            f.write('# Written by scripts/apps.\nmod = "super"\n')
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PILA_SOCKET",
+                            "NIRI_SOCKET", "SWAYSOCK", "I3SOCK", "HYPRLAND_INSTANCE_SIGNATURE",
+                            "XDG_SESSION_DESKTOP", "DESKTOP_SESSION")}
+        env.update(HOME=home, XDG_RUNTIME_DIR=run, XDG_CONFIG_HOME=os.path.join(home, ".config"),
+                   XDG_STATE_HOME=os.path.join(home, ".local/state"),
+                   XDG_CACHE_HOME=os.path.join(home, ".cache"),
+                   XDG_DATA_HOME=os.path.join(home, ".local/share"),
+                   PILA_HEADLESS_CHECK_INVARIANTS="1",
+                   RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
+        workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"
+        with open(os.path.join(out, "pila.log"), "w") as log:
+            try:
+                subprocess.run(["timeout", "180", "dbus-run-session", "--", pila, "--backend", "headless",
+                                "--headless-outputs", "eDP-1:1920x1080@60", "--config", config,
+                                "-c", workload],
+                               env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
+            finally:
+                shutil.rmtree(sealed, ignore_errors=True)
+        ok = judge(app, out) and ok
+    print()
+    print("All checks passed." if ok else "Some checks failed: see pila-apps/<app>/pila.log and steps.")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
