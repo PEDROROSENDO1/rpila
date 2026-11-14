@@ -891,12 +891,20 @@ impl AnimationsFile {
 }
 
 /// `[input]`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InputConfig {
     pub touchpad: PointerConfig,
     pub mouse: PointerConfig,
+    /// The least time between two runs of a mouse wheel binding, in
+    /// milliseconds: the notches of a quick turn inside it are dropped
+    /// (`input.rs::wheel_bindings`). 0 runs one a notch.
+    pub wheel_binding_cooldown: u32,
 }
+
+/// `wheel-binding-cooldown` unless configured, in milliseconds.
+pub const DEFAULT_WHEEL_BINDING_COOLDOWN: u32 = 150;
+/// The longest `wheel-binding-cooldown`, in milliseconds.
+const MAX_WHEEL_BINDING_COOLDOWN: u32 = 1000;
 
 impl Default for InputConfig {
     fn default() -> Self {
@@ -907,6 +915,7 @@ impl Default for InputConfig {
                 ..Default::default()
             },
             mouse: PointerConfig::default(),
+            wheel_binding_cooldown: DEFAULT_WHEEL_BINDING_COOLDOWN,
         }
     }
 }
@@ -1416,6 +1425,8 @@ impl ShadowFile {
 struct InputFile {
     touchpad: Option<PointerConfig>,
     mouse: Option<PointerConfig>,
+    #[serde(rename = "wheel-binding-cooldown")]
+    wheel_binding_cooldown: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -1687,6 +1698,15 @@ impl Config {
             mouse: match file.input.mouse {
                 Some(mouse) => mouse.validate("mouse")?,
                 None => defaults.mouse,
+            },
+            wheel_binding_cooldown: match file.input.wheel_binding_cooldown {
+                Some(ms) if ms > MAX_WHEEL_BINDING_COOLDOWN => {
+                    return Err(format!(
+                        "[input] wheel-binding-cooldown = {ms}: it's 0 to {MAX_WHEEL_BINDING_COOLDOWN} ms"
+                    ))
+                }
+                Some(ms) => ms,
+                None => defaults.wheel_binding_cooldown,
             },
         };
 
@@ -2219,6 +2239,22 @@ mod tests {
 
         let no_tap = Config::from_toml("[input.touchpad]\ntap = false", &no_env).unwrap();
         assert_eq!(no_tap.input.touchpad.tap, Some(false));
+    }
+
+    #[test]
+    fn wheel_binding_cooldown_is_0_to_1000_ms() {
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(
+            config.input.wheel_binding_cooldown,
+            DEFAULT_WHEEL_BINDING_COOLDOWN
+        );
+        for ms in [0, 1000] {
+            let text = format!("[input]\nwheel-binding-cooldown = {ms}");
+            let config = Config::from_toml(&text, &no_env).unwrap();
+            assert_eq!(config.input.wheel_binding_cooldown, ms);
+        }
+        let err = Config::from_toml("[input]\nwheel-binding-cooldown = 1001", &no_env).unwrap_err();
+        assert!(err.contains("wheel-binding-cooldown"), "{err}");
     }
 
     #[test]

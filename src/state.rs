@@ -280,6 +280,9 @@ pub struct InputState {
     /// Mouse wheel bindings: the `value120` scrolled toward a notch on each
     /// axis (horizontal, vertical), for wheels that send parts of one.
     pub wheel_v120: [f64; 2],
+    /// Mouse wheel bindings: when one last ran on each axis, for
+    /// `wheel-binding-cooldown`.
+    pub wheel_ran: [Option<std::time::Instant>; 2],
 }
 
 /// A modifier key held alone: its keycode, keysym and the modifiers its

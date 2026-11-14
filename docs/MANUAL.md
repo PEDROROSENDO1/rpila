@@ -80,7 +80,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Shift+1` to `Mod+Shift+9` | Send the window to that workspace |
 | `Mod+Page_Down`, `Mod+Page_Up` | Next, previous workspace |
 | `Mod+Shift+Page_Down`, `Mod+Shift+Page_Up` | Send the window to the next, previous workspace |
-| `Mod+WheelScrollDown`, `Mod+WheelScrollUp` | Mod and the mouse wheel: next, previous workspace, a notch each |
+| `Mod+WheelScrollDown`, `Mod+WheelScrollUp` | Mod and the mouse wheel: next, previous workspace, a notch each (a quick turn is one) |
 | `Mod+Shift+WheelScrollDown`, `Mod+Shift+WheelScrollUp` | Send the window to the next, previous workspace |
 | `Mod+Shift+S` | Screenshot of a region you drag, to the clipboard (needs grim, slurp and wl-clipboard) |
 | `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to `~/Pictures` (needs grim) |
@@ -208,7 +208,9 @@ monitors: switching to another one changes what every monitor shows. Windows on 
   the apps.
 - `Mod+Page_Down` and `Mod+Page_Up` go to the next and previous workspace; they stop at the last
   and the first. Mod with the mouse wheel does the same, a workspace per notch (down is the
-  next), and with Shift too it sends the focused window.
+  next), and with Shift too it sends the focused window. A notch less than 150 ms after the
+  last switch is dropped, so a quick turn of the wheel goes one workspace:
+  `wheel-binding-cooldown` under `[input]` sets that time (0 to 1000 ms; 0 counts every notch).
 - On a touchpad, four fingers left go to the next workspace and four fingers right to the
   previous one.
 - Bars and pagers that support ext-workspace, such as Noctalia's, show them and switch between
@@ -277,8 +279,8 @@ follows it as it changes.
 **Mouse and touchpad.** `[input.touchpad]` and `[input.mouse]` set natural scrolling, pointer
 speed and acceleration, tap to click (on by default), disabling the touchpad while typing, how
 a clickpad tells left from right clicks, and middle-click emulation. Settings you leave out
-keep libinput's defaults for the device. Mod with the mouse wheel switches workspaces (see
-[Workspaces](#workspaces)), and a binding can use a wheel notch as its key (see
+keep libinput's defaults for the device. Mod with the mouse wheel switches workspaces, a quick
+turn of the wheel one (`wheel-binding-cooldown` under `[input]`, see [Workspaces](#workspaces)), and a binding can use a wheel notch as its key (see
 [The configuration file](#the-configuration-file)).
 
 **Touchpad gestures.** Pila handles these swipes itself:
@@ -347,7 +349,8 @@ prints what's wrong.
 
 Keys are xkb key names (`Return`, `Tab`, `q`, `F5`, `XF86AudioMute`), or a mouse wheel's notch:
 `WheelScrollUp`, `WheelScrollDown`, `WheelScrollLeft` and `WheelScrollRight` run once a notch,
-and the app under the pointer doesn't get those notches (a touchpad's scrolling is never one).
+but not again within `wheel-binding-cooldown` (`[input]`, 150 ms unless set), and the app under
+the pointer doesn't get those notches (a touchpad's scrolling is never one).
 The modifiers (`Mod`, `Shift`, `Ctrl`, `Alt`, `Super`) must match exactly. `spawn` runs the rest of the line with
 `sh`, with the name of the monitor under the pointer in `PILA_OUTPUT`. The actions are listed
 in `config.example.toml`.

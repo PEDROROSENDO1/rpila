@@ -58,7 +58,10 @@ Key flows and invariants:
   plus 15 px, a touchpad's pixels, with a stop when the fingers lift. Before that, a mouse
   wheel's steps with the held modifiers may be a binding (`Trigger::Wheel`,
   `wheel_bindings`): each notch (`value120` summed in `InputState::wheel_v120`, for
-  high-resolution wheels; turning back starts over) runs it once, and a bound axis isn't
+  high-resolution wheels; turning back starts over) runs it once, except within
+  `wheel-binding-cooldown` of the last run on that axis (`InputState::wheel_ran`, wall
+  clock: event times differ by backend), where it's dropped, so a quick turn of the wheel
+  is one workspace and not all of them; and a bound axis isn't
   sent to the client; the keyboard's filters apply (locked, window menu open, shortcuts
   inhibited: the scroll is the client's).
   Bindings don't run while the focused surface (or its menu's window) holds an active

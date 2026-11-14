@@ -776,8 +776,11 @@ impl Pila {
 
     /// A mouse wheel's steps bound with the held modifiers
     /// (`Config::wheel_action`): each notch (`value120` 120, summed for
-    /// wheels that send parts of one) runs the action once. Returns which
-    /// axes (horizontal, vertical) were bound, which the client doesn't get.
+    /// wheels that send parts of one) runs the action once, unless it comes
+    /// within `wheel-binding-cooldown` of the last run on that axis: a quick
+    /// turn of the wheel is many notches, and would run through all the
+    /// workspaces. Returns which axes (horizontal, vertical) were bound,
+    /// which the client doesn't get, dropped notches included.
     /// The same filters as the keyboard's bindings: not while locked, while
     /// the window menu is open or shortcuts are inhibited.
     fn wheel_bindings<I: InputBackend>(&mut self, event: &I::PointerAxisEvent) -> [bool; 2] {
@@ -802,6 +805,9 @@ impl Pila {
             ),
             (Axis::Vertical, WheelDirection::Up, WheelDirection::Down),
         ];
+        let now = std::time::Instant::now();
+        let cooldown =
+            std::time::Duration::from_millis(self.config.input.wheel_binding_cooldown.into());
         let mut actions = Vec::new();
         for (i, (axis, back, forward)) in axes.into_iter().enumerate() {
             let Some(v120) = event.amount_v120(axis).filter(|v| *v != 0.0) else {
@@ -821,6 +827,11 @@ impl Pila {
             *sum += v120;
             while sum.abs() >= 120.0 {
                 *sum -= 120.0f64.copysign(*sum);
+                let ran = &mut self.input.wheel_ran[i];
+                if ran.is_some_and(|ran| now.duration_since(ran) < cooldown) {
+                    continue;
+                }
+                *ran = Some(now);
                 actions.push(action.clone());
             }
         }

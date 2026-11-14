@@ -142,7 +142,10 @@ impl Pila {
         if old.keyboard != self.config.keyboard {
             self.apply_keyboard_config();
         }
-        if old.input != self.config.input {
+        // The wheel's cooldown is read when used; the rest is libinput's.
+        if old.input.touchpad != self.config.input.touchpad
+            || old.input.mouse != self.config.input.mouse
+        {
             if let Some(backend) = &mut self.backend {
                 backend.apply_input_config(&self.config.input);
             }

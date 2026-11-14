@@ -117,6 +117,12 @@
 # repeat-rate = 25                 # (default) repeats per second
 
 # Touchpad and mouse (libinput, on a TTY; nested, the host handles input).
+# Mouse wheel bindings (Mod+wheel switches workspaces): the least time in
+# ms (0 to 1000) between two runs of one. The notches of a quick turn of the
+# wheel inside it are dropped, so it goes one workspace; 0 runs it each notch.
+[input]
+# wheel-binding-cooldown = 150     # (default)
+
 # Unset options keep libinput's defaults for the device, except tap, which
 # Pila turns on. Options a device doesn't support are skipped.
 [input.touchpad]

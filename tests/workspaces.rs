@@ -97,10 +97,11 @@ fn mod_shift_page_keys_move_the_window() {
 }
 
 /// Mod with a mouse wheel notch: down is the next workspace, up the
-/// previous; the window under the pointer never sees those notches.
+/// previous; the window under the pointer never sees those notches. With no
+/// cooldown, every notch counts, two in one event too.
 #[test]
 fn mod_wheel_steps_through_workspaces_and_the_window_doesnt_see_it() {
-    let mut pila = TestPila::with_config("workspaces = 3\n");
+    let mut pila = TestPila::with_config("workspaces = 3\n[input]\nwheel-binding-cooldown = 0\n");
     let client = pila.client();
     client.window("a").size(400, 300).create();
     pila.wait_focus("a");
@@ -157,6 +158,62 @@ fn a_high_resolution_wheel_switches_once_a_notch() {
         |s| s["workspace"] == 2,
     );
     pila.key_release("Super_L");
+}
+
+/// A quick turn of the wheel is several notches at once: by default the
+/// first one switches and the rest, inside the cooldown, are dropped.
+#[test]
+fn a_flick_of_the_wheel_switches_one_workspace() {
+    let mut pila = TestPila::with_config("workspaces = 9\n");
+    pila.key_press("Super_L");
+    pila.scroll("wheel", 0.0, 4.0);
+    pila.wait("2", |s| s["workspace"] == 2);
+    pila.stays(
+        "the other notches were dropped",
+        std::time::Duration::from_millis(100),
+        |s| s["workspace"] == 2,
+    );
+    pila.key_release("Super_L");
+}
+
+/// `wheel-binding-cooldown`: notches inside it are dropped, and still don't
+/// reach the window; past it the next notch runs the binding again.
+#[test]
+fn wheel_binding_cooldown_drops_the_notches_inside_it() {
+    let mut pila = TestPila::with_config("workspaces = 9\n[input]\nwheel-binding-cooldown = 600\n");
+    let client = pila.client();
+    client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+    pila.move_to((x + 100) as f64, (y + 100) as f64);
+    client.wait("pointer enter", |s| s.pointer_name.as_deref() == Some("a"));
+
+    pila.key_press("Super_L");
+    let started = std::time::Instant::now();
+    for _ in 0..4 {
+        pila.scroll("wheel", 0.0, 1.0);
+    }
+    pila.wait("2", |s| s["workspace"] == 2);
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(400),
+        "too slow to stay inside the cooldown"
+    );
+    pila.stays("still on 2", std::time::Duration::from_millis(100), |s| {
+        s["workspace"] == 2
+    });
+    // Letting the cooldown run out is the point here, not waiting for
+    // something to happen.
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    pila.scroll("wheel", 0.0, 1.0);
+    pila.wait("3", |s| s["workspace"] == 3);
+    pila.key_release("Super_L");
+    client.roundtrip();
+    let scrolled = |e: &Ev| matches!(e, Ev::Axis { .. } | Ev::AxisV120 { .. });
+    assert!(
+        !client.events().iter().any(scrolled),
+        "{:?}",
+        client.events()
+    );
 }
 
 #[test]
