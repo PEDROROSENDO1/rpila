@@ -619,9 +619,10 @@ fn the_screenshot_bindings_run_grim() {
         ),
         (
             "grim",
-            "echo \"grim $*\" >> \"$XDG_RUNTIME_DIR/shots\"\n\
-             for last; do :; done\n\
-             if [ \"$last\" = - ]; then echo PNG; else echo PNG > \"$last\"; fi\n",
+            // The picture before the log line the test waits for.
+            "for last; do :; done\n\
+             if [ \"$last\" = - ]; then echo PNG; else echo PNG > \"$last\"; fi\n\
+             echo \"grim $*\" >> \"$XDG_RUNTIME_DIR/shots\"\n",
         ),
         (
             "wl-copy",
