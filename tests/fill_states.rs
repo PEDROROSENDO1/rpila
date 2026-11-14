@@ -262,3 +262,30 @@ fn a_click_on_the_title_bar_of_a_filled_window_doesnt_restore_it() {
         },
     );
 }
+
+/// Unfullscreen or unmaximize asked of a window that is neither changes
+/// nothing: GTK 4 unsets fullscreen as a drag on its own title bar starts,
+/// and the window jumped to two thirds of the output, centered.
+#[test]
+fn unfilling_a_window_that_isnt_filled_leaves_it_where_it_is() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let a = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+Right");
+    pila.combo("Super+Shift+Down");
+    let before = pila.wait("moved", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]).0 != 440
+    });
+    let before = rect(&window_in(&before, "a").unwrap()["geometry"]);
+    let configures = client.configures(a).len();
+    client.request(a, |t| t.unset_fullscreen());
+    client.request(a, |t| t.unset_maximized());
+    // Each still answered with a configure, as the protocol says.
+    client.wait("two configures", |s| {
+        s.windows[a.0].configures.len() >= configures + 2
+    });
+    pila.stays("where it was", Duration::from_millis(300), |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == before
+    });
+}

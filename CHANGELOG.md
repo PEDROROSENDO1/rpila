@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A GTK 4 window dragged by its own title bar no longer jumps:** GTK asks to leave fullscreen
+  as such a drag starts, even when the window isn't fullscreen, and Pila took that for a window
+  coming back from fullscreen: it moved it to its default place, two thirds of the screen,
+  centered. A request for the state a window is already in now changes nothing (Pila still
+  answers it, as the protocol says).
 - **Pila writes your configuration file the first time:** with no `~/.config/pila/config.toml`
   (or `$XDG_CONFIG_HOME/pila/config.toml`), it creates it from `config.example.toml`, every line
   commented out, so nothing changes until you edit it, and changes apply as you save from the

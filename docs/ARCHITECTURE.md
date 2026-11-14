@@ -1025,6 +1025,9 @@ Key flows and invariants:
   reads it). `set_fill_state` is the single entry point; it stores the pre-fill geometry in
   the window's user data (`RestoreGeometry`) and restores it on exit; a window that
   started filled (no saved geometry) is restored to two thirds of its output, centered.
+  A client's request goes through `update_fill`, which only answers with a configure when
+  it asks for the state the window is in (GTK 4 unsets fullscreen as a drag on its own
+  title bar starts: `set_fill_state` would place a window that isn't filled).
 - **Decorations** (`decoration.rs`): Pila prefers server-side and honors client requests
   (`handlers/xdg_shell.rs`); clients that don't bind xdg-decoration (GTK, weston) draw
   their own. A decorated window's `Space` location is still its geometry origin; the title
