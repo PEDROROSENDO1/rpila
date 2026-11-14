@@ -954,7 +954,8 @@ Key flows and invariants:
   drawn just above the windows) and applies it on release; dragging a snapped or filled
   window first restores its old size under the cursor, once the pointer has moved
   `RESTORE_DISTANCE` (`restore_for_drag`; a click on its title bar or a Mod+click isn't a
-  drag and leaves it as it is). Keyboard
+  drag and leaves it as it is); a snapped one also goes down as far as the pointer did since
+  the press, which a client's own drag (GTK's, after its own threshold) makes sizable. Keyboard
   move/resize/center go through `apply_rect`, which also configures X11 windows.
   `Side` also names the four quarters (`snap-top-left`, ... or a drag near a corner:
   `edge_target`); a quarter is tiled only on the edges it touches.

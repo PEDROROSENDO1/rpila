@@ -16,7 +16,10 @@ Integration tests (`tests/*.rs`, harness in `tests/common/`) run a headless Pila
   that something doesn't happen uses `stays`.
 - `Client` (`tests/common/client.rs`) is a synthetic Wayland client on its own thread that
   acks configures, draws its color at the configured size and records configures and input
-  events.
+  events. A window can act like GTK 4's: `csd_shadow` draws a client-side shadow around its
+  geometry, `gtk_drag` drags it by its own title bar (past GTK's threshold, `unset_fullscreen`
+  then `move`, as GTK does). Real apps do what the plain client doesn't; give a test the
+  GTK window when the client's side of it matters.
 - A failing test prints the state and Pila's log; `PILA_TEST_LOG` sets its `RUST_LOG`,
   `PILA_TEST_KEEP=1` keeps a failed test's directory, `PILA_HEADLESS_DEVICE=software` renders
   on llvmpipe as CI does. A Pila that panics fails its test, unless the test made it crash on

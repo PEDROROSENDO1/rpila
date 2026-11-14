@@ -1482,8 +1482,14 @@ impl Pila {
     }
 
     /// A move grab of a maximized, fullscreen or snapped window, once the
-    /// pointer has moved: back to its old size under the cursor, at `at`.
-    pub fn restore_for_drag(&mut self, window: &Window, at: Point<f64, Logical>) {
+    /// pointer has moved from `pressed` to `at`: back to its old size under
+    /// the cursor.
+    pub fn restore_for_drag(
+        &mut self,
+        window: &Window,
+        pressed: Point<f64, Logical>,
+        at: Point<f64, Logical>,
+    ) {
         let (maximized, fullscreen) = fill_state(window);
         if maximized || fullscreen {
             let width = restore_geometry(window)
@@ -1509,7 +1515,10 @@ impl Pila {
                 .unwrap_or(window.geometry().size.w);
             let before_w = crate::snap::snapped_before_width(window).unwrap_or(width);
             let x = at.x as i32 - before_w / 2;
-            let y = self.space.element_location(window).map_or(0, |l| l.y);
+            // Down as far as the pointer went since the press: it keeps its
+            // place on the title bar (a client's own drag starts late).
+            let y = self.space.element_location(window).map_or(0, |l| l.y)
+                + (at.y - pressed.y).round() as i32;
             self.unsnap_window(window, Some((x, y).into()));
         }
     }

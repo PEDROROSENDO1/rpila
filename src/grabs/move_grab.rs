@@ -60,7 +60,7 @@ impl PointerGrab<Pila> for MoveSurfaceGrab {
                 return;
             }
             self.restore_on_drag = false;
-            data.restore_for_drag(&self.window, event.location);
+            data.restore_for_drag(&self.window, self.start_data.location, event.location);
             let Some(location) = data.space.element_location(&self.window) else {
                 handle.unset_grab(self, data, event.serial, event.time, true);
                 return;

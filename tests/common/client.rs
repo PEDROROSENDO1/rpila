@@ -149,6 +149,25 @@ pub struct WindowData {
     pub outputs: Vec<String>,
     pub preferred_scale: Option<i32>,
     pub bounds: Option<(i32, i32)>,
+    /// As GTK draws its client-side shadow: the buffer reaches this far
+    /// past the window geometry on every side (`WindowBuilder::csd_shadow`).
+    pub csd_margin: i32,
+    /// As GTK's own title bar: a press in the top `GTK_HEADER` pixels that
+    /// moves past `GTK_DRAG_THRESHOLD` asks to unset fullscreen, then to
+    /// move (`WindowBuilder::gtk_drag`).
+    pub gtk_drag: bool,
+}
+
+/// GTK's header bar height and drag threshold, as the test client mimics them.
+pub const GTK_HEADER: f64 = 30.0;
+pub const GTK_DRAG_THRESHOLD: f64 = 8.0;
+
+/// A press on a `gtk_drag` window's header, waiting to become a drag.
+#[derive(Clone, Copy)]
+struct HeaderPress {
+    window: usize,
+    serial: u32,
+    at: (f64, f64),
 }
 
 #[derive(Default)]
@@ -184,6 +203,10 @@ pub struct Shared {
     pub keymap: Option<(u32, String)>,
     /// The serial of the last pointer enter (for set_cursor).
     pub pointer_enter_serial: u32,
+    /// The window under the pointer and where, surface-local.
+    pointer_window: Option<usize>,
+    pointer_at: (f64, f64),
+    header_press: Option<HeaderPress>,
     /// The current selection offers: clipboard, primary, data-control's
     /// clipboard and primary.
     pub data_offer: Option<wayland_client::protocol::wl_data_offer::WlDataOffer>,
@@ -238,6 +261,52 @@ pub struct SurfaceData {
 }
 
 impl Shared {
+    /// A left press on a `gtk_drag` window's header starts waiting for a
+    /// drag; any release ends it.
+    fn header_button(&mut self, button: u32, pressed: bool, serial: u32) {
+        const BTN_LEFT: u32 = 0x110;
+        if !pressed {
+            self.header_press = None;
+            return;
+        }
+        let Some(window) = self.pointer_window else {
+            return;
+        };
+        let w = &self.windows[window];
+        let y = self.pointer_at.1 - w.csd_margin as f64;
+        if button == BTN_LEFT && w.gtk_drag && (0.0..GTK_HEADER).contains(&y) {
+            self.header_press = Some(HeaderPress {
+                window,
+                serial,
+                at: self.pointer_at,
+            });
+        }
+    }
+
+    /// Past the drag threshold, do what GTK 4 does: unset fullscreen (even
+    /// when not fullscreen), then ask to move.
+    fn header_drag_motion(&mut self) {
+        let Some(press) = self.header_press else {
+            return;
+        };
+        let (dx, dy) = (
+            self.pointer_at.0 - press.at.0,
+            self.pointer_at.1 - press.at.1,
+        );
+        if dx.hypot(dy) < GTK_DRAG_THRESHOLD {
+            return;
+        }
+        self.header_press = None;
+        let (Some(toplevel), Some(seat)) = (
+            self.windows[press.window].toplevel.clone(),
+            self.seat.clone(),
+        ) else {
+            return;
+        };
+        toplevel.unset_fullscreen();
+        toplevel._move(&seat, press.serial);
+    }
+
     fn window_of(&self, surface: &WlSurface) -> Option<usize> {
         self.windows.iter().position(|w| w.surface == *surface)
     }
@@ -299,6 +368,8 @@ pub struct WindowBuilder<'a> {
     max_size: Option<(i32, i32)>,
     maximized: bool,
     fullscreen: bool,
+    csd_margin: i32,
+    gtk_drag: bool,
     before_commit: Option<BeforeCommit<'a>>,
 }
 
@@ -340,6 +411,18 @@ impl<'a> WindowBuilder<'a> {
     }
     pub fn fullscreen(mut self) -> Self {
         self.fullscreen = true;
+        self
+    }
+    /// Draw a client-side shadow `margin` pixels wide around the window
+    /// geometry, as GTK does: the geometry starts that far into the surface.
+    pub fn csd_shadow(mut self, margin: i32) -> Self {
+        self.csd_margin = margin;
+        self
+    }
+    /// Drag the window by its own title bar the way GTK 4 does (see
+    /// `WindowData::gtk_drag`).
+    pub fn gtk_drag(mut self) -> Self {
+        self.gtk_drag = true;
         self
     }
 
@@ -411,6 +494,8 @@ impl<'a> WindowBuilder<'a> {
             outputs: Vec::new(),
             preferred_scale: None,
             bounds: None,
+            csd_margin: self.csd_margin,
+            gtk_drag: self.gtk_drag,
         });
         drop(shared);
         c.flush();
@@ -506,6 +591,8 @@ impl Client {
             max_size: None,
             maximized: false,
             fullscreen: false,
+            csd_margin: 0,
+            gtk_drag: false,
             before_commit: None,
         }
     }
@@ -781,8 +868,52 @@ fn dispatch(queue: &mut EventQueue<Handler>, handler: &mut Handler) -> Result<()
 }
 
 fn draw(shm: &WlShm, qh: &QueueHandle<Handler>, w: &mut WindowData, size: (i32, i32)) {
-    paint(shm, qh, &w.surface, w.color, size);
+    let m = w.csd_margin;
+    if m > 0 {
+        // A translucent frame of shadow around the content; the geometry
+        // is the content.
+        w.xdg_surface.set_window_geometry(m, m, size.0, size.1);
+        paint_framed(shm, qh, &w.surface, w.color, size, m);
+    } else {
+        paint(shm, qh, &w.surface, w.color, size);
+    }
     w.size = size;
+}
+
+/// `paint`, with `margin` pixels of translucent black around `size`.
+fn paint_framed(
+    shm: &WlShm,
+    qh: &QueueHandle<Handler>,
+    surface: &WlSurface,
+    color: [u8; 4],
+    size: (i32, i32),
+    margin: i32,
+) {
+    let (width, height) = (size.0 + 2 * margin, size.1 + 2 * margin);
+    let stride = width * 4;
+    let len = (stride * height) as usize;
+    // SAFETY: a new fd owned by `file`.
+    let fd = unsafe { libc::memfd_create(c"pila-test".as_ptr(), libc::MFD_CLOEXEC) };
+    assert!(fd >= 0, "memfd_create");
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let [a, r, g, b] = color;
+    let content = [b, g, r, a];
+    // Premultiplied.
+    let shadow = [0, 0, 0, 0x40];
+    let mut data = Vec::with_capacity(len);
+    for y in 0..height {
+        for x in 0..width {
+            let inside = x >= margin && x < width - margin && y >= margin && y < height - margin;
+            data.extend_from_slice(if inside { &content } else { &shadow });
+        }
+    }
+    file.write_all(&data).unwrap();
+    let pool = shm.create_pool(file.as_fd(), len as i32, qh, ());
+    let buffer = pool.create_buffer(0, width, height, stride, wl_shm::Format::Argb8888, qh, ());
+    pool.destroy();
+    surface.attach(Some(&buffer), 0, 0);
+    surface.damage_buffer(0, 0, width, height);
+    surface.commit();
 }
 
 /// Attach a buffer of `size` in `color` (ARGB) to `surface` and commit.
@@ -1161,6 +1292,8 @@ impl Dispatch<WlPointer, ()> for Handler {
                 s.last_serial = serial;
                 s.pointer_enter_serial = serial;
                 s.pointer_name = s.name_of(&surface);
+                s.pointer_window = s.window_of(&surface);
+                s.pointer_at = (surface_x, surface_y);
                 Ev::PointerEnter {
                     window: s.window_of(&surface),
                     x: surface_x,
@@ -1170,16 +1303,21 @@ impl Dispatch<WlPointer, ()> for Handler {
             }
             wl_pointer::Event::Leave { surface, .. } => {
                 s.pointer_name = None;
+                s.pointer_window = None;
                 Ev::PointerLeave(s.window_of(&surface))
             }
             wl_pointer::Event::Motion {
                 surface_x,
                 surface_y,
                 ..
-            } => Ev::Motion {
-                x: surface_x,
-                y: surface_y,
-            },
+            } => {
+                s.pointer_at = (surface_x, surface_y);
+                s.header_drag_motion();
+                Ev::Motion {
+                    x: surface_x,
+                    y: surface_y,
+                }
+            }
             wl_pointer::Event::Button {
                 button,
                 state: button_state,
@@ -1187,6 +1325,8 @@ impl Dispatch<WlPointer, ()> for Handler {
                 ..
             } => {
                 s.last_serial = serial;
+                let pressed = button_state == WEnum::Value(wl_pointer::ButtonState::Pressed);
+                s.header_button(button, pressed, serial);
                 Ev::Button {
                     button,
                     pressed: button_state == WEnum::Value(wl_pointer::ButtonState::Pressed),

@@ -433,3 +433,119 @@ fn resizing_a_snapped_window_forgets_the_snap() {
     });
     assert!(window_in(&state, "a").unwrap()["snapped"].is_null());
 }
+
+// --- Windows that act like GTK 4's: a client-side shadow, dragged by their own
+// title bar (`WindowBuilder::gtk_drag`: past the threshold, unset fullscreen,
+// then move) ---------------------------------------------------------------------
+
+fn gtk_window() -> (
+    TestPila,
+    Client,
+    common::client::Window,
+    (i64, i64, i64, i64),
+) {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client
+        .window("a")
+        .size(400, 300)
+        .decorations(Decorations::Client)
+        .csd_shadow(20)
+        .gtk_drag()
+        .create();
+    pila.wait_focus("a");
+    let geometry = rect(&pila.window("a")["geometry"]);
+    (pila, client, window, geometry)
+}
+
+/// Press on the header at `(x, y)` and drag by `(dx, dy)` in small steps, as
+/// a hand does; the window's geometry after the release.
+fn header_drag(
+    pila: &mut TestPila,
+    client: &Client,
+    at: (i64, i64),
+    by: (f64, f64),
+) -> (i64, i64, i64, i64) {
+    pila.move_to(at.0 as f64, at.1 as f64);
+    client.wait("the pointer on a", |s| {
+        s.pointer_name.as_deref() == Some("a")
+    });
+    pila.press("left");
+    client.wait("the press", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, common::client::Ev::Button { pressed: true, .. }))
+    });
+    for i in 1..=20 {
+        pila.move_to(
+            at.0 as f64 + by.0 * i as f64 / 20.0,
+            at.1 as f64 + by.1 * i as f64 / 20.0,
+        );
+        if i == 4 {
+            // Past GTK's threshold: its move request starts the grab.
+            pila.wait("a move grab", |s| s["pointer"]["grab"] == "move");
+        }
+    }
+    pila.release("left");
+    let state = pila.wait("the grab to end", |s| s["pointer"]["grabbed"] == false);
+    rect(&window_in(&state, "a").unwrap()["geometry"])
+}
+
+#[test]
+fn a_gtk_window_dragged_by_its_header_follows_the_pointer_exactly() {
+    let (mut pila, client, _, (x, y, w, h)) = gtk_window();
+    let moved = header_drag(&mut pila, &client, (x + 100, y + 10), (100.0, 60.0));
+    assert_eq!(moved, (x + 100, y + 60, w, h));
+    let state = pila.state();
+    let a = window_in(&state, "a").unwrap();
+    assert_eq!(
+        (a["maximized"].clone(), a["fullscreen"].clone()),
+        (false.into(), false.into())
+    );
+}
+
+#[test]
+fn a_click_on_a_gtk_header_moves_nothing() {
+    let (mut pila, client, _, before) = gtk_window();
+    pila.move_to((before.0 + 100) as f64, (before.1 + 10) as f64);
+    client.wait("the pointer on a", |s| {
+        s.pointer_name.as_deref() == Some("a")
+    });
+    pila.click("left");
+    pila.stays("where it was", std::time::Duration::from_millis(300), |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == before
+    });
+}
+
+/// A maximized or snapped GTK window dragged by its header comes back to its
+/// size under the pointer, which stays on its header.
+#[test]
+fn a_filled_gtk_window_dragged_by_its_header_comes_back_under_the_pointer() {
+    for (combo, what) in [("Super+m", "maximized"), ("Super+Left", "snapped")] {
+        let (mut pila, client, _, (_, _, w, h)) = gtk_window();
+        pila.combo(combo);
+        let filled = pila.wait(what, |s| {
+            let a = window_in(s, "a").unwrap();
+            a["geometry"]["w"] != w && (a["maximized"] == true || !a["snapped"].is_null())
+        });
+        let (fx, fy, fw, _) = rect(&window_in(&filled, "a").unwrap()["geometry"]);
+        let at = (fx + fw / 2, fy + 10);
+        header_drag(&mut pila, &client, at, (40.0, 120.0));
+        // The client draws its old size once more before the new one.
+        let state = pila.wait(&format!("{what}: back to its size"), |s| {
+            let g = rect(&window_in(s, "a").unwrap()["geometry"]);
+            (g.2, g.3) == (w, h)
+        });
+        let (x, y, rw, rh) = rect(&window_in(&state, "a").unwrap()["geometry"]);
+        let (px, py) = (at.0 + 40, at.1 + 120);
+        assert!(
+            (x..x + rw).contains(&px) && (y..y + common::client::GTK_HEADER as i64).contains(&py),
+            "{what}: the pointer ({px}, {py}) is off the header of {:?}",
+            (x, y, rw, rh)
+        );
+        let state = pila.state();
+        let a = window_in(&state, "a").unwrap();
+        assert_eq!(a["maximized"], false, "{what}");
+        assert!(a["snapped"].is_null(), "{what}");
+    }
+}

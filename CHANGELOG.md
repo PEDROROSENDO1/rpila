@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A snapped window dragged out of its half stays under the pointer:** since 0.5.4 it came back
+  to its size only once the pointer had moved, and it lost that first stretch of the drag: it
+  ended up a little above the pointer with Pila's title bar, and well above it when dragged by an
+  app's own title bar (GTK's starts its drag late).
 - **A taskbar's "unmaximize" or "leave fullscreen" on a window that isn't either no longer moves
   it:** like GTK 4's request fixed in 0.5.5, it took the window to its default place, two thirds of
   the screen, centered. Requests from taskbars and docks (wlr-foreign-toplevel) for the state a
