@@ -523,6 +523,13 @@ fn a_dock_menu_that_goes_away_leaves_no_grab_behind() {
             [0, 0, 255, 255],
         );
         shell.wait_surface_configured(dock);
+        pila.wait("the dock mapped", |s| {
+            s["layers"].as_array().is_some_and(|layers| {
+                layers
+                    .iter()
+                    .any(|l| l["namespace"] == "dock" && l["geometry"]["h"] == 60)
+            })
+        });
         let b = handle(&shell, "b");
         // A right click on the dock (centered at the bottom: 490..790,
         // 740..800) opens its menu above it, grabbing.
