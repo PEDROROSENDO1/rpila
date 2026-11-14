@@ -1059,7 +1059,9 @@ Key flows and invariants:
   thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
   the window, and `render_with` returns `None` on sizes that overflow.
 - **Rounded corners** (`rounded.rs`, `corner-radius`, default 0): `Pila::scene` gives each
-  window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; radius
+  window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; the global
+  radius not for a client that draws its own shadow, `bbox` past its geometry, as for shadows,
+  since it draws its own corners: a rule's radius still applies; radius
   at most half the shorter side and, with a bar, its height). `render::single_window_elements`
   then builds the window's elements itself (`rounded_window_elements`: popups first and unclipped, as
   `Window::render_elements` does) and wraps its own surface elements that reach into a

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **`corner-radius` no longer gives GTK apps a double corner:** apps that draw their own shadow
+  draw their own rounded corners too, and Pila rounded the window again, inside the app's shadow,
+  which kept its own corner. The global `corner-radius` now leaves them as they are; a window
+  rule's `corner-radius` still rounds them. Reported by a tester.
 - **A dock or panel menu closed by a click on the bare desktop gives the keyboard back to a
   window:** the menu's keyboard grab outlived it, and the next key gave the keyboard to the
   panel, which takes none, so typing went nowhere. Found by the input invariants the tests now

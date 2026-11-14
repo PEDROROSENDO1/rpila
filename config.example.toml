@@ -40,8 +40,10 @@
 # workspaces = 4                   # (default)
 
 # Rounded window corners: the radius in logical pixels, 0 (square) to 64.
-# Maximized and fullscreen windows stay square. The radius is at most half
-# the window's shorter side, and with a title bar at most the bar's height (28).
+# Maximized and fullscreen windows stay square, and so do apps that draw their
+# own shadow and corners (GTK apps; a window rule's corner-radius rounds them).
+# The radius is at most half the window's shorter side, and with a title bar at
+# most the bar's height (28).
 # corner-radius = 0                # (default)
 
 # Monitors on the seat's other GPUs (a laptop's HDMI or DisplayPort wired to

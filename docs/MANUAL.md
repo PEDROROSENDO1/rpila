@@ -161,7 +161,9 @@ be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own 
 
 **Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
 64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
-height (28). Maximized and fullscreen windows stay square. A window rule sets it per app.
+height (28). Maximized and fullscreen windows stay square, and so do apps that draw their own
+shadow (GTK apps): they draw their own corners too, and rounding them as well would leave a
+double corner. A window rule sets it per app, those included.
 
 **Shadows.** Each window casts a shadow, darker under the focused one. Maximized and fullscreen
 windows have none, and neither do those whose app draws its own (GTK apps do). `[shadow]` sets

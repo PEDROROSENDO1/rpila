@@ -1012,3 +1012,41 @@ fn a_blurred_window_slides_away_with_its_backdrop() {
     pila.settle();
     wait_mixed(&mut pila, 636.0, 400.0);
 }
+
+/// An app that draws its own shadow (GTK) draws its own corners too: the
+/// global `corner-radius` leaves it square, or Pila's rounded cut and the
+/// app's shadow would make a double corner. A rule's `corner-radius` still
+/// rounds it, as asked for that app.
+#[test]
+fn corner_radius_leaves_an_app_that_draws_its_own_shadow_to_it() {
+    for (config, rounded) in [
+        ("corner-radius = 30\n", false),
+        (
+            "corner-radius = 30\n[[window-rule]]\napp-id = \"a\"\ncorner-radius = 30\n",
+            true,
+        ),
+    ] {
+        let mut pila = TestPila::with_config(config);
+        let client = pila.client();
+        client
+            .window("a")
+            .size(400, 300)
+            .color(RED)
+            .decorations(common::client::Decorations::Client)
+            .csd_shadow(20)
+            .create();
+        pila.wait_focus("a");
+        let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+        pila.settle();
+        let corner = pila.pixel((x + 2) as f64, (y + 2) as f64);
+        if rounded {
+            assert_ne!(corner, [255, 0, 0, 255], "a rule's radius rounds it");
+        } else {
+            assert_eq!(
+                corner,
+                [255, 0, 0, 255],
+                "the global radius leaves its corner to it"
+            );
+        }
+    }
+}
