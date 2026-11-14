@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.6 (2026-11-14)
 
 - **`corner-radius` no longer gives GTK apps a double corner:** apps that draw their own shadow
   draw their own rounded corners too, and Pila rounded the window again, inside the app's shadow,
