@@ -715,6 +715,11 @@ impl Pila {
             },
         );
         pointer.frame(self);
+        // A click outside a menu ended its pointer grab: end the keyboard's
+        // now too (`end_finished_popup_grab`).
+        if !pointer.is_grabbed() && self.seat.get_keyboard().is_some_and(|k| k.is_grabbed()) {
+            self.end_finished_popup_grab();
+        }
     }
 
     fn on_pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {

@@ -417,9 +417,10 @@ Key flows and invariants:
   Smithay ends a popup grab only at the next input event and spends it (a motion that ends
   the pointer grab moves nothing), so after a popup is destroyed `end_finished_popup_grab`
   (idle, after the request) ends a finished grab at once: the manager's cleanup, a motion
-  where the pointer is (passed on if a menu is still open), then a fresh pointer focus, and
-  the keyboard to the most recent window if Smithay gave it back to a layer surface that
-  takes none (a dock's menu).
+  where the pointer is (passed on if a menu is still open), then a fresh pointer focus. Once
+  the pointer's grab is over, there or by a click outside the menu (`pointer_button` calls it
+  then), it ends the keyboard's grab too, and gives the keyboard to the most recent window
+  if it's on nothing or on a layer surface that takes none, or a menu of one (a dock's).
 - **Window lifecycle:** `new_toplevel` pushes the window onto `Pila::windows.unmapped` (not the
   space). A client unmapping it (a null-buffer commit, `unmap_if_buffer_removed`) takes it
   out of the space, taskbars (`remove_foreign_toplevel`, which also stops its capture

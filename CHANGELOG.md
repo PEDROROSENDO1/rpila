@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A dock or panel menu closed by a click on the bare desktop gives the keyboard back to a
+  window:** the menu's keyboard grab outlived it, and the next key gave the keyboard to the
+  panel, which takes none, so typing went nowhere. Found by the input invariants the tests now
+  check.
 - **A window unmaximized and then made fullscreen quickly comes back to its own size:** if the app
   hadn't drawn its unmaximized size yet when it went fullscreen, Pila took the size it still had
   drawn, the maximized one, for the one to come back to. It now keeps the size it asked the app

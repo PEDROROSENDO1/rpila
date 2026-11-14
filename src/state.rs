@@ -1262,34 +1262,42 @@ impl Pila {
                     .is_some()
             })
             .unwrap_or(false);
-        if !popup_grab {
+        if popup_grab {
+            // The grab sees its popups gone after the manager's cleanup;
+            // then a motion where the pointer is: the grab passes it on if a
+            // menu is still open (a submenu went away), and ends itself if
+            // not.
+            self.popups.cleanup();
+            self.refresh_pointer_focus();
+            if pointer.is_grabbed() {
+                return;
+            }
+            // It restored the focus it had when the grab started.
+            self.refresh_pointer_focus();
+        } else if pointer.is_grabbed() {
+            // Another grab (a move): not a menu's.
             return;
         }
-        // The grab sees its popups gone after the manager's cleanup; then a
-        // motion where the pointer is: the grab passes it on if a menu is
-        // still open (a submenu went away), and ends itself if not.
-        self.popups.cleanup();
-        self.refresh_pointer_focus();
-        if pointer.is_grabbed() {
-            return;
-        }
-        // It restored the focus it had when the grab started.
-        self.refresh_pointer_focus();
+        // The pointer's menu grab is over (here, or by a click outside it):
+        // the keyboard's too, which Smithay would only end at the next key.
         if let Some(keyboard) = self.seat.get_keyboard() {
             if keyboard.is_grabbed() {
                 keyboard.unset_grab(self);
             }
         }
-        // Smithay gives the keyboard back to the menu's parent: right for a
-        // window, not for a panel or dock that takes no keyboard.
+        // The keyboard goes back to a window when it's on nothing, or on a
+        // panel or dock that takes none (or a menu of one): Smithay gives it
+        // back to the menu's parent, right for a window only.
         let refocus = match self.keyboard_focus().filter(|focus| focus.is_alive()) {
-            Some(focus) => focus
-                .wl_surface()
-                .and_then(|surface| self.layer_for_surface(&surface))
-                .is_some_and(|(_, layer)| {
-                    layer.cached_state().keyboard_interactivity
-                        == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::None
-                }),
+            Some(focus) => {
+                let root = self.popup_root(&focus).unwrap_or(focus);
+                root.wl_surface()
+                    .and_then(|surface| self.layer_for_surface(&surface))
+                    .is_some_and(|(_, layer)| {
+                        layer.cached_state().keyboard_interactivity
+                            == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::None
+                    })
+            }
             None => true,
         };
         if refocus {

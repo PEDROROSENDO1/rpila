@@ -643,3 +643,62 @@ fn taskbar_requests_for_the_current_state_change_nothing() {
         }
     }
 }
+
+/// A dock's menu dismissed by a click on the bare desktop, then destroyed by
+/// its app: the keyboard isn't left with the dock, which takes none, nor
+/// given back to it at the next key.
+#[test]
+fn a_dock_menu_dismissed_on_the_desktop_leaves_the_keyboard_to_a_window() {
+    let mut pila = TestPila::start();
+    let app = pila.client();
+    app.window("a").size(300, 200).create();
+    pila.wait_focus("a");
+
+    let shell = pila.client();
+    let (dock, _) = shell.layer_surface(
+        "dock",
+        &LayerSpec {
+            anchor:
+                wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::Anchor::Bottom,
+            size: (300, 60),
+            ..LayerSpec::default()
+        },
+        [0, 0, 255, 255],
+    );
+    shell.wait_surface_configured(dock);
+    pila.wait("the dock mapped", |s| {
+        s["layers"].as_array().is_some_and(|layers| {
+            layers
+                .iter()
+                .any(|l| l["namespace"] == "dock" && l["geometry"]["h"] == 60)
+        })
+    });
+    pila.move_to(640.0, 770.0);
+    pila.press("right");
+    shell.wait("the press", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, common::client::Ev::Button { pressed: true, .. }))
+    });
+    let placement = Placement {
+        size: (200, 100),
+        anchor_rect: (150, 0, 1, 1),
+        anchor: wayland_protocols::xdg::shell::client::xdg_positioner::Anchor::Top,
+        gravity: wayland_protocols::xdg::shell::client::xdg_positioner::Gravity::Top,
+        ..Placement::default()
+    };
+    let (menu, popup) = shell.popup("menu", Err(dock), &placement, true, [0, 255, 0, 255]);
+    shell.wait_surface_configured(menu);
+    pila.release("right");
+    pila.wait("the menu's grab", |s| s["pointer"]["grab"] == "popup");
+
+    // A click on the bare desktop, far from the window and the dock.
+    pila.click_at(60.0, 60.0);
+    shell.wait_surface_closed(menu);
+    popup.destroy();
+    shell.flush();
+    pila.key("a");
+    pila.wait("the keyboard on a window", |s| {
+        s["keyboard_grabbed"] == false && s["keyboard_focus"] == "a"
+    });
+}
