@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.5 (2026-11-14)
 
 - **A GTK 4 window dragged by its own title bar no longer jumps:** GTK asks to leave fullscreen
   as such a drag starts, even when the window isn't fullscreen, and Pila took that for a window
