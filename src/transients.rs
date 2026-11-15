@@ -89,10 +89,8 @@ impl Pila {
                 .into_iter()
                 .rev()
                 .find(|w| {
-                    is_modal(w)
-                        && self.space.element_location(w).is_some()
-                        && *w != current
-                        && !seen.contains(w)
+                    // (`transient_children` leaves out `current` itself.)
+                    is_modal(w) && self.space.element_location(w).is_some() && !seen.contains(w)
                 });
             match modal {
                 Some(modal) => seen.push(std::mem::replace(&mut current, modal)),
@@ -167,7 +165,7 @@ impl Pila {
     /// Put `windows` on top, in order, in X's stacking order too.
     pub(crate) fn raise_in_order(&mut self, windows: &[Window]) {
         for window in windows {
-            self.raise_window(window, false);
+            self.raise_window(window);
             self.x11_window_raised(window);
         }
     }
@@ -200,7 +198,12 @@ impl Pila {
         let Some(parent) = self.transient_parent(window) else {
             return;
         };
-        self.inherit_marks(window);
+        // It takes its new parent's marks, keeping its own.
+        self.mark_new_window(
+            window,
+            crate::stacking::is_always_on_top(window),
+            crate::stacking::is_on_all_workspaces(window),
+        );
         let position = |w: &Window, space: &smithay::desktop::Space<Window>| {
             space.elements().position(|e| e == w)
         };
@@ -211,10 +214,8 @@ impl Pila {
             return;
         };
         if child_at < parent_at {
-            let mut descendants = Vec::new();
-            self.descendants_in_order(window, &[], &mut descendants);
-            self.raise_in_order(&descendants);
-            self.keep_on_top();
+            self.raise_in_order(std::slice::from_ref(window));
+            self.keep_transients_above(window);
             self.refresh_pointer_focus();
             self.queue_redraw();
         }

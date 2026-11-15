@@ -52,7 +52,6 @@ impl Pila {
             for window in &shown.windows {
                 self.show_window(window);
             }
-            self.keep_on_top();
             match shown.focused.filter(IsAlive::alive) {
                 Some(window) => self.focus_window(Some(window), SERIAL_COUNTER.next_serial()),
                 None => self.focus_recent_window(),

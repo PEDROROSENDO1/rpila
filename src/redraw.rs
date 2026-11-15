@@ -215,8 +215,8 @@ impl Pila {
     }
 
     /// Raise `window` in the `Space`, redrawing where it is.
-    pub fn raise_window(&mut self, window: &Window, activate: bool) {
-        self.space.raise_element(window, activate);
+    pub fn raise_window(&mut self, window: &Window) {
+        self.space.raise_element(window, false);
         self.queue_redraw_window(window);
     }
 

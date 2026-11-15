@@ -126,7 +126,7 @@ struct MenuBuffers {
     hover: Option<SolidColorBuffer>,
     mark: Option<SolidColorBuffer>,
     /// Label textures by text and buffer scale.
-    labels: HashMap<(&'static str, i32), (MemoryRenderBuffer, i32)>,
+    labels: HashMap<(&'static str, i32), MemoryRenderBuffer>,
 }
 
 /// What `Pila::scene` gives the renderer of an open menu.
@@ -541,24 +541,26 @@ pub fn elements(
     for (index, (label, checked)) in menu.rows.iter().enumerate() {
         let row = row_rect(menu.rect, index);
         let key = (*label, buffer_scale);
-        if let std::collections::hash_map::Entry::Vacant(slot) = buffers.labels.entry(key) {
-            let width = WIDTH - TEXT_INSET * 2 - MARK_SIZE;
-            if let Some(crate::text::Title {
-                pixels, width: w, ..
-            }) = crate::text::render_title(label, colors.icon, width, ITEM_HEIGHT, buffer_scale)
-            {
-                let buffer = MemoryRenderBuffer::from_slice(
-                    &pixels,
-                    Fourcc::Argb8888,
-                    (w, ITEM_HEIGHT * buffer_scale),
-                    buffer_scale,
-                    Transform::Normal,
-                    None,
-                );
-                slot.insert((buffer, w / buffer_scale));
+        // None until the fonts have loaded; then the next frame draws it.
+        let label = match buffers.labels.entry(key) {
+            std::collections::hash_map::Entry::Occupied(entry) => Some(entry.into_mut()),
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                let width = WIDTH - TEXT_INSET * 2 - MARK_SIZE;
+                crate::text::render_title(label, colors.icon, width, ITEM_HEIGHT, buffer_scale).map(
+                    |title| {
+                        slot.insert(MemoryRenderBuffer::from_slice(
+                            &title.pixels,
+                            Fourcc::Argb8888,
+                            (title.width, ITEM_HEIGHT * buffer_scale),
+                            buffer_scale,
+                            Transform::Normal,
+                            None,
+                        ))
+                    },
+                )
             }
-        }
-        if let Some((buffer, _)) = buffers.labels.get(&key) {
+        };
+        if let Some(buffer) = label {
             let loc = (row.loc + Point::from((TEXT_INSET, 0))).to_f64();
             let loc = (loc - origin.to_f64()).to_physical(scale);
             if let Ok(element) = MemoryRenderBufferRenderElement::from_buffer(

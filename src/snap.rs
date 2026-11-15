@@ -293,8 +293,7 @@ impl Pila {
     pub fn restore_window_size(&mut self, window: &Window) {
         if snapped_side(window).is_some() {
             self.unsnap_window(window, None);
-        } else if fill_state(window).0 {
-            let (_, fullscreen) = fill_state(window);
+        } else if let (true, fullscreen) = fill_state(window) {
             self.set_fill_state(window, false, fullscreen);
         }
     }

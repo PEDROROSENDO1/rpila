@@ -61,10 +61,7 @@ fn neighbor(outputs: &[Output], from: &Output, target: OutputTarget) -> Option<O
     if count < 2 {
         return None;
     }
-    let next = match target {
-        OutputTarget::Next => (index + 1) % count,
-        OutputTarget::Prev => (index + count - 1) % count,
-    };
+    let next = crate::switcher::step(index, count, target == OutputTarget::Next);
     Some(outputs[next].clone())
 }
 
@@ -79,15 +76,6 @@ impl Pila {
         marks(window)
             .all_workspaces
             .set(all_workspaces || inherit(is_on_all_workspaces));
-    }
-
-    /// `window` was set on another window: it takes that one's marks.
-    pub(crate) fn inherit_marks(&mut self, window: &Window) {
-        self.mark_new_window(
-            window,
-            is_always_on_top(window),
-            is_on_all_workspaces(window),
-        );
     }
 
     pub fn toggle_always_on_top(&mut self, window: &Window) {

@@ -32,14 +32,8 @@ impl Switch {
     }
 }
 
-/// Whether `window` belongs in the switcher: X11 menus and tooltips don't.
-fn switchable(window: &Window) -> bool {
-    window
-        .x11_surface()
-        .is_none_or(|x11| !x11.is_override_redirect())
-}
-
-/// The next index when stepping `forward` or back through `len` windows.
+/// The next index when stepping `forward` or back through `len` windows (or
+/// outputs), around the ends.
 pub fn step(index: usize, len: usize, forward: bool) -> usize {
     if len == 0 {
         return 0;
@@ -54,7 +48,7 @@ pub fn step(index: usize, len: usize, forward: bool) -> usize {
 impl Pila {
     /// Record that `window` got focus (called by `focus_window`).
     pub fn touch_focus_history(&mut self, window: &Window) {
-        if self.windows.switch.is_some() || !switchable(window) {
+        if self.windows.switch.is_some() || crate::workspaces::is_override_redirect(window) {
             return;
         }
         self.windows.focus_history.retain(|w| w != window);
@@ -84,7 +78,7 @@ impl Pila {
             .collect();
         let never_focused: Vec<Window> = mapped
             .into_iter()
-            .filter(|w| switchable(w) && !order.contains(w))
+            .filter(|w| !crate::workspaces::is_override_redirect(w) && !order.contains(w))
             .collect();
         order.extend(never_focused);
         order
