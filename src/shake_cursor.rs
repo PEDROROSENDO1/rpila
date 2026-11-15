@@ -30,10 +30,7 @@ use smithay::{
 };
 use tracing::debug;
 
-use crate::{
-    animation::{Animation, Curve},
-    Pila,
-};
+use crate::{animation::Animation, Pila};
 
 /// How far back the motion a shake is told by goes.
 const WINDOW: Duration = Duration::from_secs(1);
@@ -244,8 +241,7 @@ impl Pila {
         let from = self.cursor_magnification().unwrap_or(1.0);
         debug!(from, "cursor shaking stopped: shrinking");
         let shrink = self.config.animations.scaled(SHRINK_MS);
-        self.shake_cursor.phase =
-            Phase::Shrinking(Animation::new(now, shrink, Curve::EaseOut, from, 1.0));
+        self.shake_cursor.phase = Phase::Shrinking(Animation::new(now, shrink, from, 1.0));
         self.shake_cursor.hold = None;
         self.shake_cursor.detector.clear();
         let at = self.pointer_location();

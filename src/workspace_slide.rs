@@ -31,7 +31,7 @@ use smithay::{
 use tracing::debug;
 
 use crate::{
-    animation::{Animation, Curve},
+    animation::Animation,
     config::AnimationKind,
     render::{self, OffscreenWindow},
     Pila,
@@ -259,7 +259,7 @@ impl Pila {
         };
         crate::animation::log_workspace_slide(index);
         self.workspace_slide = Some(WorkspaceSlide {
-            progress: Animation::new(now, duration, Curve::EaseOut, 0.0, 1.0),
+            progress: Animation::new(now, duration, 0.0, 1.0),
             direction,
             old,
             carried,

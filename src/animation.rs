@@ -41,21 +41,11 @@ use crate::{
     Pila,
 };
 
-/// The shape of an animation's progress over time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Curve {
-    /// Fast, then settling: things appearing or leaving.
-    EaseOut,
-}
-
-impl Curve {
-    /// The eased value of `t` (0..=1).
-    pub fn apply(self, t: f64) -> f64 {
-        let t = t.clamp(0.0, 1.0);
-        match self {
-            Curve::EaseOut => 1.0 - (1.0 - t).powi(3),
-        }
-    }
+/// The eased value of `t` (0..=1): fast, then settling, the curve of every
+/// animation (things appearing, leaving or moving).
+fn ease_out(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    1.0 - (1.0 - t).powi(3)
 }
 
 /// A value going from `from` to `to` over `duration`, starting at `start`
@@ -64,17 +54,15 @@ impl Curve {
 pub struct Animation {
     start: Duration,
     duration: Duration,
-    curve: Curve,
     from: f64,
     to: f64,
 }
 
 impl Animation {
-    pub fn new(start: Duration, duration: Duration, curve: Curve, from: f64, to: f64) -> Self {
+    pub fn new(start: Duration, duration: Duration, from: f64, to: f64) -> Self {
         Self {
             start,
             duration,
-            curve,
             from,
             to,
         }
@@ -87,7 +75,7 @@ impl Animation {
         } else {
             now.saturating_sub(self.start).as_secs_f64() / self.duration.as_secs_f64()
         };
-        self.from + (self.to - self.from) * self.curve.apply(t)
+        self.from + (self.to - self.from) * ease_out(t)
     }
 
     pub fn done(&self, now: Duration) -> bool {
@@ -534,7 +522,7 @@ impl Pila {
         self.animations.appearing.push(Appearing {
             window: window.clone(),
             style,
-            visibility: Animation::new(now, duration, Curve::EaseOut, from, 1.0),
+            visibility: Animation::new(now, duration, from, 1.0),
         });
         log_event(window_event(kind, true), &app_id(window), Outcome::Starts);
         self.queue_redraw();
@@ -600,7 +588,7 @@ impl Pila {
             above,
             workspace: self.workspaces.active,
             style,
-            visibility: Animation::new(now, duration, Curve::EaseOut, from, 0.0),
+            visibility: Animation::new(now, duration, from, 0.0),
         });
         log_event(window_event(kind, false), &app_id(window), Outcome::Starts);
         self.queue_redraw();
@@ -774,13 +762,7 @@ impl Pila {
         for resizing in &mut animations.resizing {
             // The client didn't answer in time: move anyway.
             if resizing.progress.is_none() && now >= resizing.began + RESIZE_WAIT {
-                resizing.progress = Some(Animation::new(
-                    now,
-                    resizing.duration,
-                    Curve::EaseOut,
-                    0.0,
-                    1.0,
-                ));
+                resizing.progress = Some(Animation::new(now, resizing.duration, 0.0, 1.0));
             }
         }
         animations.resizing.retain(|r| {
@@ -1009,13 +991,7 @@ impl Pila {
         if size.is_empty() || size == resizing.from_size {
             return;
         }
-        resizing.progress = Some(Animation::new(
-            now,
-            resizing.duration,
-            Curve::EaseOut,
-            0.0,
-            1.0,
-        ));
+        resizing.progress = Some(Animation::new(now, resizing.duration, 0.0, 1.0));
         self.queue_redraw();
     }
 
@@ -1066,7 +1042,7 @@ impl Pila {
         };
         self.animations.layers.push(LayerAppearing {
             layer: layer.clone(),
-            visibility: Animation::new(now, duration, Curve::EaseOut, from, 1.0),
+            visibility: Animation::new(now, duration, from, 1.0),
         });
         log_event("layer-in", layer.namespace(), Outcome::Starts);
         self.queue_redraw();
@@ -1112,7 +1088,7 @@ impl Pila {
         self.animations.layer_ghosts.push(LayerGhost {
             layer,
             snapshot,
-            visibility: Animation::new(now, duration, Curve::EaseOut, from, 0.0),
+            visibility: Animation::new(now, duration, from, 0.0),
         });
         self.queue_redraw();
     }
@@ -1186,17 +1162,17 @@ mod tests {
 
     #[test]
     fn ease_out_starts_fast_and_ends_at_one() {
-        assert_eq!(Curve::EaseOut.apply(0.0), 0.0);
-        assert_eq!(Curve::EaseOut.apply(1.0), 1.0);
-        assert!(Curve::EaseOut.apply(0.5) > 0.8);
-        assert_eq!(Curve::EaseOut.apply(2.0), 1.0);
-        assert_eq!(Curve::EaseOut.apply(-1.0), 0.0);
+        assert_eq!(ease_out(0.0), 0.0);
+        assert_eq!(ease_out(1.0), 1.0);
+        assert!(ease_out(0.5) > 0.8);
+        assert_eq!(ease_out(2.0), 1.0);
+        assert_eq!(ease_out(-1.0), 0.0);
     }
 
     #[test]
     fn animation_runs_from_start_to_end() {
         let ms = Duration::from_millis;
-        let anim = Animation::new(ms(100), ms(200), Curve::EaseOut, 0.2, 1.0);
+        let anim = Animation::new(ms(100), ms(200), 0.2, 1.0);
         assert_eq!(anim.value(ms(50)), 0.2);
         assert_eq!(anim.value(ms(300)), 1.0);
         assert_eq!(anim.value(ms(1000)), 1.0);
@@ -1204,7 +1180,7 @@ mod tests {
         assert!(0.2 < mid && mid < 1.0);
         assert!(!anim.done(ms(299)));
         assert!(anim.done(ms(300)));
-        let instant = Animation::new(ms(100), Duration::ZERO, Curve::EaseOut, 0.0, 1.0);
+        let instant = Animation::new(ms(100), Duration::ZERO, 0.0, 1.0);
         assert_eq!(instant.value(ms(100)), 1.0);
     }
 
