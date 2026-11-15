@@ -669,22 +669,22 @@ fn single_window_elements(
     // The paths that draw the surfaces themselves apply what
     // `Window::render_elements` would: an X11 window's own opacity.
     let surface_alpha = entry.alpha * own_opacity(&entry.window);
-    match (rounding, shaders) {
-        _ if surfaces == Surfaces::MainOnly => {
+    match (surfaces, rounding.zip(shaders)) {
+        (Surfaces::MainOnly, rounded) => {
             let main = entry
                 .window
                 .wl_surface()
                 .map(|surface| main_surface_element(renderer, &surface, location, surface_alpha))
                 .unwrap_or_default();
-            match (rounding, shaders) {
-                (Some(rounding), Some(shaders)) => elements.extend(
+            match rounded {
+                Some((rounding, shaders)) => elements.extend(
                     rounded::clip_surfaces(main, shaders, rounding, output_location, scale)
                         .map(PilaRenderElement::from),
                 ),
-                _ => elements.extend(main.into_iter().map(PilaRenderElement::Surface)),
+                None => elements.extend(main.into_iter().map(PilaRenderElement::Surface)),
             }
         }
-        (Some(rounding), Some(shaders)) => elements.extend(rounded_window_elements(
+        (Surfaces::Tree, Some((rounding, shaders))) => elements.extend(rounded_window_elements(
             renderer,
             &entry.window,
             location,
@@ -694,11 +694,13 @@ fn single_window_elements(
             scale,
             surface_alpha,
         )),
-        _ => elements.extend(AsRenderElements::<GlesRenderer>::render_elements::<
-            PilaRenderElement,
-        >(
-            &entry.window, renderer, location, scale, entry.alpha
-        )),
+        (Surfaces::Tree, None) => {
+            elements.extend(AsRenderElements::<GlesRenderer>::render_elements::<
+                PilaRenderElement,
+            >(
+                &entry.window, renderer, location, scale, entry.alpha
+            ))
+        }
     }
     if let Some(bar) = &entry.title_bar {
         let rect = Rectangle::new(bar.rect.loc - output_location, bar.rect.size);

@@ -125,7 +125,7 @@ pub fn presentation_feedback(
     for entry in &scene.windows {
         entry.window.take_presentation_feedback(
             &mut feedback,
-            |surface, data| paced_by(entry.offscreen_output(), surface, data),
+            |surface, data| paced_by(entry.offscreen_output().flatten(), surface, data),
             flags,
         );
     }
@@ -150,23 +150,15 @@ pub fn presentation_feedback(
 /// The output a window's or layer surface's surface is paced by: its
 /// primary output, or while it's drawn through a texture (an animation, a
 /// workspace slide; absent from the render states then) the one it's on
-/// (`offscreen`).
-fn paced_by(
-    offscreen: Option<Option<Output>>,
-    surface: &WlSurface,
-    data: &SurfaceData,
-) -> Option<Output> {
-    match offscreen {
-        Some(Some(output)) => Some(output),
-        // Drawn through a texture but on no output (or drawn as usual):
-        // whatever it was last shown on.
-        _ => surface_primary_scanout_output(surface, data),
-    }
+/// (`offscreen`). Drawn through a texture but on no output, or drawn as
+/// usual: whatever it was last shown on.
+fn paced_by(offscreen: Option<Output>, surface: &WlSurface, data: &SurfaceData) -> Option<Output> {
+    offscreen.or_else(|| surface_primary_scanout_output(surface, data))
 }
 
 /// A layer surface's `offscreen` output for `paced_by`.
-fn layer_offscreen(effect: Option<&WindowEffect>) -> Option<Option<Output>> {
-    effect.map(|effect| effect.output.clone())
+fn layer_offscreen(effect: Option<&WindowEffect>) -> Option<Output> {
+    effect.and_then(|effect| effect.output.clone())
 }
 
 /// How often a surface that isn't shown anywhere (covered, or off every
@@ -184,7 +176,7 @@ pub fn send_frames(scene: &Scene, cursor: Option<&WlSurface>, output: &Output, t
         entry
             .window
             .send_frame(output, time, throttle, |surface, data| {
-                paced_by(entry.offscreen_output(), surface, data)
+                paced_by(entry.offscreen_output().flatten(), surface, data)
             });
     }
     for entry in scene.layers() {

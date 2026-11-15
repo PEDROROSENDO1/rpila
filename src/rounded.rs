@@ -103,46 +103,46 @@ pub(crate) struct PhysicalShape {
     pub radius: f32,
 }
 
-impl PhysicalShape {
-    /// The squares at the corners that the rounding cuts into: top-left,
-    /// top-right, bottom-right, bottom-left (`radii` of each; 0 for none).
-    fn corner_squares(&self, radii: [f32; 4]) -> Vec<Rectangle<i32, Physical>> {
-        let Rectangle { loc, size } = self.rect;
-        let side = |r: f32| r.ceil() as i32;
-        let [tl, tr, br, bl] = radii.map(side);
-        [
-            Rectangle::new(loc, (tl, tl).into()),
-            Rectangle::new((loc.x + size.w - tr, loc.y).into(), (tr, tr).into()),
-            Rectangle::new(
-                (loc.x + size.w - br, loc.y + size.h - br).into(),
-                (br, br).into(),
-            ),
-            Rectangle::new((loc.x, loc.y + size.h - bl).into(), (bl, bl).into()),
-        ]
-        .into_iter()
-        .filter(|square| !square.is_empty())
-        .collect()
-    }
+/// The squares at the corners of `rect` that a rounding cuts into: top-left,
+/// top-right, bottom-right, bottom-left (`radii` of each; 0 for none).
+fn corner_squares(
+    rect: Rectangle<i32, Physical>,
+    radii: [f32; 4],
+) -> Vec<Rectangle<i32, Physical>> {
+    let Rectangle { loc, size } = rect;
+    let side = |r: f32| r.ceil() as i32;
+    let [tl, tr, br, bl] = radii.map(side);
+    [
+        Rectangle::new(loc, (tl, tl).into()),
+        Rectangle::new((loc.x + size.w - tr, loc.y).into(), (tr, tr).into()),
+        Rectangle::new(
+            (loc.x + size.w - br, loc.y + size.h - br).into(),
+            (br, br).into(),
+        ),
+        Rectangle::new((loc.x, loc.y + size.h - bl).into(), (bl, bl).into()),
+    ]
+    .into_iter()
+    .filter(|square| !square.is_empty())
+    .collect()
 }
 
 /// Whether an element at `element` (physical) reaches into a corner of
 /// `shape` that's rounded off, and so must be clipped.
 fn needs_clip(element: Rectangle<i32, Physical>, shape: &PhysicalShape) -> bool {
-    shape
-        .corner_squares([shape.radius; 4])
+    corner_squares(shape.rect, [shape.radius; 4])
         .iter()
         .any(|square| square.overlaps(element))
 }
 
 /// `regions` (relative to an element at `element_loc`) without the corner
-/// squares of `shape`: those pixels aren't opaque anymore.
+/// squares of `rect`: those pixels aren't opaque anymore.
 fn without_corners(
     regions: OpaqueRegions<i32, Physical>,
     element_loc: Point<i32, Physical>,
-    shape: &PhysicalShape,
+    rect: Rectangle<i32, Physical>,
     radii: [f32; 4],
 ) -> OpaqueRegions<i32, Physical> {
-    let squares = shape.corner_squares(radii).into_iter().map(|mut square| {
+    let squares = corner_squares(rect, radii).into_iter().map(|mut square| {
         square.loc -= element_loc;
         square
     });
@@ -424,7 +424,7 @@ impl Element for RoundedSurface {
         without_corners(
             self.inner.opaque_regions(scale),
             self.geometry(scale).loc,
-            &self.shape,
+            self.shape.rect,
             [self.shape.radius; 4],
         )
     }
@@ -509,7 +509,6 @@ impl RenderElement<GlesRenderer> for RoundedSurface {
 pub struct RoundedSolid {
     inner: SolidColorRenderElement,
     program: GlesPixelProgram,
-    shape: PhysicalShape,
     /// Top-left, top-right, bottom-right, bottom-left (physical pixels).
     radii: [f32; 4],
 }
@@ -535,11 +534,9 @@ impl RoundedSolid {
             Corners::All => [radius; 4],
             Corners::Top => [radius, radius, 0.0, 0.0],
         };
-        let rect = inner.geometry(scale);
         Self {
             inner,
             program: shaders.solid.clone(),
-            shape: PhysicalShape { rect, radius },
             radii,
         }
     }
@@ -574,7 +571,7 @@ impl Element for RoundedSolid {
         without_corners(
             self.inner.opaque_regions(scale),
             self.geometry(scale).loc,
-            &self.shape,
+            self.geometry(scale),
             self.radii,
         )
     }
@@ -1067,12 +1064,9 @@ mod tests {
 
     #[test]
     fn opaque_regions_lose_the_corners() {
-        let shape = PhysicalShape {
-            rect: Rectangle::new((100, 100).into(), (40, 30).into()),
-            radius: 4.5,
-        };
+        let rect = Rectangle::new((100, 100).into(), (40, 30).into());
         let full = OpaqueRegions::from_slice(&[Rectangle::from_size((40, 30).into())]);
-        let regions = without_corners(full, shape.rect.loc, &shape, [4.5, 4.5, 0.0, 0.0]);
+        let regions = without_corners(full, rect.loc, rect, [4.5, 4.5, 0.0, 0.0]);
         let area: i32 = regions.iter().map(|r| r.size.w * r.size.h).sum();
         // Two 5x5 squares (the radius rounded up) at the top.
         assert_eq!(area, 40 * 30 - 2 * 25);
