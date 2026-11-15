@@ -1234,7 +1234,7 @@ struct ConfigFile {
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
     #[serde(rename = "layer-rule")]
-    layer_rules: Vec<crate::rules::LayerRuleFile>,
+    layer_rules: Vec<crate::rules::LayerRule>,
 }
 
 /// A color from the config: `#rrggbb`, or `#rrggbbaa` if `alpha` allows it.
@@ -1696,11 +1696,6 @@ impl Config {
             .enumerate()
             .map(|(i, rule)| rule.validate(i + 1, workspaces))
             .collect::<Result<Vec<_>, _>>()?;
-        let layer_rules = file
-            .layer_rules
-            .into_iter()
-            .map(crate::rules::LayerRuleFile::validate)
-            .collect();
 
         // Defaults first, then the user's: a user binding replaces a default
         // one for the same combo, and "none" removes it. Mod+N and
@@ -1823,7 +1818,7 @@ impl Config {
             animations,
             cursor,
             window_rules,
-            layer_rules,
+            layer_rules: file.layer_rules,
             warnings,
         })
     }

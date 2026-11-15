@@ -57,16 +57,7 @@ fn matches(pattern: &Option<String>, text: &str) -> bool {
 #[serde(untagged)]
 enum AnimationsFile {
     All(bool),
-    Each(EachAnimationFile),
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct EachAnimationFile {
-    open: Option<bool>,
-    close: Option<bool>,
-    minimize: Option<bool>,
-    maximize: Option<bool>,
+    Each(WindowAnimations),
 }
 
 /// `[[window-rule]]` as written.
@@ -97,17 +88,9 @@ const OPACITIES: std::ops::RangeInclusive<f64> = 0.1..=1.0;
 /// The largest `size` a rule may give (logical pixels).
 const MAX_RULE_SIZE: i32 = 16384;
 
-/// `[[layer-rule]]` as written.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct LayerRuleFile {
-    namespace: Option<String>,
-    animations: Option<bool>,
-    blur: Option<bool>,
-}
-
 /// A window's animations as rules set them (`None`: not set, they play).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WindowAnimations {
     pub open: Option<bool>,
     pub close: Option<bool>,
@@ -211,11 +194,13 @@ pub struct WindowRule {
     props: WindowProps,
 }
 
-/// A validated `[[layer-rule]]`.
-#[derive(Debug, Clone, PartialEq)]
+/// A `[[layer-rule]]` (nothing in it to validate).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct LayerRule {
     namespace: Option<String>,
-    props: LayerProps,
+    animations: Option<bool>,
+    blur: Option<bool>,
 }
 
 impl WindowRuleFile {
@@ -263,12 +248,7 @@ impl WindowRuleFile {
                 minimize: Some(on),
                 maximize: Some(on),
             },
-            Some(AnimationsFile::Each(each)) => WindowAnimations {
-                open: each.open,
-                close: each.close,
-                minimize: each.minimize,
-                maximize: each.maximize,
-            },
+            Some(AnimationsFile::Each(each)) => each,
         };
         Ok(WindowRule {
             app_id: self.app_id,
@@ -293,18 +273,6 @@ impl WindowRuleFile {
     }
 }
 
-impl LayerRuleFile {
-    pub fn validate(self) -> LayerRule {
-        LayerRule {
-            namespace: self.namespace,
-            props: LayerProps {
-                animations: self.animations,
-                blur: self.blur,
-            },
-        }
-    }
-}
-
 /// What `rules` set for a window with this app id, title and tag.
 pub fn resolve_window(rules: &[WindowRule], app_id: &str, title: &str, tag: &str) -> WindowProps {
     let mut props = WindowProps::default();
@@ -321,7 +289,10 @@ pub fn resolve_layer(rules: &[LayerRule], namespace: &str) -> LayerProps {
     let mut props = LayerProps::default();
     for rule in rules {
         if matches(&rule.namespace, namespace) {
-            props.merge(&rule.props);
+            props.merge(&LayerProps {
+                animations: rule.animations,
+                blur: rule.blur,
+            });
         }
     }
     props
@@ -610,21 +581,18 @@ mod tests {
 
     #[test]
     fn layer_rules_match_namespaces() {
-        let rules: Vec<LayerRule> = [
-            LayerRuleFile {
+        let rules = [
+            LayerRule {
                 namespace: Some("noctalia-*".into()),
                 animations: Some(false),
                 blur: None,
             },
-            LayerRuleFile {
+            LayerRule {
                 namespace: Some("noctalia-bar-*".into()),
                 animations: None,
                 blur: Some(true),
             },
-        ]
-        .into_iter()
-        .map(LayerRuleFile::validate)
-        .collect();
+        ];
         let bar = resolve_layer(&rules, "noctalia-bar-main");
         assert_eq!(bar.animations, Some(false));
         assert_eq!(bar.blur, Some(true));
