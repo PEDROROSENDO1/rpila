@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.8 (2026-11-15)
 
 - **Input methods (IME):** fcitx5 and other input methods that speak input-method-v2 type Chinese,
   Japanese, Korean and the like into apps that speak text-input-v3 (GTK, Qt 6.7 and later, foot,
@@ -8,6 +8,10 @@
   below the text cursor (above it at the bottom of the screen). Pila's keybindings come before the
   input method, menus open while it holds the keyboard, and it never sees what's typed on the lock
   screen. The manual says how to start it ("Input methods"). Asked for in discussion #2.
+- **For packagers: Smithay comes from Pila's fork for now,** `github.com/igalmarino/smithay`,
+  branch `pila` (the commit is in `Cargo.lock`): Smithay's own main branch plus one fix, kept until
+  Smithay has it. Smithay had started dropping a text cursor with no width, which GTK sends, so
+  candidate windows sat at the corner of GTK apps' windows.
 
 ## 0.5.7 (2026-11-14)
 
