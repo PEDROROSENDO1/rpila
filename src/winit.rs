@@ -1,9 +1,10 @@
 //! Nested backend: pila runs as a window inside the host Wayland session.
 
-use std::{os::unix::fs::MetadataExt, path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use smithay::{
     backend::{
+        drm::DrmNode,
         egl::{EGLDevice, EGLSurface},
         renderer::{damage::OutputDamageTracker, gles::GlesRenderer, ImportDma},
         winit::{self, WinitEvent, WinitGraphicsBackend},
@@ -35,9 +36,18 @@ pub fn init_winit(
 
     let (mut backend, winit) = winit::init::<GlesRenderer>()?;
     crate::render::warm_up(backend.renderer());
-    init_dmabuf(&mut backend, &mut state.protocols.dmabuf, display_handle);
-    if let Ok((_, dev)) = main_device(&mut backend) {
-        state.capture.dmabuf = Some(crate::capture::DmabufTarget::new(dev, backend.renderer()));
+    let node = render_node(&mut backend);
+    init_dmabuf(
+        &mut backend,
+        node,
+        &mut state.protocols.dmabuf,
+        display_handle,
+    );
+    if let Some(node) = node {
+        state.capture.dmabuf = Some(crate::capture::DmabufTarget::new(
+            node.dev_id(),
+            backend.renderer(),
+        ));
     }
 
     let mode = Mode {
@@ -285,6 +295,7 @@ pub fn apply_cursor(window: &dyn WinitWindow, status: &CursorImageStatus, magnif
 /// instead of falling back to software rendering.
 fn init_dmabuf(
     backend: &mut WinitGraphicsBackend<GlesRenderer>,
+    node: Option<DrmNode>,
     dmabuf_state: &mut DmabufState,
     display_handle: &DisplayHandle,
 ) {
@@ -292,9 +303,9 @@ fn init_dmabuf(
 
     // v4 with default feedback names the main device; Mesa's EGL needs that
     // (or wl_drm, which we don't offer) to pick a GPU, so v3 is only a fallback.
-    let feedback = match main_device(backend) {
-        Ok((path, dev)) => match DmabufFeedbackBuilder::new(dev, formats.clone()).build() {
-            Ok(feedback) => Some((path, feedback)),
+    let feedback = node.and_then(|node| {
+        match DmabufFeedbackBuilder::new(node.dev_id(), formats.clone()).build() {
+            Ok(feedback) => Some((node, feedback)),
             Err(err) => {
                 warn!(
                     ?err,
@@ -302,17 +313,14 @@ fn init_dmabuf(
                 );
                 None
             }
-        },
-        Err(err) => {
-            warn!(%err, "no DRM device for the EGL display, using linux-dmabuf v3");
-            None
         }
-    };
+    });
 
     match feedback {
-        Some((path, feedback)) => {
+        Some((node, feedback)) => {
             dmabuf_state.create_global_with_default_feedback::<Pila>(display_handle, &feedback);
-            info!(device = %path.display(), "linux-dmabuf v4 enabled");
+            let device = node.dev_path().unwrap_or_default();
+            info!(device = %device.display(), "linux-dmabuf v4 enabled");
         }
         None => {
             dmabuf_state.create_global::<Pila>(display_handle, formats);
@@ -320,15 +328,19 @@ fn init_dmabuf(
     }
 }
 
-/// The DRM device node the renderer runs on, preferring the render node.
-/// (Smithay's `EGLDevice::try_get_render_node` does this but needs `backend_drm`.)
-fn main_device(
-    backend: &mut WinitGraphicsBackend<GlesRenderer>,
-) -> Result<(PathBuf, u64), Box<dyn std::error::Error>> {
-    let device = EGLDevice::device_for_display(backend.renderer().egl_context().display())?;
-    let path = device
-        .render_device_path()
-        .or_else(|_| device.drm_device_path())?;
-    let dev = std::fs::metadata(&path)?.rdev();
-    Ok((path, dev))
+/// The DRM node the renderer runs on, preferring the render node; `None`
+/// without one (llvmpipe: no dmabufs then).
+fn render_node(backend: &mut WinitGraphicsBackend<GlesRenderer>) -> Option<DrmNode> {
+    let display = backend.renderer().egl_context().display();
+    match EGLDevice::device_for_display(display).and_then(|d| d.try_get_render_node()) {
+        Ok(Some(node)) => Some(node),
+        Ok(None) => {
+            warn!("no DRM device for the EGL display, using linux-dmabuf v3");
+            None
+        }
+        Err(err) => {
+            warn!(%err, "no DRM device for the EGL display, using linux-dmabuf v3");
+            None
+        }
+    }
 }
