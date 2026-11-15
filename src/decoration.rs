@@ -30,7 +30,6 @@ use smithay::{
         shell::server::xdg_toplevel,
     },
     utils::{Logical, Physical, Point, Rectangle, Scale, Transform},
-    wayland::{compositor::with_states, shell::xdg::XdgToplevelSurfaceData},
 };
 use tracing::warn;
 
@@ -331,24 +330,6 @@ fn is_maximized(window: &Window) -> bool {
     })
 }
 
-/// The window's title as set by the client (`xdg_toplevel.set_title`, or
-/// the X11 window's `_NET_WM_NAME`/`WM_NAME`).
-fn window_title(window: &Window) -> Option<String> {
-    if let Some(x11) = window.x11_surface() {
-        return Some(x11.title()).filter(|t| !t.is_empty());
-    }
-    let toplevel = window.toplevel()?;
-    with_states(toplevel.wl_surface(), |states| {
-        states
-            .data_map
-            .get::<XdgToplevelSurfaceData>()?
-            .lock()
-            .ok()?
-            .title
-            .clone()
-    })
-}
-
 /// Render elements for a title bar at `rect` (relative to the output origin),
 /// front to back, drawn at `scale`. The textures are rasterized at that
 /// scale rounded up (`scale::buffer_scale`), so they stay sharp on HiDPI
@@ -430,41 +411,41 @@ pub fn title_bar_elements(
     // centered on the bar where it fits (see `title_x`).
     let title_width =
         (rect.size.w - BUTTONS * BUTTON_WIDTH - 2 * TITLE_PADDING).min(MAX_TITLE_WIDTH);
-    match window_title(window) {
-        Some(text) if title_width >= MIN_TITLE_WIDTH && !text.is_empty() => {
-            let key = (text, icon_color, buffer_scale);
-            let fits = |texture: &TitleTexture| texture.shows(&key, title_width);
-            // None until the fonts have loaded; then the next frame draws it.
-            let make = || {
-                let drawn = crate::text::render_title(
-                    &key.0,
-                    icon_color,
-                    title_width,
-                    TITLE_BAR_HEIGHT,
+    let text = crate::foreign_toplevel::title(window);
+    if title_width >= MIN_TITLE_WIDTH && !text.is_empty() {
+        let key = (text, icon_color, buffer_scale);
+        let fits = |texture: &TitleTexture| texture.shows(&key, title_width);
+        // None until the fonts have loaded; then the next frame draws it.
+        let make = || {
+            let drawn = crate::text::render_title(
+                &key.0,
+                icon_color,
+                title_width,
+                TITLE_BAR_HEIGHT,
+                buffer_scale,
+            )?;
+            Some(TitleTexture {
+                buffer: MemoryRenderBuffer::from_slice(
+                    &drawn.pixels,
+                    Fourcc::Argb8888,
+                    (drawn.width, TITLE_BAR_HEIGHT * buffer_scale),
                     buffer_scale,
-                )?;
-                Some(TitleTexture {
-                    buffer: MemoryRenderBuffer::from_slice(
-                        &drawn.pixels,
-                        Fourcc::Argb8888,
-                        (drawn.width, TITLE_BAR_HEIGHT * buffer_scale),
-                        buffer_scale,
-                        Transform::Normal,
-                        None,
-                    ),
-                    width: drawn.width / buffer_scale,
-                    max_width: title_width,
-                    whole: drawn.whole,
-                    key: key.clone(),
-                })
-            };
-            if let Some(texture) = variant(title, fits, TITLE_LOOKS, make) {
-                let x = title_x(rect.loc.x, rect.size.w, texture.width);
-                let loc = Point::from((x, rect.loc.y));
-                elements.extend(upload(renderer, &texture.buffer, loc).map(Into::into));
-            }
+                    Transform::Normal,
+                    None,
+                ),
+                width: drawn.width / buffer_scale,
+                max_width: title_width,
+                whole: drawn.whole,
+                key: key.clone(),
+            })
+        };
+        if let Some(texture) = variant(title, fits, TITLE_LOOKS, make) {
+            let x = title_x(rect.loc.x, rect.size.w, texture.width);
+            let loc = Point::from((x, rect.loc.y));
+            elements.extend(upload(renderer, &texture.buffer, loc).map(Into::into));
         }
-        _ => title.clear(),
+    } else {
+        title.clear();
     }
 
     for (slot, icon, part, loc) in [

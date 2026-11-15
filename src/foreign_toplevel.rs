@@ -11,8 +11,9 @@ use smithay::{
     desktop::Window,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     wayland::{
-        compositor::with_states, foreign_toplevel_list::ForeignToplevelHandle,
-        shell::xdg::XdgToplevelSurfaceData,
+        compositor::with_states,
+        foreign_toplevel_list::ForeignToplevelHandle,
+        shell::xdg::{XdgToplevelSurfaceData, XdgToplevelSurfaceRoleAttributes},
     },
 };
 
@@ -24,21 +25,34 @@ pub(crate) fn title_and_app_id(window: &Window) -> (String, String) {
     if let Some(x11) = window.x11_surface() {
         return (x11.title(), x11.class());
     }
-    let Some(toplevel) = window.toplevel() else {
-        return Default::default();
-    };
+    xdg_attributes(window, |data| {
+        (
+            data.title.clone().unwrap_or_default(),
+            data.app_id.clone().unwrap_or_default(),
+        )
+    })
+    .unwrap_or_default()
+}
+
+/// The window's title, empty if unset (`title_and_app_id` without the app
+/// id: the title bar asks for it each time it's drawn).
+pub(crate) fn title(window: &Window) -> String {
+    if let Some(x11) = window.x11_surface() {
+        return x11.title();
+    }
+    xdg_attributes(window, |data| data.title.clone().unwrap_or_default()).unwrap_or_default()
+}
+
+/// What `read` takes from an xdg toplevel's attributes; `None` for an X11
+/// window, or one whose attributes can't be read.
+fn xdg_attributes<T>(
+    window: &Window,
+    read: impl FnOnce(&XdgToplevelSurfaceRoleAttributes) -> T,
+) -> Option<T> {
+    let toplevel = window.toplevel()?;
     with_states(toplevel.wl_surface(), |states| {
-        states
-            .data_map
-            .get::<XdgToplevelSurfaceData>()
-            .and_then(|data| {
-                let data = data.lock().ok()?;
-                Some((
-                    data.title.clone().unwrap_or_default(),
-                    data.app_id.clone().unwrap_or_default(),
-                ))
-            })
-            .unwrap_or_default()
+        let data = states.data_map.get::<XdgToplevelSurfaceData>()?;
+        Some(read(&*data.lock().ok()?))
     })
 }
 
