@@ -67,6 +67,26 @@ impl From<SurfaceElement> for PilaRenderElement {
     }
 }
 
+/// Shaders kept in the EGL context's user data, compiled by `compile` the
+/// first time they're asked for (`warm_up` does it at startup, not in a
+/// frame). `None` if they failed to compile, which is kept too: they aren't
+/// tried again.
+pub fn compiled_once<T: Clone + 'static>(
+    renderer: &mut GlesRenderer,
+    compile: impl FnOnce(&mut GlesRenderer) -> Option<T>,
+) -> Option<T> {
+    struct Slot<T>(Option<T>);
+    if let Some(slot) = renderer.egl_context().user_data().get::<Slot<T>>() {
+        return slot.0.clone();
+    }
+    let shaders = compile(renderer);
+    renderer
+        .egl_context()
+        .user_data()
+        .insert_if_missing(|| Slot(shaders.clone()));
+    shaders
+}
+
 /// The start of a custom texture shader's source
 /// (`GlesRenderer::compile_custom_texture_shader`): what Smithay's texture
 /// programs declare, with floats at `precision`. Its own uniforms and

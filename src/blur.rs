@@ -251,22 +251,11 @@ pub struct Shaders {
     up_rounded: GlesTexProgram,
 }
 
-/// `None` if they failed to compile (then there's no blur).
-struct ShaderSlot(Option<Shaders>);
-
 impl Shaders {
-    /// The shaders, kept in the EGL context's user data; compiled by
-    /// `render::warm_up`, not in a frame.
+    /// The shaders (`render::compiled_once`); `None` if they failed to
+    /// compile (then there's no blur).
     pub fn get(renderer: &mut GlesRenderer) -> Option<Shaders> {
-        if let Some(slot) = renderer.egl_context().user_data().get::<ShaderSlot>() {
-            return slot.0.clone();
-        }
-        let shaders = Self::compile(renderer);
-        renderer
-            .egl_context()
-            .user_data()
-            .insert_if_missing(|| ShaderSlot(shaders.clone()));
-        shaders
+        crate::render::compiled_once(renderer, Self::compile)
     }
 
     fn compile(renderer: &mut GlesRenderer) -> Option<Shaders> {

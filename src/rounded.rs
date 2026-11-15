@@ -271,21 +271,11 @@ pub struct Shaders {
     shadow: GlesPixelProgram,
 }
 
-/// `None` if the shaders failed to compile (then windows are drawn square).
-struct ShaderSlot(Option<Shaders>);
-
 impl Shaders {
-    /// The shaders, compiled on first use.
+    /// The shaders (`render::compiled_once`); `None` if they failed to
+    /// compile (then windows are drawn square).
     pub fn get(renderer: &mut GlesRenderer) -> Option<Shaders> {
-        if let Some(slot) = renderer.egl_context().user_data().get::<ShaderSlot>() {
-            return slot.0.clone();
-        }
-        let shaders = Self::compile(renderer);
-        renderer
-            .egl_context()
-            .user_data()
-            .insert_if_missing(|| ShaderSlot(shaders.clone()));
-        shaders
+        crate::render::compiled_once(renderer, Self::compile)
     }
 
     fn compile(renderer: &mut GlesRenderer) -> Option<Shaders> {
