@@ -43,9 +43,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Smithay's main branch, as niri and cosmic-comp use it: fixes reach pila
 # without waiting for a release (0.7.0 is from June 2025). Move `rev` forward
 # on purpose, with a full test run and a bare-metal check.
+#
+# From Pila's fork for now, branch `pila`: Smithay's 3a08ff96 (2026-11-14) plus
+# one fix, kept until Smithay has it: a text cursor with no width (GTK's) is
+# kept, so input methods' candidate windows go next to it
+# (`input_method::a_text_cursor_with_no_width_places_the_candidate_window`
+# fails without). On a bump: rebase that branch on the new rev, or go back to
+# `https://github.com/Smithay/smithay.git` once the fix is there.
 [dependencies.smithay]
-git = "https://github.com/Smithay/smithay.git"
-rev = "3a08ff960e90e5ee472f6195254d02167571f428"
+git = "https://github.com/igalmarino/smithay.git"
+rev = "b8f524b3e3c27ba9e6e9565aebc7fb8838609385"
 default-features = false
 features = [
     "backend_winit",

@@ -895,3 +895,18 @@ fn keys_released_for_the_lock_screen_dont_reach_the_input_method() {
     ime.roundtrip();
     assert_eq!(count(&ime, "ime_grab", "Key"), before);
 }
+
+/// GTK's text cursor is a line: its rectangle has no width. (Smithay dropped
+/// such rectangles; Pila's fork of it keeps them, `Cargo.toml`.)
+#[test]
+fn a_text_cursor_with_no_width_places_the_candidate_window() {
+    let (mut pila, _app, _text_input, ime, input_method) = typing_in_a((20, 30, 0, 20));
+    let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+    let _popup = ime.ime_popup(&input_method, IME_COLOR, (200, 50));
+    pila.wait("the candidate window", |s| !popups(s).is_empty());
+    let state = pila.settle();
+    assert_eq!(
+        popups(&state)[0]["geometry"],
+        serde_json::json!([x + 20, y + 30 + 20, 200, 50])
+    );
+}

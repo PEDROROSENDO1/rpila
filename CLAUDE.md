@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A daily-driver **stacking** Wayland compositor (crate/binary name `pila`) written in **Rust**
 on **Smithay**'s main branch (a git dependency pinned to a `rev` in `Cargo.toml`, as niri
-and cosmic-comp do: 0.7.0, the last release, is from June 2025).
+and cosmic-comp do: 0.7.0, the last release, is from June 2025; for now from Pila's fork,
+`igalmarino/smithay`, branch `pila`: a rev of Smithay's plus the fixes `Cargo.toml` lists).
 
 ## Environment
 
@@ -311,4 +312,8 @@ the canonical references. Clone `https://github.com/Smithay/smithay` outside `/w
 (e.g. `/tmp`) at the `rev` of the `smithay` dependency in `Cargo.toml` and read them before
 inventing new patterns. Moving `rev` forward is a change of its own: read Smithay's
 `CHANGELOG.md` and log since the old one, run the whole suite, `scripts/check --nested` and
-`scripts/shells`, and have the user check bare metal (`udev/`).
+`scripts/shells`, and have the user check bare metal (`udev/`). While the dependency is Pila's
+fork (`Cargo.toml` says which rev of Smithay's it is and what it adds), a bump rebases its
+`pila` branch on the new rev, or goes back to Smithay's own once it has the fixes: each has a
+test that fails without it. The branch is moved through the GitHub API (no git network here),
+at the user's word.
