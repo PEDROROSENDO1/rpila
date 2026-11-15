@@ -179,6 +179,15 @@ impl ModKey {
             other => Err(format!("unknown modifier {other:?} (alt, super or ctrl)")),
         }
     }
+
+    /// The keysym a tap of this modifier is bound by (`tap_sym`).
+    fn tap_sym(self) -> Keysym {
+        match self {
+            ModKey::Alt => Keysym::Alt_L,
+            ModKey::Super => Keysym::Super_L,
+            ModKey::Ctrl => Keysym::Control_L,
+        }
+    }
 }
 
 /// The modifiers of a binding. Caps Lock and Num Lock are ignored.
@@ -214,12 +223,13 @@ impl From<&ModifiersState> for Mods {
 /// The keysym a tap of the modifier key `sym` is bound by (both sides are
 /// the same tap), or `None` if `sym` isn't Alt, Super or Ctrl.
 pub fn tap_sym(sym: Keysym) -> Option<Keysym> {
-    match sym {
-        Keysym::Alt_L | Keysym::Alt_R | Keysym::Meta_L | Keysym::Meta_R => Some(Keysym::Alt_L),
-        Keysym::Super_L | Keysym::Super_R => Some(Keysym::Super_L),
-        Keysym::Control_L | Keysym::Control_R => Some(Keysym::Control_L),
-        _ => None,
-    }
+    let key = match sym {
+        Keysym::Alt_L | Keysym::Alt_R | Keysym::Meta_L | Keysym::Meta_R => ModKey::Alt,
+        Keysym::Super_L | Keysym::Super_R => ModKey::Super,
+        Keysym::Control_L | Keysym::Control_R => ModKey::Ctrl,
+        _ => return None,
+    };
+    Some(key.tap_sym())
 }
 
 /// A key binding of `[bindings]` (or a default one).
@@ -285,14 +295,9 @@ impl KeyCombo {
             if let Some(modifier) = modifier {
                 let mut mods = Mods::default();
                 mods.add(modifier);
-                let sym = match modifier {
-                    ModKey::Alt => Keysym::Alt_L,
-                    ModKey::Super => Keysym::Super_L,
-                    ModKey::Ctrl => Keysym::Control_L,
-                };
                 return Ok(KeyCombo {
                     mods,
-                    trigger: Trigger::Key(sym),
+                    trigger: Trigger::Key(modifier.tap_sym()),
                 });
             }
         }
@@ -301,10 +306,10 @@ impl KeyCombo {
             match part.to_ascii_lowercase().as_str() {
                 "mod" => mods.add(mod_key),
                 "shift" => mods.shift = true,
-                "ctrl" | "control" => mods.ctrl = true,
-                "alt" => mods.alt = true,
-                "super" | "logo" | "win" => mods.logo = true,
-                _ => return Err(format!("unknown modifier {part:?} in {text:?}")),
+                name => match ModKey::parse(name) {
+                    Ok(key) => mods.add(key),
+                    Err(_) => return Err(format!("unknown modifier {part:?} in {text:?}")),
+                },
             }
         }
         if let Some(direction) = WheelDirection::parse(key) {
