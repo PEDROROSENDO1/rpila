@@ -51,7 +51,13 @@ Key flows and invariants:
 - **Keybindings** are intercepted in the keyboard filter closure (`input.rs`), which looks
   up every key press in `Config::bindings` (modifiers must match exactly, Caps/Num Lock
   ignored; keys without Mod, e.g. media keys, can be bound); intercepted keycodes go in
-  `suppressed_keys` so their release isn't forwarded to the client either. A modifier
+  `suppressed_keys` so their release isn't forwarded to the client either. A binding with
+  `repeat = true` (`Config::repeating`, `config::BindingFile` parses the table form) runs
+  again while its key is held: once it has run, `start_binding_repeat` inserts a calloop timer
+  at `repeat-delay`, then every 1/`repeat-rate` s (the keyboard sends nothing while a key is
+  held: repeat is the receiver's), which checks the lock, window menu and inhibitor again; its
+  key's release, another key's press and `release_all_keys` end it (`stop_binding_repeat`; the
+  timer ends itself if its own action stopped it, `InputState::repeat_firing`). A modifier
   alone (`"Mod" = "launcher"`, a default) is a tap: a modifier key's press is never looked
   up (`action_for` skips the keysyms `tap_sym` knows) but arms `InputState::mod_tap`, which
   any other key press, pointer button, scroll, gesture or touch, or `release_all_keys`

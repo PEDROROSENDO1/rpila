@@ -13,6 +13,7 @@ const KEY_J: u32 = 36;
 const KEY_A: u32 = 30;
 const KEY_5: u32 = 6;
 const KEY_F5: u32 = 63;
+const KEY_RIGHT: u32 = 106;
 
 const BAR: i64 = 28;
 
@@ -733,4 +734,83 @@ fn wheel_bindings_are_configurable() {
             ..
         }
     )));
+}
+
+/// Quick repeats, and Mod+Shift+Right (move right by 40) repeating.
+const REPEATING: &str = "[keyboard]\nrepeat-delay = 150\nrepeat-rate = 20\n\n[bindings]\n\
+                         \"Mod+Shift+Right\" = { action = \"move-right\", repeat = true }\n";
+
+fn hold_mod_shift_right(pila: &mut TestPila) {
+    pila.key_press("Super");
+    pila.key_press("Shift");
+    pila.key_press("Right");
+}
+
+fn x_of(state: &Value) -> i64 {
+    rect(&window_in(state, "a").unwrap()["geometry"]).0
+}
+
+/// `repeat = true`: held, the binding runs again at the keyboard's repeat
+/// delay and rate, and stops when the key is released; the client never
+/// sees the key.
+#[test]
+fn a_repeating_binding_runs_while_its_key_is_held() {
+    let (mut pila, client, _, (x, ..)) = one_window(REPEATING);
+    hold_mod_shift_right(&mut pila);
+    pila.wait("three moves or more", |s| x_of(s) >= x + 3 * 40);
+    pila.key_release("Right");
+    // A repeat may have been on its way as the release came.
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    let stopped = x_of(&pila.state());
+    pila.stays(
+        "no more moves",
+        std::time::Duration::from_millis(400),
+        |s| x_of(s) == stopped,
+    );
+    pila.key_release("Shift");
+    pila.key_release("Super");
+    client.roundtrip();
+    assert!(
+        !client.keys().iter().any(|(k, _)| *k == KEY_RIGHT),
+        "Right reached the client: {:?}",
+        client.keys()
+    );
+}
+
+/// Without `repeat`, a held binding runs once, however long it's held.
+#[test]
+fn a_binding_runs_once_while_held_without_repeat() {
+    let (mut pila, _client, _, (x, ..)) =
+        one_window("[keyboard]\nrepeat-delay = 150\nrepeat-rate = 20\n");
+    hold_mod_shift_right(&mut pila);
+    pila.wait("a move", |s| x_of(s) == x + 40);
+    pila.stays(
+        "one move only",
+        std::time::Duration::from_millis(500),
+        |s| x_of(s) == x + 40,
+    );
+    pila.key_release("Right");
+    pila.key_release("Shift");
+    pila.key_release("Super");
+}
+
+/// Another key pressed while a binding repeats stops it, as xkb's repeat
+/// goes to the last key pressed.
+#[test]
+fn another_key_stops_a_repeating_binding() {
+    let (mut pila, _client, _, (x, ..)) = one_window(REPEATING);
+    hold_mod_shift_right(&mut pila);
+    pila.wait("two moves or more", |s| x_of(s) >= x + 2 * 40);
+    pila.key_press("F9");
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    let stopped = x_of(&pila.state());
+    pila.stays(
+        "no more moves",
+        std::time::Duration::from_millis(400),
+        |s| x_of(s) == stopped,
+    );
+    pila.key_release("F9");
+    pila.key_release("Right");
+    pila.key_release("Shift");
+    pila.key_release("Super");
 }

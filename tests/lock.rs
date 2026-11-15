@@ -519,3 +519,27 @@ fn the_pointer_is_refused_to_anything_but_the_lock_at_the_lowest_layer() {
     );
     assert!(!apps.events().iter().any(is_input));
 }
+
+/// A binding repeating while its key is held stops when the session locks.
+#[test]
+fn locking_stops_a_repeating_binding() {
+    let mut pila = TestPila::with_config(
+        "[keyboard]\nrepeat-delay = 150\nrepeat-rate = 20\n\n[bindings]\n\
+         \"Mod+x\" = { action = \"spawn echo >> $XDG_RUNTIME_DIR/runs\", repeat = true }\n",
+    );
+    let runs = |pila: &TestPila| {
+        std::fs::read_to_string(pila.dir.join("runs")).map_or(0, |text| text.lines().count())
+    };
+    pila.key_press("Super");
+    pila.key_press("x");
+    pila.wait_file("runs");
+    let locker = pila.client();
+    let lock = locker.lock_session();
+    locker.lock_surface(&lock, "HEADLESS-1", LOCK_COLOR);
+    locker.wait_logged("lock", "Locked");
+    // A run may be on its way as the lock came.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let stopped = runs(&pila);
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    assert_eq!(runs(&pila), stopped, "the binding ran on while locked");
+}

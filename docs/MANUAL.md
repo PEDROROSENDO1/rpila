@@ -347,9 +347,15 @@ prints what's wrong.
 ```toml
 [bindings]
 "Mod+Shift+Return" = "spawn foot -e htop"
-"XF86AudioRaiseVolume" = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }
+"XF86AudioPlay" = "spawn playerctl play-pause"
 "Mod+J" = "none"          # remove a default binding
 ```
+
+A binding runs once each time its keys are pressed. Written as a table with `repeat = true`, as
+the volume key above, it runs again while the key is held, after `repeat-delay` and at
+`repeat-rate` (`[keyboard]`), until the key is released or another is pressed. Only a key can
+repeat: not a wheel's notch or a modifier alone.
 
 Keys are xkb key names (`Return`, `Tab`, `q`, `F5`, `XF86AudioMute`), or a mouse wheel's notch:
 `WheelScrollUp`, `WheelScrollDown`, `WheelScrollLeft` and `WheelScrollRight` run once a notch,

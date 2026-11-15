@@ -591,6 +591,55 @@ action_examples! {
     Action::ChangeVt(_) => Action::ChangeVt(2),
 }
 
+/// A `[bindings]` value: the action (`"Mod+X" = "close"`), or a table with
+/// it and whether it repeats while the key is held
+/// (`"XF86AudioRaiseVolume" = { action = "spawn ...", repeat = true }`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BindingFile {
+    action: String,
+    repeat: bool,
+}
+
+impl<'de> Deserialize<'de> for BindingFile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Table {
+            action: String,
+            #[serde(default)]
+            repeat: bool,
+        }
+
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = BindingFile;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("an action, or a table with `action` and `repeat`")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, action: &str) -> Result<BindingFile, E> {
+                Ok(BindingFile {
+                    action: action.to_string(),
+                    repeat: false,
+                })
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                map: A,
+            ) -> Result<BindingFile, A::Error> {
+                let table = Table::deserialize(serde::de::value::MapAccessDeserializer::new(map))?;
+                Ok(BindingFile {
+                    action: table.action,
+                    repeat: table.repeat,
+                })
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 /// `[keyboard]`: passed to xkbcommon, plus key repeat.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
@@ -1160,7 +1209,7 @@ struct ConfigFile {
     launcher: Option<String>,
     autostart: Vec<String>,
     keyboard: KeyboardConfig,
-    bindings: BTreeMap<String, String>,
+    bindings: BTreeMap<String, BindingFile>,
     gestures: BTreeMap<String, String>,
     output: Vec<OutputFile>,
     input: InputFile,
@@ -1446,6 +1495,9 @@ pub struct Config {
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<(KeyCombo, Action)>,
+    /// The key bindings that run again while their key is held
+    /// (`repeat = true`), at the keyboard's repeat delay and rate.
+    pub repeating: Vec<KeyCombo>,
     /// Touchpad swipes pila handles (the others reach the clients).
     pub gestures: Vec<(Gesture, Action)>,
     pub outputs: Vec<OutputConfig>,
@@ -1661,14 +1713,30 @@ impl Config {
                 .iter()
                 .map(|(k, a)| (k.as_str(), a.as_str())),
         );
-        let user = file.bindings.iter().map(|(k, a)| (k.as_str(), a.as_str()));
-        for (written, action) in defaults.chain(user) {
+        let mut repeating: Vec<KeyCombo> = Vec::new();
+        let defaults = defaults.map(|(k, a)| (k, a, false));
+        let user = file
+            .bindings
+            .iter()
+            .map(|(k, b)| (k.as_str(), b.action.as_str(), b.repeat));
+        for (written, action, repeat) in defaults.chain(user) {
             let combo = KeyCombo::parse(written, mod_key)?;
             let action =
                 Action::parse(action).map_err(|err| format!("binding {written:?}: {err}"))?;
+            let held_key = matches!(combo.trigger, Trigger::Key(sym) if tap_sym(sym).is_none());
+            if repeat && !held_key {
+                return Err(format!(
+                    "binding {written:?}: only a key can repeat, not a mouse wheel's notch \
+                     or a modifier alone"
+                ));
+            }
             bindings.retain(|(c, _)| *c != combo);
+            repeating.retain(|c| *c != combo);
             if let Some(action) = action {
                 bindings.push((combo, action));
+                if repeat {
+                    repeating.push(combo);
+                }
             }
         }
 
@@ -1737,6 +1805,7 @@ impl Config {
             autostart: file.autostart,
             keyboard: file.keyboard,
             bindings,
+            repeating,
             gestures,
             outputs,
             input,
@@ -1809,6 +1878,16 @@ impl Config {
             mods: mods.into(),
             trigger: Trigger::Key(sym),
         })
+    }
+
+    /// Whether the binding of `sym` with exactly the pressed modifiers runs
+    /// again while the key is held (`repeat = true`).
+    pub fn repeats(&self, sym: Keysym, mods: &ModifiersState) -> bool {
+        let combo = KeyCombo {
+            mods: mods.into(),
+            trigger: Trigger::Key(sym),
+        };
+        self.repeating.contains(&combo)
     }
 
     /// The action bound to a wheel step that way with exactly the pressed
@@ -2064,6 +2143,49 @@ mod tests {
         for text in ["Shift", "Mod+Alt", "Mod+Super"] {
             assert!(KeyCombo::parse(text, ModKey::Alt).is_err(), "{text}");
         }
+    }
+
+    #[test]
+    fn a_binding_can_repeat() {
+        let none = ModifiersState::default();
+        let config = Config::from_toml(
+            "[bindings]\n\
+             \"XF86AudioRaiseVolume\" = { action = \"spawn up\", repeat = true }\n\
+             \"XF86AudioLowerVolume\" = { action = \"spawn down\" }\n\
+             \"XF86AudioMute\" = \"spawn mute\"\n",
+            &no_env,
+        )
+        .unwrap();
+        let up = Keysym::XF86_AudioRaiseVolume;
+        assert_eq!(
+            config.action_for(up, &none),
+            Some(Action::Spawn("up".into()))
+        );
+        assert!(config.repeats(up, &none));
+        assert!(!config.repeats(Keysym::XF86_AudioLowerVolume, &none));
+        assert!(!config.repeats(Keysym::XF86_AudioMute, &none));
+
+        // "none" removes the repeat with the binding.
+        let removed = Config::from_toml(
+            "[bindings]\n\"XF86AudioMute\" = { action = \"none\", repeat = true }\n",
+            &no_env,
+        )
+        .unwrap();
+        assert!(removed.repeating.is_empty());
+
+        // A wheel's notch or a tap has no held key to repeat.
+        for combo in ["Mod+WheelScrollUp", "Mod"] {
+            let text =
+                format!("[bindings]\n\"{combo}\" = {{ action = \"close\", repeat = true }}\n");
+            let err = Config::from_toml(&text, &no_env).unwrap_err();
+            assert!(err.contains("only a key can repeat"), "{combo}: {err}");
+        }
+        let err = Config::from_toml(
+            "[bindings]\n\"Mod+X\" = { action = \"close\", repat = true }\n",
+            &no_env,
+        )
+        .unwrap_err();
+        assert!(err.contains("unknown field `repat`"), "{err}");
     }
 
     #[test]

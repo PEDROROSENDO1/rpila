@@ -132,6 +132,8 @@ click-method = "button-areas"
 "Mod+WheelScrollRight" = "focus-output next"
 "super+shift+wheelscrollleft" = "none"
 "Mod+J" = "none"
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-" }
 
 [gestures]
 "swipe-3-left" = "cycle-focus"

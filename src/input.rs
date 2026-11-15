@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -6,12 +8,13 @@ use smithay::{
     },
     desktop::Window,
     input::{
-        keyboard::{FilterResult, Keysym},
+        keyboard::{FilterResult, Keycode, Keysym},
         pointer::{
             AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus,
             GrabStartData as PointerGrabStartData, MotionEvent, RelativeMotionEvent,
         },
     },
+    reexports::calloop::timer::{TimeoutAction, Timer},
     utils::{Logical, Point, Serial, SERIAL_COUNTER},
     wayland::{
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat, shell::wlr_layer::Layer,
@@ -207,6 +210,14 @@ impl Pila {
             serial,
             time,
             |state, mods, handle| {
+                // A repeating binding stops when its key is released, or
+                // another is pressed (xkb repeats the last key pressed).
+                if let Some(repeating) = state.input.binding_repeat.as_ref().map(|r| r.keycode) {
+                    let pressed = key_state == KeyState::Pressed;
+                    if (pressed && repeating != keycode) || (!pressed && repeating == keycode) {
+                        state.stop_binding_repeat();
+                    }
+                }
                 // Any other key pressed means a held modifier isn't tapped
                 // alone (a repeat of its own press leaves it).
                 if key_state == KeyState::Pressed
@@ -269,6 +280,9 @@ impl Pila {
                             .filter(|action| allowed(state, action));
                         if let Some(action) = action {
                             state.input.suppressed_keys.insert(keycode);
+                            if sym.is_some_and(|sym| state.config.repeats(sym, mods)) {
+                                state.input.repeat_next = Some((keycode, action.clone()));
+                            }
                             return FilterResult::Intercept(Some(action));
                         }
                     }
@@ -305,6 +319,9 @@ impl Pila {
         if let Some(action) = action.flatten() {
             self.run_action(action, serial);
         }
+        if let Some((keycode, action)) = self.input.repeat_next.take() {
+            self.start_binding_repeat(keycode, action);
+        }
         if let Some(action) = self.input.tap_action.take() {
             self.run_action(action, serial);
             acted = true;
@@ -318,6 +335,60 @@ impl Pila {
             }
         }
         acted
+    }
+
+    /// A binding with `repeat = true` was pressed and has run: run it again
+    /// while its key is held, after the keyboard's repeat delay and at its
+    /// rate, as xkb repeats a key for a client. Its release, another key's
+    /// press, `release_all_keys` or the lock stop it.
+    fn start_binding_repeat(&mut self, keycode: Keycode, action: Action) {
+        self.stop_binding_repeat();
+        let kb = &self.config.keyboard;
+        // A rate of 0 turns repeat off, as for clients.
+        if kb.repeat_rate <= 0 {
+            return;
+        }
+        let delay = Duration::from_millis(kb.repeat_delay.max(0) as u64);
+        let every = Duration::from_secs_f64(1.0 / f64::from(kb.repeat_rate));
+        let timer = Timer::from_duration(delay);
+        let inserted = self.loop_handle.insert_source(timer, move |_, _, state| {
+            // The checks a press goes through (`on_keyboard`), again.
+            let allowed = !state.is_locked()
+                && state.window_menu.is_none()
+                && (!state.shortcuts_inhibited() || action == Action::Quit);
+            if !allowed {
+                state.input.binding_repeat = None;
+                return TimeoutAction::Drop;
+            }
+            // A held key is activity, though it sends nothing more.
+            state.input_activity = true;
+            state.input.repeat_firing = true;
+            state.run_action(action.clone(), SERIAL_COUNTER.next_serial());
+            state.input.repeat_firing = false;
+            if std::mem::take(&mut state.input.repeat_stopped) {
+                return TimeoutAction::Drop;
+            }
+            TimeoutAction::ToDuration(every)
+        });
+        match inserted {
+            Ok(timer) => {
+                self.input.binding_repeat = Some(crate::state::BindingRepeat { keycode, timer });
+            }
+            Err(err) => tracing::warn!(?err, "can't repeat a binding"),
+        }
+    }
+
+    /// End a binding's repeat, if one runs.
+    pub(crate) fn stop_binding_repeat(&mut self) {
+        let Some(repeat) = self.input.binding_repeat.take() else {
+            return;
+        };
+        if self.input.repeat_firing {
+            // Inside its own timer: it ends itself on return.
+            self.input.repeat_stopped = true;
+        } else {
+            self.loop_handle.remove(repeat.timer);
+        }
     }
 
     /// Whether the surface with keyboard focus (or the window of a focused
@@ -344,6 +415,7 @@ impl Pila {
         let time = InputTime::now();
         // A modifier held as focus went (the host's Alt+Tab) wasn't tapped.
         self.input.mod_tap = None;
+        self.stop_binding_repeat();
         for keycode in keyboard.pressed_keys() {
             let serial = SERIAL_COUNTER.next_serial();
             keyboard.input::<(), _>(

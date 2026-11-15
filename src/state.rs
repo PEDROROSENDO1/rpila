@@ -283,6 +283,23 @@ pub struct InputState {
     /// Mouse wheel bindings: when one last ran on each axis, for
     /// `wheel-binding-cooldown`.
     pub wheel_ran: [Option<std::time::Instant>; 2],
+    /// A binding with `repeat = true` just pressed: its key and action, for
+    /// `start_binding_repeat` once it has run.
+    pub repeat_next: Option<(Keycode, crate::config::Action)>,
+    /// The binding running again while its key is held (`input.rs`).
+    pub binding_repeat: Option<BindingRepeat>,
+    /// Set while a repeat runs its action, which may stop the repeat
+    /// (`stop_binding_repeat` leaves the timer to end itself then).
+    pub repeat_firing: bool,
+    /// The repeat was stopped while it ran its action.
+    pub repeat_stopped: bool,
+}
+
+/// A binding with `repeat = true` whose key is held: its keycode and the
+/// timer that runs it again.
+pub struct BindingRepeat {
+    pub keycode: Keycode,
+    pub timer: calloop::RegistrationToken,
 }
 
 /// A modifier key held alone: its keycode, keysym and the modifiers its
