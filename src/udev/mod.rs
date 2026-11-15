@@ -12,7 +12,7 @@
 //! redraws are paced by the display. A session lock is confirmed only after a
 //! locked frame has been shown on every output.
 
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, path::Path, time::Duration};
 
 use smithay::wayland::drm_syncobj::{supports_syncobj_eventfd, DrmSyncobjState};
 
@@ -778,6 +778,71 @@ impl UdevData {
     }
 }
 
+/// The primary node of the DRM device at `path` (a seat may name another):
+/// its key in `UdevData::devices`.
+fn primary_node(path: &Path) -> Result<DrmNode, Box<dyn std::error::Error>> {
+    let node = DrmNode::from_path(path)?;
+    Ok(node
+        .node_with_type(NodeType::Primary)
+        .and_then(Result::ok)
+        .unwrap_or(node))
+}
+
+/// Open the DRM device at `path` through the session.
+fn open_device(
+    session: &mut LibSeatSession,
+    path: &Path,
+) -> Result<DrmDeviceFd, Box<dyn std::error::Error>> {
+    let fd = session.open(
+        path,
+        OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
+    )?;
+    Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
+}
+
+/// A GPU's render node (`node` if it has none), which its renderer is keyed
+/// by, and the EGL display it was found with. Smithay shares one display per
+/// GBM device and terminates it with the last handle: keep this one until the
+/// GPU manager holds its own (`add_node`), or the display is initialized
+/// twice.
+fn render_node(
+    gbm: &GbmDevice<DrmDeviceFd>,
+    node: DrmNode,
+) -> Result<(DrmNode, EGLDisplay), Box<dyn std::error::Error>> {
+    // SAFETY: the GBM device outlives the display (the output manager and
+    // the GPU manager hold it, in `UdevData`).
+    let display = unsafe { EGLDisplay::new(gbm.clone())? };
+    let render_node = EGLDevice::device_for_display(&display)?
+        .try_get_render_node()
+        .ok()
+        .flatten()
+        .unwrap_or(node);
+    Ok((render_node, display))
+}
+
+/// A GPU's output manager: buffers allocated on it for rendering and scanout,
+/// in the formats its renderer draws (`render_formats`).
+fn output_manager(
+    drm: DrmDevice,
+    gbm: GbmDevice<DrmDeviceFd>,
+    render_node: DrmNode,
+    render_formats: FormatSet,
+) -> PilaDrmOutputManager {
+    let allocator = GbmAllocator::new(
+        gbm.clone(),
+        GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
+    );
+    let exporter = GbmFramebufferExporter::new(gbm.clone(), render_node.into());
+    DrmOutputManager::new(
+        drm,
+        allocator,
+        exporter,
+        Some(gbm),
+        COLOR_FORMATS,
+        render_formats,
+    )
+}
+
 /// Set up the session, the GPU, outputs and input, and make pila run on them.
 pub fn init_udev(
     event_loop: &mut EventLoop<'static, Pila>,
@@ -792,18 +857,10 @@ pub fn init_udev(
     let path = primary_gpu(&seat)?
         .or_else(|| all_gpus(&seat).ok()?.into_iter().next())
         .ok_or("no GPU found")?;
-    let node = DrmNode::from_path(&path)?;
-    let node = node
-        .node_with_type(NodeType::Primary)
-        .and_then(Result::ok)
-        .unwrap_or(node);
+    let node = primary_node(&path)?;
     info!(gpu = %path.display(), "using GPU");
 
-    let fd = session.open(
-        &path,
-        OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
-    )?;
-    let fd = DrmDeviceFd::new(DeviceFd::from(fd));
+    let fd = open_device(&mut session, &path)?;
     if supports_syncobj_eventfd(&fd) {
         state.protocols.syncobj = Some(DrmSyncobjState::new::<Pila>(
             &state.display_handle,
@@ -813,16 +870,7 @@ pub fn init_udev(
     let (drm, drm_notifier) = DrmDevice::new(fd.clone(), true)?;
     let gbm = GbmDevice::new(fd)?;
 
-    // Only to find the render node. Smithay shares one display per GBM
-    // device: the GPU manager's (`add_node`) is this one, which the manager
-    // keeps alive. SAFETY: the GBM device outlives it (the output manager and
-    // the GPU manager hold it, in `UdevData`).
-    let display = unsafe { EGLDisplay::new(gbm.clone())? };
-    let render_node = EGLDevice::device_for_display(&display)?
-        .try_get_render_node()
-        .ok()
-        .flatten()
-        .unwrap_or(node);
+    let (render_node, _display) = render_node(&gbm, node)?;
     // The GPU manager owns the renderer, keyed by the render node. It only
     // logs a renderer it can't create and leaves the GPU out: keep the error
     // to say why the GPU is missing.
@@ -853,20 +901,8 @@ pub fn init_udev(
         renderer,
     ));
 
-    let allocator = GbmAllocator::new(
-        gbm.clone(),
-        GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
-    );
-    let exporter = GbmFramebufferExporter::new(gbm.clone(), render_node.into());
     let render_formats = renderer.egl_context().dmabuf_render_formats().clone();
-    let drm = DrmOutputManager::new(
-        drm,
-        allocator,
-        exporter,
-        Some(gbm),
-        COLOR_FORMATS,
-        render_formats,
-    );
+    let drm = output_manager(drm, gbm, render_node, render_formats);
 
     // Client buffers: shm in the formats the renderer reads, dmabuf on this GPU.
     state.protocols.shm.update_formats(renderer.shm_formats());

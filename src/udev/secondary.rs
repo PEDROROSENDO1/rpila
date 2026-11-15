@@ -113,20 +113,15 @@ impl<'a> RenderElement<PrimaryRenderer<'a>> for PrimaryGpuElement {
     }
 }
 
-use super::{draw::frame_finish, outputs, scan_connectors, GpuDevice, OutputId, COLOR_FORMATS};
+use super::{
+    draw::frame_finish, open_device, output_manager, outputs, primary_node, render_node,
+    scan_connectors, GpuDevice, OutputId,
+};
 use crate::{backend::Backend, state::Pila};
-use smithay::{
-    backend::{
-        allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
-        drm::{
-            exporter::gbm::GbmFramebufferExporter, output::DrmOutputManager, DrmDevice,
-            DrmDeviceFd, DrmEvent, DrmNode, NodeType,
-        },
-        egl::{EGLDevice, EGLDisplay},
-        session::Session,
-    },
-    reexports::rustix::fs::OFlags,
-    utils::DeviceFd,
+use smithay::backend::{
+    allocator::gbm::GbmDevice,
+    drm::{DrmDevice, DrmEvent, DrmNode},
+    session::Session,
 };
 use smithay_drm_extras::drm_scanner::DrmScanner;
 use std::path::Path;
@@ -144,29 +139,14 @@ fn try_add_gpu(state: &mut Pila, path: &Path) -> Result<(), Box<dyn std::error::
     let Some(Backend::Udev(data)) = &mut state.backend else {
         return Ok(());
     };
-    let node = DrmNode::from_path(path)?;
-    let node = node
-        .node_with_type(NodeType::Primary)
-        .and_then(Result::ok)
-        .unwrap_or(node);
+    let node = primary_node(path)?;
     if data.devices.contains_key(&node) {
         return Ok(());
     }
-    let fd = data.session.open(
-        path,
-        OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
-    )?;
-    let fd = DrmDeviceFd::new(DeviceFd::from(fd));
+    let fd = open_device(&mut data.session, path)?;
     let (drm, notifier) = DrmDevice::new(fd.clone(), true)?;
     let gbm = GbmDevice::new(fd)?;
-    // Only to find the render node (see `init_udev`).
-    // SAFETY: the GBM device outlives it (the managers below hold it).
-    let display = unsafe { EGLDisplay::new(gbm.clone())? };
-    let render_node = EGLDevice::device_for_display(&display)?
-        .try_get_render_node()
-        .ok()
-        .flatten()
-        .unwrap_or(node);
+    let (render_node, _display) = render_node(&gbm, node)?;
     // Its own renderer: what its outputs are set up with, and the copies
     // land through.
     data.gpus.as_mut().add_node(render_node, gbm.clone())?;
@@ -178,19 +158,7 @@ fn try_add_gpu(state: &mut Pila, path: &Path) -> Result<(), Box<dyn std::error::
             .dmabuf_render_formats()
             .clone()
     };
-    let allocator = GbmAllocator::new(
-        gbm.clone(),
-        GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
-    );
-    let exporter = GbmFramebufferExporter::new(gbm.clone(), render_node.into());
-    let drm = DrmOutputManager::new(
-        drm,
-        allocator,
-        exporter,
-        Some(gbm),
-        COLOR_FORMATS,
-        render_formats,
-    );
+    let drm = output_manager(drm, gbm, render_node, render_formats);
     let events = data
         .loop_handle
         .insert_source(notifier, move |event, metadata, state| match event {
