@@ -240,9 +240,7 @@ fn a_window_dragged_onto_another_output_is_redrawn_there() {
 
 /// Nothing changes the `Space`'s windows but through `map_window`,
 /// `unmap_window` and `raise_window` (`redraw.rs`), which ask for the redraws:
-/// a direct `space.map_element` moves a window and redraws nothing. (One is
-/// allowed: `resize_grab::handle_commit`, inside a commit, which asks for its
-/// surface's outputs before and after.)
+/// a direct `space.map_element` moves a window and redraws nothing.
 #[test]
 fn the_spaces_windows_change_only_through_the_helpers_that_redraw() {
     fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
@@ -280,10 +278,9 @@ fn the_spaces_windows_change_only_through_the_helpers_that_redraw() {
             }
         }
     }
-    assert_eq!(
-        direct,
-        ["grabs/resize_grab.rs: space.map_element("],
-        "use Pila::map_window, unmap_window or raise_window"
+    assert!(
+        direct.is_empty(),
+        "{direct:?}: use Pila::map_window, unmap_window or raise_window"
     );
 }
 

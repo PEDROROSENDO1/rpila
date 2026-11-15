@@ -24,7 +24,7 @@ use smithay::{
 
 use smithay::xwayland::XWaylandClientData;
 
-use crate::{grabs::resize_grab, state::ClientState, Pila};
+use crate::{state::ClientState, Pila};
 
 impl CompositorHandler for Pila {
     fn compositor_state(&mut self) -> &mut CompositorState {
@@ -70,9 +70,7 @@ impl CompositorHandler for Pila {
         self.handle_layer_commit(surface);
         self.update_foreign_toplevel(surface);
         self.handle_lock_commit(surface);
-        if let Some(moved) = resize_grab::handle_commit(&mut self.space, surface) {
-            self.keep_transients_above(&moved);
-        }
+        self.finish_resize_commit(surface);
         crate::cursor::handle_commit(&self.cursor_status, surface);
         self.handle_dnd_icon_commit(surface);
         self.redraw_committed(surface, before);

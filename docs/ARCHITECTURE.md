@@ -1165,5 +1165,5 @@ Key flows and invariants:
   `SceneTitleBar::colors` for the bar. Rasterized buttons and titles are keyed by their colors,
   so a reload redraws them. The bar stays opaque, which `SceneWindow::covers` counts on.
 - **Resize** uses per-surface `ResizeSurfaceState` in the surface data map;
-  `resize_grab::handle_commit` (called from `CompositorHandler::commit`) repositions the
+  `Pila::finish_resize_commit` (called from `CompositorHandler::commit`) repositions the
   window when resizing from the top/left edges once the client commits the new size.

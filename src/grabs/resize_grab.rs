@@ -2,7 +2,7 @@
 use crate::Pila;
 use smithay::xwayland::xwm::ResizeEdge as X11ResizeEdge;
 use smithay::{
-    desktop::{Space, Window},
+    desktop::Window,
     input::pointer::{
         AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, GestureHoldBeginEvent,
         GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
@@ -409,50 +409,51 @@ impl ResizeSurfaceState {
     }
 }
 
-/// Should be called on `WlSurface::commit`
-/// Returns the window, if the commit moved it (`Space::map_element` raised it).
-pub fn handle_commit(space: &mut Space<Window>, surface: &WlSurface) -> Option<Window> {
-    let window = space
-        .elements()
-        .find(|w| w.toplevel().is_some_and(|t| t.wl_surface() == surface))
-        .cloned()?;
+impl Pila {
+    /// A commit of `surface` after a resize from the top or left edge: the
+    /// window moves so that its bottom right corner stays (called from
+    /// `commit`, after `handle_xdg_commit`).
+    pub fn finish_resize_commit(&mut self, surface: &WlSurface) {
+        let Some(window) = self.window_for_surface(surface) else {
+            return;
+        };
+        let Some(mut window_loc) = self.space.element_location(&window) else {
+            return;
+        };
+        let geometry = window.geometry();
 
-    let mut window_loc = space.element_location(&window)?;
-    let geometry = window.geometry();
+        let new_loc: Point<Option<i32>, Logical> = ResizeSurfaceState::with(surface, |state| {
+            state
+                .commit()
+                .and_then(|(edges, initial_rect)| {
+                    // If the window is being resized by top or left, its location must be adjusted
+                    // accordingly.
+                    edges.intersects(ResizeEdge::TOP_LEFT).then(|| {
+                        let new_x = edges.intersects(ResizeEdge::LEFT).then_some(
+                            initial_rect.loc.x + (initial_rect.size.w - geometry.size.w),
+                        );
 
-    let new_loc: Point<Option<i32>, Logical> = ResizeSurfaceState::with(surface, |state| {
-        state
-            .commit()
-            .and_then(|(edges, initial_rect)| {
-                // If the window is being resized by top or left, its location must be adjusted
-                // accordingly.
-                edges.intersects(ResizeEdge::TOP_LEFT).then(|| {
-                    let new_x = edges
-                        .intersects(ResizeEdge::LEFT)
-                        .then_some(initial_rect.loc.x + (initial_rect.size.w - geometry.size.w));
+                        let new_y = edges.intersects(ResizeEdge::TOP).then_some(
+                            initial_rect.loc.y + (initial_rect.size.h - geometry.size.h),
+                        );
 
-                    let new_y = edges
-                        .intersects(ResizeEdge::TOP)
-                        .then_some(initial_rect.loc.y + (initial_rect.size.h - geometry.size.h));
-
-                    (new_x, new_y).into()
+                        (new_x, new_y).into()
+                    })
                 })
-            })
-            .unwrap_or_default()
-    });
+                .unwrap_or_default()
+        });
 
-    if let Some(new_x) = new_loc.x {
-        window_loc.x = new_x;
+        if new_loc.x.is_none() && new_loc.y.is_none() {
+            return;
+        }
+        if let Some(new_x) = new_loc.x {
+            window_loc.x = new_x;
+        }
+        if let Some(new_y) = new_loc.y {
+            window_loc.y = new_y;
+        }
+        // Mapping it again raised it: its transients go back above it.
+        self.map_window(window.clone(), window_loc, false);
+        self.keep_transients_above(&window);
     }
-    if let Some(new_y) = new_loc.y {
-        window_loc.y = new_y;
-    }
-
-    if new_loc.x.is_some() || new_loc.y.is_some() {
-        // If TOP or LEFT side of the window got resized, we have to move it
-        space.map_element(window.clone(), window_loc, false);
-        return Some(window);
-    }
-
-    None
 }
