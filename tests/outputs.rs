@@ -616,6 +616,29 @@ fn editing_an_outputs_config_section_drops_its_override() {
     pila.wait("B at 1.5", |s| s["outputs"][1]["scale"] == 1.5);
 }
 
+/// A `mode` without a refresh is the monitor's preferred mode if it has that
+/// size, not the fastest, and one with a refresh the closest to it: the
+/// headless backend picks as bare metal does (`ModeSpec::pick`).
+#[test]
+fn a_mode_is_picked_as_on_bare_metal() {
+    let section = |mode: &str| format!("[[output]]\nname = \"A\"\nmode = \"{mode}\"\n");
+    // A's own mode, the preferred one, is 1920x1080 at 30 Hz; it also has
+    // it at 60 Hz (`EXTRA_MODES`).
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1920x1080@30".into()),
+        config: section("1024x768"),
+        ..Options::default()
+    });
+    pila.wait("1024 wide", |s| s["outputs"][0]["mode"]["w"] == 1024);
+    pila.write_config(&section("1920x1080"));
+    let state = pila.wait("1920 wide", |s| s["outputs"][0]["mode"]["w"] == 1920);
+    assert_eq!(state["outputs"][0]["mode"]["refresh_mhz"], 30_000);
+    pila.write_config(&section("1920x1080@59.94"));
+    pila.wait("at 60 Hz", |s| {
+        s["outputs"][0]["mode"]["refresh_mhz"] == 60_000
+    });
+}
+
 // --- Monitors (`edid.rs`) ---------------------------------------------------------
 
 const MONITOR: &str = "=LEN/P27h-30/ABC";

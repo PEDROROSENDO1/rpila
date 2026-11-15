@@ -245,14 +245,7 @@ impl Pila {
 
     /// Nested: only the scale of the `winit` output applies.
     pub(crate) fn apply_nested_scale(&mut self) {
-        let file = self.config.output("winit", None).and_then(|c| c.scale);
-        let scale = self
-            .outputs
-            .overrides
-            .get("winit")
-            .and_then(|c| c.scale)
-            .or(file)
-            .unwrap_or(1.0);
+        let scale = self.effective_output_config("winit").scale.unwrap_or(1.0);
         for output in self.space.outputs() {
             output.change_current_state(None, None, Some(Scale::Fractional(scale)), None);
         }

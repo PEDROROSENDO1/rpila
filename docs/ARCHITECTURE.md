@@ -860,7 +860,7 @@ Key flows and invariants:
   modes only, ≥ 1 head enabled, scale 0.5..8, positions within
   ±`config::MAX_OUTPUT_POSITION`, the bound `[[output]]` is parsed with, so the backends'
   layout math can't overflow) and applied as `[[output]]`-style overrides
-  in `Pila::outputs.overrides`, which `udev::effective_output_config` layers over the file
+  in `Pila::outputs.overrides`, which `Pila::effective_output_config` layers over the file
   for `connector_connected` and `apply_output_config`. If the backend can't do it
   (`apply_outputs` returns false: a failed modeset) the overrides go back to what they were
   and the client gets `failed`. A head's property set twice (a mode and a custom mode

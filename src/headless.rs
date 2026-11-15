@@ -643,36 +643,15 @@ pub fn remove_output(state: &mut Pila, name: &str) -> bool {
     true
 }
 
-/// The `[[output]]` config of `name` with wlr-output-management's overrides
-/// on top.
-fn effective_output_config(state: &Pila, name: &str) -> OutputConfig {
-    let mut config = state
-        .output_section(name)
-        .unwrap_or_else(|| OutputConfig::named(name));
-    if let Some(over) = state.outputs.overrides.get(name) {
-        config.mode = over.mode.or(config.mode);
-        config.scale = over.scale.or(config.scale);
-        config.position = over.position.or(config.position);
-        config.transform = over.transform.or(config.transform);
-        config.enabled = over.enabled.or(config.enabled);
-        config.adaptive_sync = over.adaptive_sync.or(config.adaptive_sync);
-    }
-    config
-}
-
+/// The mode `spec` asks for, as bare metal picks it (`ModeSpec::pick`), else
+/// the output's own (the first, its preferred one).
 fn pick_mode(modes: &[Mode], spec: Option<ModeSpec>) -> Mode {
-    let Some(spec) = spec else {
-        return modes[0];
-    };
-    modes
+    let sizes: Vec<_> = modes
         .iter()
-        .filter(|m| (m.size.w, m.size.h) == (spec.width, spec.height))
-        .min_by_key(|m| match spec.refresh_hz {
-            Some(hz) => (m.refresh - (hz * 1000.0).round() as i32).abs(),
-            None => -m.refresh,
-        })
-        .copied()
-        .unwrap_or(modes[0])
+        .map(|m| ((m.size.w, m.size.h), m.refresh))
+        .collect();
+    spec.and_then(|spec| spec.pick(&sizes, Some(0)))
+        .map_or(modes[0], |i| modes[i])
 }
 
 /// Apply the config (and overrides) to every virtual output: enabled, mode,
@@ -692,7 +671,7 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
     let configs: Vec<OutputConfig> = data
         .outputs
         .iter()
-        .map(|o| effective_output_config(state, &o.output.name()))
+        .map(|o| state.effective_output_config(&o.output.name()))
         .collect();
     let any_on = configs.iter().any(|c| c.enabled.unwrap_or(true));
     let display_handle = state.display_handle.clone();

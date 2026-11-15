@@ -1678,6 +1678,19 @@ impl Pila {
         Some(section)
     }
 
+    /// The `[[output]]` section for `name` (else none of its fields set),
+    /// with what a display tool set at runtime on top
+    /// (`Outputs::overrides`).
+    pub fn effective_output_config(&self, name: &str) -> crate::config::OutputConfig {
+        let file = self
+            .output_section(name)
+            .unwrap_or_else(|| crate::config::OutputConfig::named(name));
+        match self.outputs.overrides.get(name) {
+            Some(over) => file.overridden_by(over),
+            None => file,
+        }
+    }
+
     /// Housekeeping after `output` was drawn, for any backend: what
     /// concerns that output now, the rest once per event-loop iteration
     /// however many outputs were drawn (`after_frames`).
