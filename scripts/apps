@@ -17,21 +17,34 @@ Through Pila's control socket, real pointer and keyboard input:
     its size under the pointer;
   - after each step: no grab left, the keyboard on the window, no popup.
 
+And typing through an input method, fcitx5 with Rime's pinyin (fcitx5-foot,
+fcitx5-gtk4: a terminal and a GTK 4 text field, skipped where fcitx5 or
+Rime's luna_pinyin isn't installed):
+
+  - fcitx5 becomes Pila's input method and takes the keyboard in the app;
+  - "nihao" shows its candidate window next to the text cursor, on the
+    screen, and a space puts the two characters into the app;
+  - a binding of Pila's still runs, and (GTK) a context menu opens and closes
+    with Escape while the input method holds the keyboard, leaving no grab.
+
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
-                                     weston-terminal, xterm)
+                                     weston-terminal, xterm, fcitx5-foot,
+                                     fcitx5-gtk4)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
 (app.log) and a screenshot at the end (grim, if installed). Uses
 target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
-(package dbus); xterm needs Xwayland. Standard library only.
+(package dbus); xterm needs Xwayland; fcitx5-gtk4 reads the text back with
+wl-paste (package wl-clipboard). Standard library only.
 """
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -48,6 +61,36 @@ APPS = {
     "weston-terminal": (["weston-terminal"], "app"),
     "xterm": (["xterm"], "pila"),
 }
+
+# Typing through fcitx5: name: (the app, as a function of the file a terminal
+# writes what's typed to; how the text is read back: that "file", or the
+# "clipboard" after select all and copy).
+IME_APPS = {
+    "fcitx5-foot": (lambda typed: ["foot", "sh", "-c", f"cat > {shlex.quote(typed)}"], "file"),
+    "fcitx5-gtk4": (lambda typed: ["gtk4-demo", "--run=entry_undo"], "clipboard"),
+}
+
+# fcitx5's settings for the run: Rime as the input method, on from the start,
+# with the one schema the run types in (deploying every schema takes minutes).
+FCITX5_PROFILE = """[Groups/0]
+Name=Default
+Default Layout=us
+DefaultIM=rime
+
+[Groups/0/Items/0]
+Name=keyboard-us
+Layout=
+
+[Groups/0/Items/1]
+Name=rime
+Layout=
+
+[GroupOrder]
+0=Default
+"""
+FCITX5_CONFIG = "[Behavior]\nActiveByDefault=True\n"
+RIME_SCHEMAS = "patch:\n  schema_list:\n    - schema: luna_pinyin\n"
+PINYIN, HANZI = "nihao", "\u4f60\u597d"
 
 BAR = 28  # Pila's title bar height
 DRAG = (100, 60)  # how far each drag goes
@@ -145,7 +188,132 @@ class Workload:
                        f"{len(state['popups'])} popups")
         return state
 
+    def tap(self, key):
+        self.ctl(cmd="key", key=key, state="tap")
+        time.sleep(0.15)
+
+    def typed(self, how, path):
+        """What the app has, read back as `how` says."""
+        if how == "file":
+            self.tap("Return")
+            self.ctl(cmd="combo", keys="Control_L+d")
+            end = time.monotonic() + 3
+            while time.monotonic() < end and not (os.path.exists(path) and os.path.getsize(path)):
+                time.sleep(0.1)
+            return open(path).read().strip() if os.path.exists(path) else ""
+        self.ctl(cmd="combo", keys="Control_L+a")
+        time.sleep(0.3)
+        self.ctl(cmd="combo", keys="Control_L+c")
+        time.sleep(0.5)
+        try:
+            return subprocess.run(["wl-paste", "-n"], capture_output=True, text=True, timeout=5).stdout
+        except subprocess.TimeoutExpired:
+            return ""
+
+    def run_ime(self):
+        """Typing through fcitx5 (module docs)."""
+        command, how = IME_APPS[self.app]
+        self.mark(f"{self.app} begin")
+        home = os.environ["HOME"]
+        settings = os.path.join(home, ".config/fcitx5")
+        rime = os.path.join(home, ".local/share/fcitx5/rime")
+        os.makedirs(settings)
+        os.makedirs(rime)
+        for path, text in [(os.path.join(settings, "profile"), FCITX5_PROFILE),
+                           (os.path.join(settings, "config"), FCITX5_CONFIG),
+                           (os.path.join(rime, "default.custom.yaml"), RIME_SCHEMAS)]:
+            with open(path, "w") as f:
+                f.write(text)
+        fcitx5 = subprocess.Popen(["fcitx5"], stdout=open(os.path.join(self.out, "fcitx5.log"), "w"),
+                                  stderr=subprocess.STDOUT)
+        try:
+            self.ime_steps(command, how, rime)
+        finally:
+            fcitx5.terminate()
+        return self.finish()
+
+    def ime_steps(self, command, how, rime):
+        present = self.wait(lambda s: s["input_method"]["present"], 20)
+        if not self.check("fcitx5 is Pila's input method", present is not None, "none within 20 s"):
+            return
+        typed = os.path.join(self.out, "typed.txt")
+        subprocess.Popen(command(typed), stdout=open(os.path.join(self.out, "app.log"), "w"),
+                         stderr=subprocess.STDOUT)
+        state = self.wait(lambda s: self.window(s) is not None and self.window(s)["geometry"]["w"] > 0, 20)
+        if not self.check(f"{command(typed)[0]} opens a window", state is not None, "none within 20 s"):
+            return
+        app_id = self.window(state)["app_id"]
+        state = self.wait(lambda s: s["keyboard_grab"] == "input_method"
+                          and s["input_method"]["text_input_focus"] == app_id, 10)
+        now = self.state()
+        self.check("the input method takes the keyboard in the app's text field", state is not None,
+                   f"keyboard grab {now['keyboard_grab']}, text input on {now['input_method']['text_input_focus']}")
+        # Rime compiles its dictionary the first time: it says so when done.
+        user = os.path.join(rime, "user.yaml")
+        end = time.monotonic() + 120
+        while time.monotonic() < end and not (os.path.exists(user) and "last_build_time" in open(user).read()):
+            time.sleep(0.2)
+        time.sleep(1.5)
+
+        for key in PINYIN:
+            self.tap(key)
+        state = self.wait(lambda s: s["input_method"]["popups"], 5)
+        if self.check(f"typing {PINYIN!r} shows the candidate window", state is not None, "none within 5 s"):
+            time.sleep(0.3)
+            state = self.state()
+            x, y, w, h = self.geometry(state)
+            px, py, pw, ph = state["input_method"]["popups"][0]["geometry"]
+            screen = state["outputs"][0]["geometry"]
+            # Below the first line of a terminal, or below a text field in
+            # the window: never over the window's top-left corner, where it
+            # goes with no text cursor known.
+            at_text = x <= px < x + w and y < py <= y + h + ph
+            on_screen = (0 <= px and px + pw <= screen["w"] and 0 <= py and py + ph <= screen["h"])
+            self.check("the candidate window is next to the text cursor, on the screen",
+                       at_text and on_screen, f"it's at {(px, py, pw, ph)}, the window at {(x, y, w, h)}")
+            if shutil.which("grim"):
+                subprocess.run(["grim", os.path.join(self.out, "candidates.png")], check=False)
+        self.tap("space")
+        gone = self.wait(lambda s: not s["input_method"]["popups"], 5)
+        self.check("a space closes the candidate window", gone is not None)
+
+        # A binding of Pila's, with the input method holding the keyboard.
+        self.ctl(cmd="combo", keys="Super+m")
+        maximized = self.wait(lambda s: self.window(s)["maximized"], 3)
+        self.check("Super+m maximizes the window while the input method holds the keyboard",
+                   maximized is not None)
+        self.ctl(cmd="combo", keys="Super+m")
+        self.wait(lambda s: not self.window(s)["maximized"], 3)
+        time.sleep(0.5)
+
+        if how == "clipboard":
+            # A context menu in the text field: it opens, Escape closes it,
+            # and typing goes on.
+            x, y, w, _ = self.geometry()
+            self.move(x + w // 2, y + 100)
+            time.sleep(0.3)
+            self.ctl(cmd="button", button="right", state="click")
+            opened = self.wait(lambda s: s["popups"], 3)
+            self.check("a context menu opens while the input method holds the keyboard", opened is not None)
+            time.sleep(0.3)
+            self.tap("Escape")
+            closed = self.wait(lambda s: not s["popups"] and not s["pointer"]["grabbed"], 3)
+            now = self.state()
+            self.check("Escape closes it and no grab is left", closed is not None,
+                       f"{len(now['popups'])} popups, pointer grab {now['pointer']['grab']}")
+            for key in PINYIN:
+                self.tap(key)
+            self.tap("space")
+            time.sleep(0.3)
+            expected = HANZI * 2
+        else:
+            expected = HANZI
+        got = self.typed(how, typed)
+        self.check(f"{PINYIN!r} and a space put {expected!r} into the app", got == expected, f"it has {got!r}")
+
     def run(self):
+        if self.app in IME_APPS:
+            return self.run_ime()
         command, _ = APPS[self.app]
         self.mark(f"{self.app} begin")
         appdir = os.path.join(self.out, "app.log")
@@ -259,6 +427,27 @@ def judge(app, out):
     return all(results)
 
 
+def data_file(relative):
+    """Whether a data directory of the system has `relative`."""
+    dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
+
+
+def missing_for(app):
+    """What `app`'s run needs and the system lacks, if anything."""
+    if app in APPS:
+        command = APPS[app][0]
+        return "" if shutil.which(command[0]) else f"{command[0]} not installed"
+    command, how = IME_APPS[app]
+    tools = [command("")[0], "fcitx5"] + (["wl-paste"] if how == "clipboard" else [])
+    for tool in tools:
+        if not shutil.which(tool):
+            return f"{tool} not installed"
+    if not data_file("fcitx5/addon/rime.conf") or not data_file("rime-data/luna_pinyin.schema.yaml"):
+        return "fcitx5 has no Rime with luna_pinyin"
+    return ""
+
+
 def main(argv):
     if len(argv) >= 3 and argv[0] == "--workload":
         Workload(argv[1], argv[2]).run()
@@ -266,9 +455,10 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    unknown = [a for a in argv if a not in APPS]
+    names = list(APPS) + list(IME_APPS)
+    unknown = [a for a in argv if a not in names]
     if unknown:
-        print(f"unknown app {unknown[0]!r}: one of {', '.join(APPS)}", file=sys.stderr)
+        print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)
         return 2
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pila = os.environ.get("PILA_BIN") or os.path.join(repo, "target/release/pila")
@@ -280,10 +470,10 @@ def main(argv):
             print(f"{tool} is missing (package dbus)", file=sys.stderr)
             return 2
     ok = True
-    for app in argv or list(APPS):
-        command, _ = APPS[app]
-        if not shutil.which(command[0]):
-            print(f"\nSKIP  {app} ({command[0]} not installed)")
+    for app in argv or names:
+        missing = missing_for(app)
+        if missing:
+            print(f"\nSKIP  {app} ({missing})")
             continue
         print(f"\nRunning {app} on a headless Pila...")
         out = os.path.join(repo, "pila-apps", app)
@@ -299,7 +489,9 @@ def main(argv):
         env = {k: v for k, v in os.environ.items()
                if k not in ("WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PILA_SOCKET",
                             "NIRI_SOCKET", "SWAYSOCK", "I3SOCK", "HYPRLAND_INSTANCE_SIGNATURE",
-                            "XDG_SESSION_DESKTOP", "DESKTOP_SESSION")}
+                            "XDG_SESSION_DESKTOP", "DESKTOP_SESSION",
+                            # Apps reach the input method through Pila.
+                            "GTK_IM_MODULE", "QT_IM_MODULE", "XMODIFIERS")}
         env.update(HOME=home, XDG_RUNTIME_DIR=run, XDG_CONFIG_HOME=os.path.join(home, ".config"),
                    XDG_STATE_HOME=os.path.join(home, ".local/state"),
                    XDG_CACHE_HOME=os.path.join(home, ".cache"),

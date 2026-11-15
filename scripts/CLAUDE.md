@@ -49,6 +49,18 @@ with the GTK-like client of `tests/common/client.rs` where it helps). Run it aft
 grabs, decorations, fill states or input, and before a release; a behavior that only real apps
 show gets a step. Standard-library Python, like the other helpers.
 
+`fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
+where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
+as its input method, on from the start, and that one schema (deploying all of Rime's takes
+minutes; it's ready when Rime's `user.yaml` has a `last_build_time`); the app is foot writing
+what's typed to a file, or GTK Demo's text field, read back through the clipboard. The checks:
+fcitx5 becomes Pila's input method and takes the keyboard in the app, `nihao` shows the
+candidate window next to the text cursor and on the screen (GTK's text cursor has no width: the
+check that Pila's Smithay keeps such a rectangle), a space puts 你好 into the app, Super+m still
+maximizes, and in GTK a context menu opens and Escape closes it with no grab left. The container
+has no CJK font: the candidates in `candidates.png` are boxes. Run them after changing
+`input_method.rs`, the keyboard path, grabs, or the Smithay rev.
+
 # scripts/shells
 
 `scripts/shells [noctalia|dms]` runs each desktop shell Pila supports (Noctalia, Dux Shell) on
