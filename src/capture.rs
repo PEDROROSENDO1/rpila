@@ -2,8 +2,13 @@
 //! or a window) and ext-image-copy-capture-v1 (copying it into client
 //! buffers). Screenshot tools (grim) and screen sharing
 //! (xdg-desktop-portal-wlr, for browsers and OBS through PipeWire) use them.
-//! Smithay doesn't implement either, so this is built on the bindings from
-//! `wayland-protocols`.
+//! Built on the bindings from `wayland-protocols`: Smithay implements both
+//! too (`wayland::image_copy_capture`), but accepts misuses Pila treats as
+//! protocol errors (a frame attached to or captured again after `capture`,
+//! the cursor session's `duplicate_session` and `invalid_option`, shm
+//! buffers larger than advertised; `tests/capture.rs`,
+//! `a_frame_misused_is_a_protocol_error` and
+//! `a_cursor_session_is_stopped_from_the_start`).
 //!
 //! A session advertises its buffer constraints (the source's size in
 //! physical pixels and the shm formats), then copies one frame per `capture`.
