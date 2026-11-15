@@ -273,7 +273,9 @@ the order of `layout`), and so can a bar or a script: `pila msg action switch-la
 `pila msg keyboard` lists the layouts and says which is in use, and `pila msg subscribe keyboard`
 follows it as it changes.
 
-`repeat-delay` and `repeat-rate` set how soon and how fast a held key repeats.
+`repeat-delay` and `repeat-rate` set how soon and how fast a held key repeats. `numlock = true`
+starts Pila with Num Lock on (for a keypad's numbers), and turns it on again when a change to
+`[keyboard]` loads another keymap.
 `pila --check-config` tells you if xkb doesn't know a layout you wrote.
 
 **Mouse and touchpad.** `[input.touchpad]` and `[input.mouse]` set natural scrolling, pointer

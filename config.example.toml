@@ -115,6 +115,7 @@
 # options = "grp:alt_shift_toggle,caps:escape"   # e.g.
 # repeat-delay = 200               # (default) ms before a held key repeats
 # repeat-rate = 25                 # (default) repeats per second
+# numlock = true                   # e.g.: Num Lock on at startup (default off)
 
 # Touchpad and mouse (libinput, on a TTY; nested, the host handles input).
 # Mouse wheel bindings (Mod+wheel switches workspaces): the least time in
@@ -216,6 +217,7 @@
 # "XF86AudioLowerVolume" = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
 # "XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
 # "Mod+J" = "none"
+# "Mod" = "none"                   # tapping Mod alone opens nothing
 
 [gestures]
 # Touchpad swipes Pila handles itself (on a TTY), as "swipe-<fingers>-<way>"

@@ -233,6 +233,14 @@ impl Pila {
             );
         }
         keyboard.change_repeat_info(kb.repeat_rate, kb.repeat_delay);
+        // A new keymap starts with every lock off.
+        if kb.numlock && crate::state::lock_num_lock(&keyboard) {
+            // `set_modifier_state` tells neither the client nor the LEDs.
+            keyboard.advertise_modifier_state(self);
+            if let Some(backend) = &mut self.backend {
+                backend.update_leds(keyboard.led_state());
+            }
+        }
     }
 
     /// Nested: only the scale of the `winit` output applies.

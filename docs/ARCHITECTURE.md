@@ -32,7 +32,8 @@ Key flows and invariants:
   start a notification daemon, `state::notify_after_startup`), and reloaded when the file changes
   (`config_reload.rs`: inotify on its directory, a 250 ms settle timer, then
   `Config::read`; an invalid file keeps the running config and notifies). `apply_config`
-  re-applies what changed: keyboard (`set_xkb_config`), rules (`refresh_rule_props`),
+  re-applies what changed: keyboard (`set_xkb_config`; a new keymap starts with every lock
+  off, so `numlock` turns Num Lock on again, as at startup: `state::lock_num_lock`), rules (`refresh_rule_props`),
   the workspace count (`apply_workspace_count`), `[input]` on connected devices
   (`UdevData::apply_input_config`), `[[output]]` (`Pila::apply_outputs` →
   `backend::apply_output_config`: on udev and headless enabled, mode via `use_mode`, scale,

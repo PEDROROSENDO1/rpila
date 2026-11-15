@@ -485,6 +485,13 @@ impl Pila {
                 format!("{what}: using the default keymap. Check [keyboard] in the config."),
             );
         }
+        if kb.numlock {
+            if let Some(keyboard) = seat.get_keyboard() {
+                // No client yet to tell; keyboards connected later take the
+                // LEDs from the seat (`udev/input.rs`).
+                lock_num_lock(&keyboard);
+            }
+        }
         seat.add_pointer();
 
         let socket_name = Self::init_wayland_listener(display, event_loop);
@@ -2094,6 +2101,19 @@ pub fn centered_location(
             (area.size.w - size.w).max(0) / 2,
             (area.size.h - size.h - bar).max(0) / 2 + bar,
         ))
+}
+
+/// Turn Num Lock on (`[keyboard] numlock`); whether it was off. The state
+/// it starts from is the keyboard's own, layout included, so nothing else
+/// changes. Neither clients nor the LEDs are told.
+pub fn lock_num_lock(keyboard: &smithay::input::keyboard::KeyboardHandle<Pila>) -> bool {
+    let mut mods = keyboard.modifier_state();
+    if mods.num_lock {
+        return false;
+    }
+    mods.num_lock = true;
+    keyboard.set_modifier_state(mods);
+    true
 }
 
 /// Whether a surface has a buffer attached, i.e. is mapped.

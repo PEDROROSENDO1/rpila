@@ -603,6 +603,9 @@ pub struct KeyboardConfig {
     pub repeat_delay: i32,
     /// Repeats per second.
     pub repeat_rate: i32,
+    /// Num Lock on at startup, and with each new keymap (a reload that
+    /// changes `[keyboard]`): xkb starts every keymap with it off.
+    pub numlock: bool,
 }
 
 impl Default for KeyboardConfig {
@@ -615,6 +618,7 @@ impl Default for KeyboardConfig {
             options: None,
             repeat_delay: 200,
             repeat_rate: 25,
+            numlock: false,
         }
     }
 }

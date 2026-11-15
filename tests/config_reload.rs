@@ -326,3 +326,51 @@ fn an_existing_config_is_left_as_it_is() {
     );
     assert!(!pila.log().contains("created the config from the example"));
 }
+
+/// Mod2, Num Lock in the keymaps Pila makes.
+const NUM_LOCK: u32 = 16;
+
+/// Whether the client's last modifiers event has Num Lock on.
+fn num_lock_on(s: &common::client::Shared) -> Option<bool> {
+    s.events.iter().rev().find_map(|e| match e {
+        common::client::Ev::Modifiers { locked, .. } => Some(locked & NUM_LOCK != 0),
+        _ => None,
+    })
+}
+
+/// `[keyboard] numlock = true` starts Pila with Num Lock on; without it,
+/// it starts off.
+#[test]
+fn num_lock_starts_on_when_asked() {
+    let mut pila = TestPila::with_config("[keyboard]\nnumlock = true\n");
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    client.wait("Num Lock on", |s| num_lock_on(s) == Some(true));
+
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    client.wait("Num Lock off", |s| num_lock_on(s) == Some(false));
+}
+
+/// A new keymap (another layout on reload) starts with every lock off:
+/// with `numlock = true`, Num Lock comes back on with it.
+#[test]
+fn num_lock_stays_on_when_the_keymap_changes() {
+    let mut pila = TestPila::with_config("[keyboard]\nnumlock = true\n");
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    client.wait("Num Lock on", |s| num_lock_on(s) == Some(true));
+    pila.write_config("[keyboard]\nlayout = \"de\"\nnumlock = true\n");
+    pila.wait_log("config reloaded");
+    // A window taking the focus is told the modifiers as they are now.
+    client.clear_events();
+    client.window("b").create();
+    pila.wait_focus("b");
+    client.wait("Num Lock on with the new keymap", |s| {
+        num_lock_on(s) == Some(true)
+    });
+}
