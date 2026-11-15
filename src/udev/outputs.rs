@@ -429,13 +429,13 @@ fn retrain_bad_links(state: &mut Pila) {
     let Some(Backend::Udev(data)) = &mut state.backend else {
         return;
     };
-    let bad: Vec<(OutputId, Output, Option<property::Handle>)> = data
+    let bad: Vec<(OutputId, Output, property::Handle)> = data
         .outputs
         .iter()
         .filter(|(_, s)| s.enabled() && s.drm_output.is_some())
         .filter_map(|(id, s)| {
             let (prop, value) = link_status(&data.devices.get(&id.node)?.drm, s.connector)?;
-            (value == LINK_STATUS_BAD).then(|| (*id, s.output.clone(), Some(prop)))
+            (value == LINK_STATUS_BAD).then(|| (*id, s.output.clone(), prop))
         })
         .collect();
     for (id, output, prop) in bad {
@@ -445,22 +445,21 @@ fn retrain_bad_links(state: &mut Pila) {
         let Some(device) = data.drm_device(id) else {
             continue;
         };
-        let retrained = device.is_atomic()
-            && prop.is_some_and(|prop| {
-                let mut request = AtomicModeReq::new();
-                request.add_property(
-                    connector,
-                    prop,
-                    property::Value::UnsignedRange(LINK_STATUS_GOOD),
-                );
-                match device.atomic_commit(AtomicCommitFlags::ALLOW_MODESET, request) {
-                    Ok(()) => true,
-                    Err(err) => {
-                        warn!(name, ?err, "couldn't set the link back to good");
-                        false
-                    }
+        let retrained = device.is_atomic() && {
+            let mut request = AtomicModeReq::new();
+            request.add_property(
+                connector,
+                prop,
+                property::Value::UnsignedRange(LINK_STATUS_GOOD),
+            );
+            match device.atomic_commit(AtomicCommitFlags::ALLOW_MODESET, request) {
+                Ok(()) => true,
+                Err(err) => {
+                    warn!(name, ?err, "couldn't set the link back to good");
+                    false
                 }
-            });
+            }
+        };
         if !retrained
             && !(data.set_output_power(&output, false) && data.set_output_power(&output, true))
         {

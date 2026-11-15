@@ -128,9 +128,9 @@ impl Backend {
             Backend::Winit(backend) => {
                 crate::winit::apply_cursor(backend.window(), status, magnified)
             }
-            Backend::Udev(data) => data.cursor_changed(status),
-            // Nothing to show it on.
-            Backend::Headless(_) => {}
+            // Bare metal: drawn by Pila with the output (`render_output`),
+            // the redraw queued by the caller. Headless: nothing to show it on.
+            Backend::Udev(_) | Backend::Headless(_) => {}
         }
     }
 
@@ -228,9 +228,7 @@ impl Backend {
 /// Use the seat's other GPUs for their monitors, or stop, as `other-gpus`
 /// says (bare metal only).
 pub fn apply_other_gpus(state: &mut crate::Pila) {
-    if let Some(Backend::Udev(_)) = state.backend {
-        crate::udev::apply_other_gpus(state);
-    }
+    crate::udev::apply_other_gpus(state);
 }
 
 /// Apply the outputs' settings (`[[output]]` with the runtime overrides on

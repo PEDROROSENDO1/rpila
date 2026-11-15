@@ -2,9 +2,9 @@
 //! Run from a TTY (`pila --backend udev`, the default without a host session).
 //!
 //! Deliberately smaller than anvil's: one GPU renders (the seat's primary;
-//! the others only scan out their monitors, `secondary.rs`), no direct
-//! scan-out tuning, no DRM leasing. Outputs are placed left to right in
-//! connector order.
+//! the others only scan out their monitors, `secondary.rs`), no DRM
+//! leasing. An output without a position in `[[output]]` goes right of those
+//! already there, in the order they're connected.
 //!
 //! Redraws stay on demand and per output (`redraw.rs`): one idle callback per
 //! loop iteration renders every output asked for. An output with a frame in
@@ -255,13 +255,13 @@ struct OutputSurface {
     global: Option<GlobalId>,
     /// A frame was queued and its vblank hasn't arrived yet.
     frame_pending: bool,
-    /// The sequence number of the vblank that showed the last frame, and
-    /// whether pila wanted a new frame at every vblank after it (an
-    /// animation was running; `frame_stats.rs`).
+    /// The sequence number of the vblank that showed the last frame.
     last_vblank: Option<u64>,
     /// When the last frame was shown (the kernel's timestamp, on the
     /// presentation clock, if it gives one).
     last_vblank_time: Option<Duration>,
+    /// Pila wanted a new frame at every vblank after `last_vblank` (an
+    /// animation was running; `frame_stats.rs`).
     back_to_back: bool,
     /// Something changed since the last frame.
     redraw_needed: bool,
@@ -766,10 +766,6 @@ impl UdevData {
     /// The primary GPU's renderer; `None` (logged) if it can't be lent.
     pub fn renderer(&mut self) -> Option<PrimaryRenderer<'_>> {
         primary_renderer(&mut self.gpus, &self.primary)
-    }
-
-    pub fn cursor_changed(&mut self, _status: &CursorImageStatus) {
-        // Drawn by pila in `render_output`; the redraw is queued by the caller.
     }
 }
 
