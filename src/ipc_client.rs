@@ -80,8 +80,9 @@ fn request(args: &[String]) -> Result<Value, String> {
     }
 }
 
-/// Send `request`; pila's answer as it wrote it.
-fn ask(path: &std::path::Path, request: &Value) -> Result<String, String> {
+/// Send `request`; pila's answer as it wrote it, and the connection, for
+/// the events that follow a subscription.
+fn ask(path: &std::path::Path, request: &Value) -> Result<(String, BufReader<UnixStream>), String> {
     let shown = path.display();
     let fail = |err: std::io::Error| format!("can't talk to pila at {shown}: {err}");
     let mut stream = UnixStream::connect(path).map_err(fail)?;
@@ -90,12 +91,13 @@ fn ask(path: &std::path::Path, request: &Value) -> Result<String, String> {
     stream
         .write_all(format!("{request}\n").as_bytes())
         .map_err(fail)?;
+    let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    BufReader::new(stream).read_line(&mut line).map_err(fail)?;
+    reader.read_line(&mut line).map_err(fail)?;
     if line.is_empty() {
         return Err(format!("pila closed the connection at {shown}"));
     }
-    Ok(line)
+    Ok((line, reader))
 }
 
 /// A window title and such, safe to print on a terminal: it comes from any
@@ -243,11 +245,8 @@ pub fn run(args: &[String]) -> i32 {
             return EXIT_USAGE;
         }
     };
-    if request["request"] == "subscribe" {
-        return subscribe(&request, json_output);
-    }
-    let line = match socket_path().and_then(|path| ask(&path, &request)) {
-        Ok(line) => line,
+    let (line, reader) = match socket_path().and_then(|path| ask(&path, &request)) {
+        Ok(answer) => answer,
         Err(err) => {
             eprintln!("pila msg: {err}");
             return EXIT_NO_PILA;
@@ -264,6 +263,9 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("pila msg: {}", plain(&answer["error"]));
         return EXIT_REFUSED;
     }
+    if request["request"] == "subscribe" {
+        return follow(reader, json_output);
+    }
     // A closed pipe (`| head`) isn't an error worth saying.
     let mut out = std::io::stdout().lock();
     if json_output {
@@ -278,42 +280,13 @@ pub fn run(args: &[String]) -> i32 {
     0
 }
 
-/// `pila msg subscribe`: each event as it comes, until pila closes the
-/// connection.
-fn subscribe(request: &Value, json_output: bool) -> i32 {
-    let connected = socket_path().and_then(|path| {
-        let shown = path.display().to_string();
-        let fail = |err: std::io::Error| format!("can't talk to pila at {shown}: {err}");
-        let mut stream = UnixStream::connect(&path).map_err(fail)?;
-        stream.set_read_timeout(Some(TIMEOUT)).map_err(fail)?;
-        stream.set_write_timeout(Some(TIMEOUT)).map_err(fail)?;
-        stream
-            .write_all(format!("{request}\n").as_bytes())
-            .map_err(fail)?;
-        let mut reader = BufReader::new(stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).map_err(fail)?;
-        // Events come when something changes: no timeout from here on.
-        reader.get_ref().set_read_timeout(None).map_err(fail)?;
-        Ok((reader, line))
-    });
-    let (mut reader, line) = match connected {
-        Ok(connected) => connected,
-        Err(err) => {
-            eprintln!("pila msg: {err}");
-            return EXIT_NO_PILA;
-        }
-    };
-    match serde_json::from_str::<Value>(&line) {
-        Ok(answer) if answer["ok"] == true => {}
-        Ok(answer) => {
-            eprintln!("pila msg: {}", plain(&answer["error"]));
-            return EXIT_REFUSED;
-        }
-        Err(_) => {
-            eprintln!("pila msg: a bad answer from pila");
-            return EXIT_NO_PILA;
-        }
+/// `pila msg subscribe`, once pila said yes: each event as it comes, until
+/// pila closes the connection.
+fn follow(mut reader: BufReader<UnixStream>, json_output: bool) -> i32 {
+    // Events come when something changes: no timeout from here on.
+    if let Err(err) = reader.get_ref().set_read_timeout(None) {
+        eprintln!("pila msg: {err}");
+        return EXIT_NO_PILA;
     }
     let mut out = std::io::stdout().lock();
     loop {
