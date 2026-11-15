@@ -81,10 +81,7 @@ impl Pila {
     }
 
     fn flash_window(&mut self, window: &Window) {
-        window.user_data().insert_if_missing(BellFlash::default);
-        let Some(flash) = window.user_data().get::<BellFlash>() else {
-            return;
-        };
+        let flash = window.user_data().get_or_insert(BellFlash::default);
         flash.until.set(Some(Instant::now() + FLASH));
         self.queue_redraw();
         // Redraw again once it's over, so it disappears.

@@ -381,12 +381,8 @@ impl Pila {
         let tag = window_tag(window);
         let props = resolve_window(&self.config.window_rules, &app_id, &title, &tag);
         debug!(target: "pila::rules", app_id, title, tag, ?props, "window rules");
-        window
-            .user_data()
-            .insert_if_missing(WindowRuleProps::default);
-        if let Some(stored) = window.user_data().get::<WindowRuleProps>() {
-            *stored.0.borrow_mut() = props.clone();
-        }
+        let stored = window.user_data().get_or_insert(WindowRuleProps::default);
+        *stored.0.borrow_mut() = props.clone();
         props
     }
 
@@ -434,10 +430,8 @@ impl Pila {
     pub fn resolve_layer_rules(&self, layer: &LayerSurface) -> LayerProps {
         let props = resolve_layer(&self.config.layer_rules, layer.namespace());
         debug!(target: "pila::rules", namespace = layer.namespace(), ?props, "layer rules");
-        layer.user_data().insert_if_missing(LayerRuleProps::default);
-        if let Some(stored) = layer.user_data().get::<LayerRuleProps>() {
-            *stored.0.borrow_mut() = props;
-        }
+        let stored = layer.user_data().get_or_insert(LayerRuleProps::default);
+        *stored.0.borrow_mut() = props;
         props
     }
 

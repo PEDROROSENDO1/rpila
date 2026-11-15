@@ -87,10 +87,11 @@ pub fn note_pending_content(surface: &WlSurface) {
             .get::<RendererSurfaceStateUserData>()
             .is_some_and(|state| state.locked().buffer().is_some());
         if brings_content(attached, damaged, had_buffer) {
-            states.data_map.insert_if_missing(BringsContent::default);
-            if let Some(mark) = states.data_map.get::<BringsContent>() {
-                mark.0.set(true);
-            }
+            states
+                .data_map
+                .get_or_insert(BringsContent::default)
+                .0
+                .set(true);
         }
     });
 }

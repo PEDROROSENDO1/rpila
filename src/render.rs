@@ -976,8 +976,7 @@ fn animated_element(
     draw: DrawAt<'_>,
 ) -> Option<PilaRenderElement> {
     let size = texture_size(rect, scale);
-    user_data.insert_if_missing(AnimTextures::default);
-    let textures = user_data.get::<AnimTextures>()?;
+    let textures = user_data.get_or_insert(AnimTextures::default);
     let buffer = {
         let mut textures = textures.0.borrow_mut();
         textures.retain(|t| t.scale != scale || t.size == size);

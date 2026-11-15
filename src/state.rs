@@ -2094,12 +2094,8 @@ struct RestoreGeometry(RefCell<Option<Rectangle<i32, Logical>>>);
 
 /// Set where a window returns to when it leaves maximized/fullscreen.
 pub fn set_restore_geometry(window: &Window, rect: Rectangle<i32, Logical>) {
-    window
-        .user_data()
-        .insert_if_missing(RestoreGeometry::default);
-    if let Some(restore) = window.user_data().get::<RestoreGeometry>() {
-        *restore.0.borrow_mut() = Some(rect);
-    }
+    let restore = window.user_data().get_or_insert(RestoreGeometry::default);
+    *restore.0.borrow_mut() = Some(rect);
 }
 
 pub fn restore_geometry(window: &Window) -> Option<Rectangle<i32, Logical>> {

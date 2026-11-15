@@ -93,10 +93,11 @@ fn snap_state(window: &Window) -> Option<(Side, Rectangle<i32, Logical>)> {
 }
 
 fn set_snap_state(window: &Window, state: Option<(Side, Rectangle<i32, Logical>)>) {
-    window.user_data().insert_if_missing(SnapState::default);
-    if let Some(s) = window.user_data().get::<SnapState>() {
-        s.0.set(state);
-    }
+    window
+        .user_data()
+        .get_or_insert(SnapState::default)
+        .0
+        .set(state);
 }
 
 /// The width a snapped window had before snapping.

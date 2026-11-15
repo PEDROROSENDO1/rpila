@@ -1050,10 +1050,7 @@ impl Pila {
     /// A layer surface was committed: if it just got a buffer (it shows
     /// up), fade it in. Called from `handle_layer_commit`.
     pub fn layer_committed(&mut self, layer: &LayerSurface) {
-        layer.user_data().insert_if_missing(LayerShown::default);
-        let Some(shown) = layer.user_data().get::<LayerShown>() else {
-            return;
-        };
+        let shown = layer.user_data().get_or_insert(LayerShown::default);
         let has_buffer = crate::state::has_buffer(layer.wl_surface());
         if shown.0.replace(has_buffer) || !has_buffer {
             return;
