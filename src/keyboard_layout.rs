@@ -2,7 +2,7 @@
 //! option switches between): which there are and which is in use, for
 //! `pila msg keyboard` and its events, and `switch-layout`. While a virtual
 //! keyboard's keymap stands in (`virtual_keyboard.rs`), it's the physical
-//! keyboard's that count: their names as last read, and the layout saved to
+//! keyboard's that count: their names as it took over, and the layout saved to
 //! come back to, which a switch changes instead.
 
 use crate::sync::Locked;
@@ -19,18 +19,14 @@ impl Pila {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return (Vec::new(), 0);
         };
-        let (names, active) = keyboard.with_xkb_state(self, |context| {
+        keyboard.with_xkb_state(self, |context| {
             let xkb = context.xkb().locked();
             let names: Vec<String> = xkb
                 .layouts()
                 .map(|layout| xkb.layout_name(layout).to_string())
                 .collect();
             (names, xkb.active_layout().0 as usize)
-        });
-        if self.input.layout_names != names {
-            self.input.layout_names.clone_from(&names);
-        }
-        (names, active)
+        })
     }
 
     /// Whether the physical keyboard's layouts are still `names`, with

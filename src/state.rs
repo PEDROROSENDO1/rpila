@@ -260,8 +260,8 @@ pub struct InputState {
     /// The configured keymap as text, kept while a virtual keyboard's is in
     /// place; reset when the keyboard config is applied.
     pub configured_keymap: Option<smithay::input::keyboard::KeymapFile>,
-    /// The physical keyboard's layout names as last read, told while a
-    /// virtual keyboard's keymap is in place (`keyboard_layout.rs`).
+    /// The physical keyboard's layout names, read as a virtual keyboard's
+    /// keymap takes its place and told while it's there (`keyboard_layout.rs`).
     pub layout_names: Vec<String>,
     /// Pointer buttons whose press only woke the monitors: their release
     /// isn't forwarded either.
