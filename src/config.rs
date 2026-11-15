@@ -1040,7 +1040,6 @@ impl OutputConfig {
     }
 }
 
-/// `transform` in `[[output]]`: wl_output's names.
 /// A TOML error as one line that starts with where and what ("line 3,
 /// column 3: unknown field ..."): notifications show only their first lines,
 /// and toml's own text starts with a snippet of the file.
@@ -1064,6 +1063,7 @@ fn toml_error(text: &str, err: &toml::de::Error) -> String {
     format!("{}{message}", place.unwrap_or_default())
 }
 
+/// `transform` in `[[output]]`: wl_output's names.
 fn parse_transform(text: &str) -> Result<Transform, String> {
     Ok(match text {
         "normal" => Transform::Normal,
@@ -1585,14 +1585,11 @@ pub const EXAMPLE: &str = include_str!("../config.example.toml");
 /// wrote it.
 pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
     use std::io::Write;
-    // `symlink_metadata`: a link whose file isn't there yet is the user's.
-    if path.symlink_metadata().is_ok() {
-        return Ok(false);
-    }
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
     }
-    // `create_new`: never over a file that appeared meanwhile.
+    // `create_new` (O_EXCL): never over what's there, a link included, even
+    // one whose file isn't there yet (it's the user's).
     let mut file = match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
