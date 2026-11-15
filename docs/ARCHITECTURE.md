@@ -358,8 +358,8 @@ Key flows and invariants:
   surface made current first (`winit::make_surface_current`); Smithay's `bind` is lazy,
   and querying without it fails with `EGL_BAD_SURFACE` every animated frame.
 - **Redraws are on demand, per output** (`redraw.rs`): nothing redraws an output but a
-  request for it. `queue_redraw_output`/`request_redraw` ask one output (with `content`:
-  `request_redraw_as` and `redraw::Content`, see "Bare metal"), `queue_redraw_rect` the outputs a
+  request for it. `queue_redraw_output` asks one output for something new to show
+  (`request_redraw_as` with another `redraw::Content`, see "Bare metal"), `queue_redraw_rect` the outputs a
   global rectangle overlaps, `queue_redraw_window` those a window's frame, title bar, shadow
   margin and popups touch (`window_visual_rect`; no margin for a maximized or fullscreen window,
   which has no shadow and reaches its output's edges: each of its frames would redraw the

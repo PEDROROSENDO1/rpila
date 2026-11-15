@@ -173,7 +173,12 @@ impl Pila {
         let drawn = self.backend.as_ref().is_some_and(|backend| {
             backend.draws_cursor(&self.cursor_status, self.shake_cursor.magnified())
         });
-        self.queue_redraw_pointer(from, to, drawn || self.dnd_icon.is_some());
+        let content = if drawn || self.dnd_icon.is_some() {
+            crate::redraw::Content::Sure
+        } else {
+            crate::redraw::Content::Maybe
+        };
+        self.queue_redraw_pointer(from, to, content);
     }
 
     /// A key: Pila's (a binding, the window menu, ...) or the client's.

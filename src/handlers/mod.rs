@@ -67,7 +67,7 @@ impl SeatHandler for Pila {
         // with the pointer locked, so its location is asked for after.
         self.loop_handle.insert_idle(|state| {
             let at = state.pointer_location();
-            state.queue_redraw_pointer(at, at, true);
+            state.queue_redraw_pointer(at, at, crate::redraw::Content::Sure);
         });
         self.wake.ping();
     }

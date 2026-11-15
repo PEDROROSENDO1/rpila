@@ -223,7 +223,7 @@ impl Pila {
         if current.is_none() {
             self.cursor_magnified_changed();
         }
-        self.queue_redraw_pointer(location, location, true);
+        self.queue_redraw_pointer(location, location, crate::redraw::Content::Sure);
     }
 
     /// The hold timer fired: shrink the cursor back if the shaking stopped,
@@ -245,7 +245,7 @@ impl Pila {
         self.shake_cursor.hold = None;
         self.shake_cursor.detector.clear();
         let at = self.pointer_location();
-        self.queue_redraw_pointer(at, at, true);
+        self.queue_redraw_pointer(at, at, crate::redraw::Content::Sure);
         TimeoutAction::Drop
     }
 
@@ -275,7 +275,7 @@ impl Pila {
         shake.phase = Phase::Rest;
         self.cursor_magnified_changed();
         let at = self.pointer_location();
-        self.queue_redraw_pointer(at, at, true);
+        self.queue_redraw_pointer(at, at, crate::redraw::Content::Sure);
     }
 
     /// The cursor started or stopped being drawn magnified: nested, whether

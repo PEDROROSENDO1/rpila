@@ -250,7 +250,7 @@ impl Pila {
             // and it may well have nothing new to show.
             let output = state.space.outputs().next().cloned();
             if let Some(output) = output {
-                state.request_redraw(&output, false);
+                state.request_redraw_as(&output, crate::redraw::Content::Maybe);
             }
             TimeoutAction::Drop
         });

@@ -41,17 +41,6 @@ pub enum Content {
     Sure,
 }
 
-impl Content {
-    /// `Sure` or `Maybe`.
-    pub fn sure(sure: bool) -> Self {
-        if sure {
-            Content::Sure
-        } else {
-            Content::Maybe
-        }
-    }
-}
-
 /// A redraw held back by `Pila::defer_redraws`.
 #[derive(Clone)]
 pub enum Deferred {
@@ -117,16 +106,6 @@ fn brings_content(attached: Option<Attached>, damaged: bool, had_buffer: bool) -
     }
 }
 
-/// Every output of the `Space`, collected (to ask while borrowing `state`).
-fn outputs_of_all(state: &Pila) -> std::vec::IntoIter<Output> {
-    state
-        .space
-        .outputs()
-        .cloned()
-        .collect::<Vec<_>>()
-        .into_iter()
-}
-
 /// `rect` grown by `margin` on every side.
 pub fn grown(rect: Rectangle<i32, Logical>, margin: i32) -> Rectangle<i32, Logical> {
     let margin = margin.max(0);
@@ -166,12 +145,6 @@ impl Pila {
         self.request_redraw_as(output, Content::Sure);
     }
 
-    /// Ask for a redraw of `output`; `content`: what changed surely shows
-    /// (else it may be nothing, see the module docs).
-    pub fn request_redraw(&mut self, output: &Output, content: bool) {
-        self.request_redraw_as(output, Content::sure(content));
-    }
-
     /// Ask for a redraw of `output`, bringing `content`.
     pub fn request_redraw_as(&mut self, output: &Output, content: Content) {
         if let Some(deferred) = &mut self.deferred_redraws {
@@ -185,9 +158,9 @@ impl Pila {
     }
 
     /// Ask for a redraw of each output `rect` (global) overlaps.
-    pub fn queue_redraw_rect(&mut self, rect: Rectangle<i32, Logical>, content: bool) {
+    pub fn queue_redraw_rect(&mut self, rect: Rectangle<i32, Logical>) {
         for output in self.outputs_overlapping(rect) {
-            self.request_redraw(&output, content);
+            self.queue_redraw_output(&output);
         }
     }
 
@@ -195,7 +168,7 @@ impl Pila {
     /// not on the `Space`: minimized, on another workspace, unmapped).
     pub fn queue_redraw_window(&mut self, window: &Window) {
         if let Some(rect) = self.window_visual_rect(window) {
-            self.queue_redraw_rect(rect, true);
+            self.queue_redraw_rect(rect);
         }
     }
 
@@ -222,12 +195,13 @@ impl Pila {
 
     /// The pointer moved from `from` to `to`: redraw the outputs of both,
     /// where its cursor (and a drag's icon, a title bar button's highlight)
-    /// was and is. `content`: Pila draws something there that moved.
+    /// was and is. `content`: `Sure` if Pila draws something there that
+    /// moved, else `Maybe` (the cursor is the host's or a plane's).
     pub fn queue_redraw_pointer(
         &mut self,
         from: Point<f64, Logical>,
         to: Point<f64, Logical>,
-        content: bool,
+        content: Content,
     ) {
         let mut outputs: Vec<Output> = self.space.output_under(from).cloned().collect();
         for output in self.space.output_under(to) {
@@ -236,7 +210,7 @@ impl Pila {
             }
         }
         for output in outputs {
-            self.request_redraw(&output, content);
+            self.request_redraw_as(&output, content);
         }
     }
 
@@ -384,7 +358,10 @@ impl Pila {
         };
         let (Some(mut outputs), Some(after)) = (before, self.surface_outputs(surface)) else {
             tracing::trace!(target: "pila::frames", "commit of an unknown surface: every output");
-            outputs_of_all(self).for_each(|output| self.request_redraw_as(&output, content));
+            let outputs: Vec<Output> = self.space.outputs().cloned().collect();
+            for output in outputs {
+                self.request_redraw_as(&output, content);
+            }
             return;
         };
         for output in after {
