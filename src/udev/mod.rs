@@ -439,10 +439,7 @@ impl UdevData {
                     surface.recovery.retry();
                     surface.redraw_needed = true;
                 }
-                if !data.redraw_scheduled {
-                    data.redraw_scheduled = true;
-                    data.loop_handle.insert_idle(render_all);
-                }
+                data.schedule_render();
             }
             TimeoutAction::Drop
         });
@@ -473,10 +470,7 @@ impl UdevData {
                     surface.idle_timer = false;
                     surface.idle_until = None;
                 }
-                if !data.redraw_scheduled {
-                    data.redraw_scheduled = true;
-                    data.loop_handle.insert_idle(render_all);
-                }
+                data.schedule_render();
             }
             TimeoutAction::Drop
         });
@@ -564,10 +558,7 @@ impl UdevData {
             // Sent when the CRTC is free, without blocking (`gamma.rs`); a
             // newer change before then replaces it.
             surface.gamma_pending = Some(ramp.to_vec());
-            if !self.redraw_scheduled {
-                self.redraw_scheduled = true;
-                self.loop_handle.insert_idle(render_all);
-            }
+            self.schedule_render();
         } else if !self
             .drm_device(id)
             .is_some_and(|drm| apply_gamma(drm, id.crtc, ramp, size, GammaCause::Client))
