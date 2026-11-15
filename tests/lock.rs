@@ -193,6 +193,44 @@ fn a_second_lock_while_locked_is_refused() {
     other.wait_logged("lock", "Finished");
 }
 
+/// A refused lock's `unlock_and_destroy` is a protocol error and leaves the
+/// session locked: only the lock in force unlocks it.
+#[test]
+fn unlocking_through_a_refused_lock_is_an_error_and_unlocks_nothing() {
+    let (mut pila, _apps, _locker, _lock) = locked();
+    let other = pila.client();
+    let second = other.lock_session();
+    other.wait_logged("lock", "Finished");
+    other.expect_error();
+    second.unlock_and_destroy();
+    other.flush();
+    other.wait_error();
+    pila.stays("still locked", std::time::Duration::from_millis(200), |s| {
+        s["locked"] == true
+    });
+}
+
+/// A locker asking to unlock before it was told `locked` gets a protocol
+/// error, and the session doesn't unlock.
+#[test]
+fn unlocking_before_the_lock_is_confirmed_is_an_error_and_unlocks_nothing() {
+    let mut pila = TestPila::start();
+    let locker = pila.client();
+    let manager: wayland_protocols::ext::session_lock::v1::client::ext_session_lock_manager_v1::ExtSessionLockManagerV1 =
+        locker.bind("ext_session_lock_manager_v1", 1);
+    locker.expect_error();
+    // Both in one write, so Pila reads them before it can draw the locked
+    // frame that confirms the lock.
+    let lock = manager.lock(&locker.qh, "lock".to_string());
+    lock.unlock_and_destroy();
+    locker.flush();
+    locker.wait_error();
+    assert!(!locker.logged("lock").iter().any(|e| e.contains("Locked")));
+    pila.stays("still locked", std::time::Duration::from_millis(200), |s| {
+        s["locked"] == true
+    });
+}
+
 /// Lock surfaces belong to a lock object, not to a client: the locker's own
 /// second, refused lock can't put a surface over its real lock screen.
 #[test]

@@ -977,9 +977,9 @@ Key flows and invariants:
   (`Action::examples`, a table a new kind of action doesn't build without), gesture,
   activation, taskbar and pager request and the window menu while locked. The lock is confirmed (`confirm_lock`)
   once every output that's on shows a full locked frame (bare metal: at its vblank,
-  `maybe_confirm_lock`; nested: submitted; headless: drawn), at once with none on. `unlock` defers to `finish_unlock`, which only
-  unlocks once the holder's lock object is gone (Smithay 0.7 called `unlock()` even for a
-  rogue client's `unlock_and_destroy`; its main branch checks the lock, and Pila still does). A dead locker leaves the session locked;
+  `maybe_confirm_lock`; nested: submitted; headless: drawn), at once with none on. `unlock` unlocks at once: Smithay
+  calls it only for the confirmed lock's `unlock_and_destroy`, any other being a protocol
+  error. A dead locker leaves the session locked;
   a new locker may take over.
 - **Idle** (`idle.rs`, ext-idle-notify + idle-inhibit): every input event sets
   `Pila::input_activity`, which `after_frames` turns into one `notify_activity` per loop

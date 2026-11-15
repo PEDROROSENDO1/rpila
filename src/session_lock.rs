@@ -10,12 +10,9 @@
 //! Locking is confirmed to the client (`SessionLocker::lock`) only after a
 //! locked frame has been rendered (`Pila::confirm_lock`, from the backend).
 //!
-//! Smithay 0.7 called `SessionLockHandler::unlock` for an `unlock_and_destroy`
-//! on *any* lock object, even one that never got the lock (it posted a protocol
-//! error but still called `unlock`); its main branch checks the lock first, and
-//! pila still does. `unlock` only schedules a check: the
-//! session unlocks once the lock object of the client holding the lock is
-//! gone, which a genuine `unlock_and_destroy` (a destructor) guarantees.
+//! Smithay calls `SessionLockHandler::unlock` only for the `unlock_and_destroy`
+//! of the lock that was confirmed (`SessionLocker::lock`, which Pila calls only
+//! for the lock it keeps); any other is a protocol error.
 
 use smithay::{
     desktop::utils::under_from_surface_tree,
@@ -227,24 +224,6 @@ impl Pila {
         );
         pointer.frame(self);
     }
-
-    /// Second half of `SessionLockHandler::unlock`, run after the request
-    /// that triggered it has been dispatched (see the module docs).
-    fn finish_unlock(&mut self, lock: Option<ExtSessionLockV1>) {
-        if !self.is_locked() || self.session_lock.lock != lock {
-            return;
-        }
-        if lock.as_ref().is_some_and(|l| l.is_alive()) {
-            warn!("ignoring unlock request from a client that doesn't hold the lock");
-            return;
-        }
-        info!("session unlocked");
-        self.session_lock = SessionLock::default();
-        // Runs outside client dispatch, which would otherwise queue it.
-        self.queue_redraw();
-        self.focus_recent_window();
-        self.refresh_pointer_focus();
-    }
 }
 
 impl SessionLockHandler for Pila {
@@ -297,9 +276,11 @@ impl SessionLockHandler for Pila {
     }
 
     fn unlock(&mut self) {
-        let lock = self.session_lock.lock.clone();
-        self.loop_handle
-            .insert_idle(move |state| state.finish_unlock(lock));
+        info!("session unlocked");
+        self.session_lock = SessionLock::default();
+        self.queue_redraw();
+        self.focus_recent_window();
+        self.refresh_pointer_focus();
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
