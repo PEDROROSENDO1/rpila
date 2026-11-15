@@ -96,8 +96,9 @@ fn a_missing_notify_send_is_logged_once() {
     );
 }
 
-/// A `notify-send` that writes its arguments to `notified` in pila's runtime
-/// directory, in a directory of `dir` that's to be all of the `PATH`.
+/// A `notify-send` that writes its arguments to `notified` in `dir`, a
+/// directory that's to be all of the `PATH`: a line per call, in one write,
+/// so a reader never sees some of a call's arguments without the rest.
 fn recording_notify_send(dir: &std::path::Path) -> String {
     use std::os::unix::fs::PermissionsExt;
     std::fs::create_dir_all(dir).unwrap();
@@ -105,10 +106,7 @@ fn recording_notify_send(dir: &std::path::Path) -> String {
     let log = dir.join("notified");
     std::fs::write(
         &script,
-        format!(
-            "#!/bin/sh\nfor a in \"$@\"; do echo \"$a\" >> {}; done\n",
-            log.display()
-        ),
+        format!("#!/bin/sh\necho \"$*\" >> {}\n", log.display()),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
