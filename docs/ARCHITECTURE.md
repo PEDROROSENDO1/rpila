@@ -52,7 +52,7 @@ Key flows and invariants:
   up every key press in `Config::bindings` (modifiers must match exactly, Caps/Num Lock
   ignored; keys without Mod, e.g. media keys, can be bound); intercepted keycodes go in
   `suppressed_keys` so their release isn't forwarded to the client either. A binding with
-  `repeat = true` (`Config::repeating`, `config::BindingFile` parses the table form) runs
+  `repeat = true` (`config::Binding::repeat`, `config::BindingFile` parses the table form) runs
   again while its key is held: once it has run, `start_binding_repeat` inserts a calloop timer
   at `repeat-delay`, then every 1/`repeat-rate` s (the keyboard sends nothing while a key is
   held: repeat is the receiver's), which checks the lock, window menu and inhibitor again; its

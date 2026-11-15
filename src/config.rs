@@ -222,6 +222,16 @@ pub fn tap_sym(sym: Keysym) -> Option<Keysym> {
     }
 }
 
+/// A key binding of `[bindings]` (or a default one).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Binding {
+    pub combo: KeyCombo,
+    pub action: Action,
+    /// It runs again while its key is held (`repeat = true`), at the
+    /// keyboard's repeat delay and rate.
+    pub repeat: bool,
+}
+
 /// A key combination, e.g. `Mod+Shift+Q`, a modifier tapped alone (`Mod`:
 /// its own modifier and `tap_sym`), or modifiers with a mouse wheel step
 /// (`Mod+WheelScrollDown`).
@@ -1494,10 +1504,7 @@ pub struct Config {
     /// Commands run at startup (when no `-c` is given).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
-    pub bindings: Vec<(KeyCombo, Action)>,
-    /// The key bindings that run again while their key is held
-    /// (`repeat = true`), at the keyboard's repeat delay and rate.
-    pub repeating: Vec<KeyCombo>,
+    pub bindings: Vec<Binding>,
     /// Touchpad swipes pila handles (the others reach the clients).
     pub gestures: Vec<(Gesture, Action)>,
     pub outputs: Vec<OutputConfig>,
@@ -1699,7 +1706,7 @@ impl Config {
         // one for the same combo, and "none" removes it. Mod+N and
         // Mod+Shift+N only exist for the workspaces there are (up to 9), so
         // the other digits still reach the apps.
-        let mut bindings: Vec<(KeyCombo, Action)> = Vec::new();
+        let mut bindings: Vec<Binding> = Vec::new();
         let workspace_bindings: Vec<(String, String)> = (1..=workspaces.min(9))
             .flat_map(|n| {
                 [
@@ -1713,7 +1720,6 @@ impl Config {
                 .iter()
                 .map(|(k, a)| (k.as_str(), a.as_str())),
         );
-        let mut repeating: Vec<KeyCombo> = Vec::new();
         let defaults = defaults.map(|(k, a)| (k, a, false));
         let user = file
             .bindings
@@ -1730,13 +1736,13 @@ impl Config {
                      or a modifier alone"
                 ));
             }
-            bindings.retain(|(c, _)| *c != combo);
-            repeating.retain(|c| *c != combo);
+            bindings.retain(|b| b.combo != combo);
             if let Some(action) = action {
-                bindings.push((combo, action));
-                if repeat {
-                    repeating.push(combo);
-                }
+                bindings.push(Binding {
+                    combo,
+                    action,
+                    repeat,
+                });
             }
         }
 
@@ -1805,7 +1811,6 @@ impl Config {
             autostart: file.autostart,
             keyboard: file.keyboard,
             bindings,
-            repeating,
             gestures,
             outputs,
             input,
@@ -1887,7 +1892,7 @@ impl Config {
             mods: mods.into(),
             trigger: Trigger::Key(sym),
         };
-        self.repeating.contains(&combo)
+        self.bindings.iter().any(|b| b.combo == combo && b.repeat)
     }
 
     /// The action bound to a wheel step that way with exactly the pressed
@@ -1912,8 +1917,8 @@ impl Config {
         let action = self
             .bindings
             .iter()
-            .find(|(c, _)| *c == combo)
-            .map(|(_, action)| action.clone())?;
+            .find(|b| b.combo == combo)
+            .map(|b| b.action.clone())?;
         // Mod+D does nothing without a launcher (and isn't swallowed).
         match action {
             Action::Launcher if self.launcher.is_none() => None,
@@ -2171,7 +2176,7 @@ mod tests {
             &no_env,
         )
         .unwrap();
-        assert!(removed.repeating.is_empty());
+        assert!(removed.bindings.iter().all(|b| !b.repeat));
 
         // A wheel's notch or a tap has no held key to repeat.
         for combo in ["Mod+WheelScrollUp", "Mod"] {
@@ -2856,7 +2861,7 @@ mod tests {
         assert!(config
             .bindings
             .iter()
-            .any(|(_, action)| *action == Action::CloseFocused));
+            .any(|b| b.action == Action::CloseFocused));
         let text = uncomment(r#"#   "swipe-3-left"  = "cycle-focus""#);
         if let Err(err) = Config::from_toml(&text, &no_env) {
             panic!("a default gesture uncommented: {err}");
