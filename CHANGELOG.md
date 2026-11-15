@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Input methods (IME):** fcitx5 and other input methods that speak input-method-v2 type Chinese,
+  Japanese, Korean and the like into apps that speak text-input-v3 (GTK, Qt 6.7 and later, foot,
+  kitty, Chromium and Electron with `--enable-wayland-ime`, and launchers), with the candidate window
+  below the text cursor (above it at the bottom of the screen). Pila's keybindings come before the
+  input method, menus open while it holds the keyboard, and it never sees what's typed on the lock
+  screen. The manual says how to start it ("Input methods"). Asked for in discussion #2.
+
 ## 0.5.7 (2026-11-14)
 
 - **GTK 4 apps no longer freeze after a dropdown or menu is opened a second time:** GTK hides a

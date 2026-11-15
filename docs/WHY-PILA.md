@@ -124,16 +124,16 @@ nothing changed.
 ## Protocols
 
 Standard `wayland-protocols` first (stable, staging, then unstable where nothing newer
-exists), implemented in Pila when Smithay lacks them. wlroots protocols only where shells need
-them and no `ext-` replacement exists yet (layer-shell, screencopy, foreign-toplevel-management,
-gamma-control, output-management, output-power-management, virtual-keyboard), each to be
-dropped when one lands. No KDE, GNOME or Hyprland protocols.
+exists), implemented in Pila when Smithay lacks them. wlroots protocols only where shells or
+input methods need them and no `ext-` replacement exists yet (layer-shell, screencopy,
+foreign-toplevel-management, gamma-control, output-management, output-power-management,
+virtual-keyboard, input-method-v2), each to be dropped when one lands. No KDE, GNOME or Hyprland protocols.
 
 Among the less common ones: xdg-session-management (window placement and state restored across
 client and compositor restarts), ext-background-effect, ext-workspace, ext-image-copy-capture,
 ext-data-control, xdg-dialog, xdg-toplevel-tag, xdg-system-bell, wp-fifo, wp-commit-timing,
 linux-drm-syncobj, wp-security-context, cursor-shape, pointer-constraints and
-relative-pointer, idle-notify and idle-inhibit. Xwayland runs through Smithay's X11 window
+relative-pointer, idle-notify and idle-inhibit, text-input-v3. Xwayland runs through Smithay's X11 window
 manager, restarted if it dies, with selections bridged both ways.
 
 ## Security model
@@ -141,7 +141,7 @@ manager, restarted if it dies, with selections bridged both ways.
 - **Privileged globals filtered by security context:** clients connected through
   wp-security-context (Flatpak) can't see screen capture (both protocols), data-control,
   layer shell, session lock, foreign-toplevel list and management, gamma, output management and
-  power, ext-workspace, virtual keyboard, keyboard-shortcuts-inhibit, idle-notify or
+  power, ext-workspace, virtual keyboard, input method, keyboard-shortcuts-inhibit, idle-notify or
   security-context itself. Any new global that exposes or controls other clients, input or
   outputs is filtered too, by policy.
 - **Session lock enforced at the focus types:** while locked, the keyboard and pointer focus
@@ -202,7 +202,6 @@ can be turned off globally or per app.
 
 ## Not there yet
 
-Pila is alpha. Missing: touchscreens, tablets (tablet-v2) and input methods (text-input,
-input-method). NVIDIA is untested; secondary-GPU outputs are off by default and untested on
+Pila is alpha. Missing: touchscreens and tablets (tablet-v2). NVIDIA is untested; secondary-GPU outputs are off by default and untested on
 real hardware. See [Status](../README.md#status) and, if you can, [help test
 it](../README.md#help-test-pila).

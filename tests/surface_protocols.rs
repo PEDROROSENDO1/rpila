@@ -72,6 +72,7 @@ const PUBLIC: &[&str] = &[
     "xdg_session_manager_v1",
     "xdg_toplevel_tag_manager_v1",
     "xdg_wm_dialog_v1",
+    "zwp_text_input_manager_v3",
 ];
 
 /// Hidden from sandboxed clients (`state::is_privileged`).
@@ -91,6 +92,7 @@ const PRIVILEGED: &[&str] = &[
     "zwlr_output_manager_v1",
     "zwlr_output_power_manager_v1",
     "zwlr_screencopy_manager_v1",
+    "zwp_input_method_manager_v2",
     "zwp_keyboard_shortcuts_inhibit_manager_v1",
     "zwp_virtual_keyboard_manager_v1",
 ];

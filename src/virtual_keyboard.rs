@@ -22,11 +22,15 @@ use crate::sync::Locked;
 use std::any::Any;
 
 use smithay::{
-    backend::input::{Event, InputEvent},
+    backend::input::{Event, InputEvent, KeyboardKeyEvent},
     input::keyboard::{KeymapFile, Layout},
-    wayland::virtual_keyboard::{
-        VirtualKeyboardBackend, VirtualKeyboardDevice, VirtualKeyboardHandler,
-        VirtualKeyboardSpecialEvent,
+    utils::SERIAL_COUNTER,
+    wayland::{
+        input_method::InputMethodSeat,
+        virtual_keyboard::{
+            VirtualKeyboardBackend, VirtualKeyboardDevice, VirtualKeyboardHandler,
+            VirtualKeyboardKeyEvent, VirtualKeyboardSpecialEvent,
+        },
     },
 };
 use tracing::{debug, warn};
@@ -57,8 +61,15 @@ impl VirtualKeyboardHandler for Pila {
     fn process_virtual_keyboard_event(&mut self, event: InputEvent<VirtualKeyboardBackend>) {
         match event {
             InputEvent::Keyboard { event } => {
-                self.activate_virtual_keymap(&event.device());
-                self.process_input_event(InputEvent::<VirtualKeyboardBackend>::Keyboard { event });
+                let device = event.device();
+                self.activate_virtual_keymap(&device);
+                if self.is_input_method_keyboard(&device) {
+                    self.forward_input_method_key(&event);
+                } else {
+                    self.process_input_event(InputEvent::<VirtualKeyboardBackend>::Keyboard {
+                        event,
+                    });
+                }
             }
             InputEvent::Special(VirtualKeyboardSpecialEvent::Modifiers {
                 device,
@@ -95,6 +106,32 @@ impl VirtualKeyboardHandler for Pila {
 }
 
 impl Pila {
+    /// Whether `device` is the input method's that holds the keyboard: the
+    /// keys it hands back, those it didn't use (`input_method.rs`).
+    fn is_input_method_keyboard(&self, device: &VirtualKeyboardDevice) -> bool {
+        let grab_client = self.seat.input_method().keyboard_grab_client();
+        grab_client.is_some() && grab_client == device.client()
+    }
+
+    /// A key the input method hands back goes to the focus as it is: through
+    /// the grab it would go back to the input method, forever; the bindings
+    /// and the activity were the physical key's, and Smithay's tracking of
+    /// held keys would drop it while that key is still down. Its modifiers
+    /// went to the input method, so the current ones go with it.
+    fn forward_input_method_key(&mut self, event: &VirtualKeyboardKeyEvent) {
+        let Some(keyboard) = self.seat.get_keyboard() else {
+            return;
+        };
+        keyboard.input_forward_bypassing_grab(
+            self,
+            event.key_code(),
+            event.state(),
+            SERIAL_COUNTER.next_serial(),
+            event.time(),
+            true,
+        );
+    }
+
     /// Give the seat `device`'s keymap, unless it has it already.
     fn activate_virtual_keymap(&mut self, device: &VirtualKeyboardDevice) {
         let Some(keymap) = device.keymap() else {

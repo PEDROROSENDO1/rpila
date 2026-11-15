@@ -73,7 +73,8 @@ Key flows and invariants:
   clock: event times differ by backend), where it's dropped, so a quick turn of the wheel
   is one workspace and not all of them; and a bound axis isn't
   sent to the client; the keyboard's filters apply (locked, window menu open, shortcuts
-  inhibited: the scroll is the client's).
+  inhibited: the scroll is the client's). The filter runs before an input method's keyboard
+  grab, so the input method never sees a key Pila used (see "Input methods").
   Bindings don't run while the focused surface (or its menu's window) holds an active
   keyboard-shortcuts inhibitor (`shortcuts_inhibited`; all requests are granted, and sandboxed apps can't make any), or
   while the session is locked; Quit is the exception to the inhibitor (and, in debug
@@ -89,7 +90,47 @@ Key flows and invariants:
   brings the configured one back (`restore_configured_keymap`) from its saved text
   (`InputState::configured_keymap`, no recompile), with the layout and Caps/Num Lock from
   before. A device with no keymap, or the configured one, doesn't swap. `apply_keyboard_config`
-  drops both.
+  drops both. The input method's own (the client holding the keyboard grab,
+  `InputMethodHandle::keyboard_grab_client`) is the exception: what it types are keys it
+  hands back, and they go straight to the focus (`forward_input_method_key`; see "Input
+  methods").
+- **Input methods** (`input_method.rs`, text-input-v3 and input-method-v2, both Smithay's):
+  text-input is for every client, input-method only for privileged ones (it reads everything
+  typed). Smithay follows the keyboard focus: `KeyboardTarget` of a `WlSurface` (which
+  `focus::KeyboardFocus` delegates to) moves the text input's focus with it, sends `enter`/
+  `leave` while there's an input method, and deactivates it on leaving; an app's `enable`
+  activates it. The input method usually grabs the keyboard while active
+  (`InputMethodKeyboardGrab`, a `KeyboardGrab`): `on_keyboard` runs Pila's filter (bindings,
+  `suppressed_keys`) first, so the input method never sees Pila's keys, then forwards through
+  the grab. What it doesn't use it hands back through a virtual keyboard of its own: those keys
+  go to the focus past the grab (`input_forward_bypassing_grab`), with no filter and not
+  through Smithay's tracking of held keys, which would drop a key the physical keyboard still
+  holds (through the grab they would loop back to it). Its candidate window (an
+  `input_popup_surface`) is tracked by the `PopupManager` as `PopupKind::InputMethod`, so
+  it's drawn, hit and redrawn with its window's or layer surface's popups. Its parent is the
+  surface with the keyboard: a window's, a layer surface's, or a popup of either (a popover
+  with a text field), in whose root's tree it's kept (and dismissed from: `dismiss_popup`
+  looks the root up). Its location is in the parent surface's coordinates, as the text
+  cursor's: `parent_geometry` gives the parent's own geometry (a window's, a popup's; none
+  for a layer surface), which the drawing takes off (`render.rs` draws popups from their
+  root's geometry). `place_popup` puts it below the text cursor, above if it doesn't fit,
+  slid sideways to stay in its room (`popup_bounds`): the output the text cursor is on (a
+  window may span two), without the panels drawn above windows, which would cover it
+  (`output_area`, usable, unless a fullscreen window covers the top layer:
+  `top_layer_covered`); all of the output for a layer surface's. It's placed
+  (`place_input_method_popup`) on creation, when the app moves its text cursor, and on each of
+  its commits, as its size changes with what's typed. Smithay moves it onto the text cursor
+  before telling Pila, so where Pila last put it is kept in its surface's data (`PlacedAt`,
+  cleared when it's dismissed: Smithay shows it again without a parent to dismiss first);
+  moving it from there is a change of Pila's own, redrawn at once (`Content::Sure`) where it
+  was and where it goes. A new one gets its output's scale before its first buffer, as a
+  window does. With no text field (the input method deactivated: Smithay takes its parent
+  away) it shows nowhere, whatever its client draws (`surface_outputs`). Grabs: see "Pointer
+  grabs". The lock screen never gets the input method: while locked, keys go to the focus
+  past its grab (`Pila::forward_key`, which `on_keyboard` and `release_all_keys` forward
+  with), and a lock surface given the keyboard loses the text input at once
+  (`KeyboardTarget::enter` of `KeyboardFocus`), so the input method neither activates there
+  nor sees what's typed.
 - **Drag and drop:** a client's `start_drag` reaches `dnd_requested`
   (`handlers/mod.rs`), which runs Smithay's `DnDGrab` on the pointer or touch point that
   started it; Smithay's default would cancel every drag. Its icon (`Pila::dnd_icon`) is
@@ -143,10 +184,11 @@ Key flows and invariants:
   not yet queued. The state counts both too: such an animation as `running`, such a redraw as
   `redraw_pending`, so a test's `settle` doesn't stop before them. With
   `PILA_HEADLESS_CHECK_INVARIANTS=1` (also set by the harness), every 50 ms
-  `broken_invariant` checks that input can't get stuck: no popup grab (pointer or keyboard)
-  outlives every popup, and the keyboard isn't on a layer surface that takes none; one broken
-  for 500 ms (a client may be slow to destroy a dismissed menu) is a panic. A new kind of grab
-  or focus Pila takes gets its invariant there.
+  `broken_invariant` checks that input can't get stuck: no popup grab (pointer or keyboard; an
+  input method's keyboard grab isn't one) outlives every menu (its candidate window isn't
+  one), and the keyboard isn't on a layer surface that takes none; one broken for 500 ms (a
+  client may be slow to destroy a dismissed menu) is a panic. A new kind of grab or focus
+  Pila takes gets its invariant there.
 - **Nested-only (winit):** named cursor shapes are drawn by the host (`apply_cursor`),
   but while the cursor is magnified (`shake_cursor.rs`) Pila draws them from its own theme
   and hides the host's; client cursor surfaces are drawn by Pila (`cursor.rs`). Winit doesn't report the pointer
@@ -424,16 +466,28 @@ Key flows and invariants:
   cursor), and reset it in `PointerGrab::unset`. Client-requested move/resize goes through
   `check_grab` (`handlers/xdg_shell.rs`), which requires a live implicit grab on that
   client's surface. Popup grabs (menus, `XdgShellHandler::grab`) use Smithay's
-  `PopupKeyboardGrab`/`PopupPointerGrab`; they are the only keyboard grabs Pila takes.
-  A popup grab ignores focus changes, so `focus_window` dismisses it first
-  (`dismiss_popup_grab`), and `focused_window` resolves a focused popup to its window.
+  `PopupKeyboardGrab`/`PopupPointerGrab`; they are the only keyboard grabs Pila takes, but
+  not the only ones there are: an input method's holds the keyboard while it's active (see
+  "Input methods"), so a menu's is told apart by its type (`Pila::keyboard_popup_grab`,
+  `Pila::pointer_popup_grab`), and Pila only ends a menu's. A menu opened while an input
+  method holds the keyboard takes the pointer only (a device has one grab, and Smithay can't
+  give the input method's back): the keyboard stays on the window, and the input method
+  passes on the keys it doesn't use; such a menu's grab is kept
+  (`InputState::pointer_only_menu`), as it may be another surface's than the keyboard's (a
+  panel's). A popup grab ignores focus changes, so `focus_window` dismisses it first
+  (`dismiss_popup_grab`, which closes a pointer-only menu through its grab and leaves the
+  focused surface's popups alone, and never closes the input method's candidate window), and
+  `focused_window` resolves a focused popup to its window.
   Smithay ends a popup grab only at the next input event and spends it (a motion that ends
   the pointer grab moves nothing), so after a popup is destroyed `end_finished_popup_grab`
   (idle, after the request) ends a finished grab at once: the manager's cleanup, a motion
   where the pointer is (passed on if a menu is still open), then a fresh pointer focus. Once
   the pointer's grab is over, there or by a click outside the menu (`pointer_button` calls it
-  then), it ends the keyboard's grab too, and gives the keyboard to the most recent window
-  if it's on nothing or on a layer surface that takes none, or a menu of one (a dock's).
+  then, when the button ended a menu's pointer grab), it ends the keyboard's grab too, and
+  gives the keyboard to the most recent window if it's on nothing, on a layer surface that
+  takes none, or a menu of one (a dock's), or on a menu that's gone; still on a menu of a
+  window (its keyboard grab was gone first: an input method took the keyboard and let it go),
+  to that window.
 - **Window lifecycle:** `new_toplevel` pushes the window onto `Pila::windows.unmapped` (not the
   space). A client unmapping it (a null-buffer commit, `unmap_if_buffer_removed`) takes it
   out of the space, taskbars (`remove_foreign_toplevel`, which also stops its capture
@@ -912,7 +966,9 @@ Key flows and invariants:
   and `set_keyboard_focus`, through `refused_while_locked`, which logs the attempt once per lock
   with a backtrace and panics in debug builds (the tests' builds): any path that gets there is
   a bug. Every input reaches clients through those types, whatever sent it (Pila or a Smithay
-  grab); leaving is always allowed. Above that, each path still refuses what it shouldn't do
+  grab), but for an input method's keyboard grab, which sends keys to the input method's own
+  object: while locked, keys bypass it, and a lock surface never gets the text input (see
+  "Input methods"); leaving is always allowed. Above that, each path still refuses what it shouldn't do
   while locked (`focus_window`/`focus_layer` keep the keyboard on a lock surface, popup and
   move/resize grabs are refused, bindings, gestures and `pila msg` don't run their actions,
   nor does `run_action` itself, save `runs_while_locked`, a VT switch and Quit in debug

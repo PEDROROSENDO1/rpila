@@ -25,6 +25,8 @@
 //!   `output_remove` `name`.
 //! - `output_fail_next`: the next time outputs are applied, the backend fails.
 //! - `spawn` `command`: run a command as a binding would.
+//! - `release_keys`: release every held key, as the nested backend does when
+//!   its window loses the keyboard (`Pila::release_all_keys`).
 //! - `actions`: one example of each kind of action (`Action::examples`), by
 //!   name; `action` `index`: run that one as a binding would (`run_action`).
 //! - `keyboard_focus` / `pointer_focus` `app_id`: hand that window the keyboard
@@ -298,6 +300,10 @@ fn handle(state: &mut Pila, request: &Value) -> Result<Value, String> {
         }
         "spawn" => {
             state.spawn(str_field(request, "command")?);
+            json!({})
+        }
+        "release_keys" => {
+            state.release_all_keys();
             json!({})
         }
         "actions" => {

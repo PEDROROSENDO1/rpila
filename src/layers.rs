@@ -59,7 +59,7 @@ impl Pila {
     /// Whether a fullscreen window on top of `output`'s windows covers its Top
     /// layer. A Top surface that takes the keyboard (a launcher) stays above
     /// it, so what gets the keys is shown.
-    fn top_layer_covered(&self, output: &Output) -> bool {
+    pub fn top_layer_covered(&self, output: &Output) -> bool {
         let top = self
             .space
             .elements()

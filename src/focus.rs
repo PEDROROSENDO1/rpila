@@ -26,7 +26,7 @@ use smithay::{
     },
     reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},
     utils::{IsAlive, Serial},
-    wayland::seat::WaylandFocus,
+    wayland::{input_method::InputMethodSeat, seat::WaylandFocus, text_input::TextInputSeat},
     xwayland::X11Surface,
 };
 
@@ -117,6 +117,17 @@ impl KeyboardTarget<Pila> for KeyboardFocus {
                 KeyboardTarget::enter(surface, seat, data, keys, serial)
             }
             KeyboardFocus::X11(window) => KeyboardTarget::enter(window, seat, data, keys, serial),
+        }
+        // Smithay gave the surface the text input: a lock surface doesn't
+        // get it, so the input method never sees, nor types into, the lock
+        // screen (`input_method.rs`).
+        if data.is_locked() {
+            let text_input = seat.text_input();
+            // A `leave` only after the `enter` Smithay sent, as it does.
+            if seat.input_method().has_instance() || text_input.compositor_input_method() {
+                text_input.leave();
+            }
+            text_input.set_focus(None);
         }
     }
 

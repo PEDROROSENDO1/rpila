@@ -258,6 +258,8 @@ pub struct SurfaceData {
     pub closed: bool,
     /// The outputs it entered (wl_surface.enter, less leave), by name.
     pub outputs: Vec<String>,
+    /// The last `wl_surface.preferred_buffer_scale`.
+    pub preferred_scale: Option<i32>,
 }
 
 impl Shared {
@@ -1056,6 +1058,9 @@ impl Dispatch<WlSurface, ()> for Handler {
                 wl_surface::Event::Leave { output } => {
                     let name = name_of(&s, output);
                     s.surfaces[i].outputs.retain(|n| *n != name);
+                }
+                wl_surface::Event::PreferredBufferScale { factor } => {
+                    s.surfaces[i].preferred_scale = Some(*factor);
                 }
                 _ => {}
             }

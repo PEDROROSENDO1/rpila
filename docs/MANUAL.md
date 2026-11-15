@@ -317,6 +317,27 @@ at once.
 The mouse, touchpad and gesture settings apply from the login screen or a TTY; nested, the
 desktop around Pila handles those devices. The keyboard settings apply either way.
 
+## Input methods (Chinese, Japanese, Korean, ...)
+
+An input method such as fcitx5 types what a keyboard layout can't: pinyin into Chinese
+characters, kana into kanji, and so on. Pila works with any input method that speaks the
+input-method-v2 protocol, as fcitx5 does. Start it with Pila:
+
+```toml
+autostart = ["fcitx5 -d", "waybar", "kitty"]
+```
+
+Apps reach it through the text-input-v3 protocol, with nothing to set up: GTK 3 and 4, Qt 6.7 and
+later, foot and kitty. Don't set `GTK_IM_MODULE` or `QT_IM_MODULE`: fcitx5's own modules talk to it
+over D-Bus instead, past Pila. Chromium and
+Electron apps need `--enable-wayland-ime --wayland-text-input-version=3`. X11 apps (through
+Xwayland) use XIM, which needs `XMODIFIERS=@im=fcitx` in the session's environment: in
+`/etc/environment`, or wherever your system sets the login environment.
+
+Pila's keybindings come first: a key Pila uses never reaches the input method. The candidate window
+shows below the text cursor, or above it when there's no room below, clear of your panels. The lock
+screen never uses the input method: what's typed there doesn't reach it.
+
 ## The configuration file
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). The first time

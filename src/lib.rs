@@ -36,6 +36,7 @@ pub mod handlers;
 pub mod headless;
 pub mod idle;
 pub mod input;
+pub mod input_method;
 pub mod introspect;
 pub mod ipc;
 pub mod ipc_client;

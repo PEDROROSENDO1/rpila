@@ -32,6 +32,7 @@
 #     "swaybg -c 333355",
 #     "waybar",
 #     "mako",
+#     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
 

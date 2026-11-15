@@ -820,7 +820,7 @@ fn render_all(state: &mut Pila) {
 /// with the input state, if anything.
 fn broken_invariant(state: &Pila) -> Option<String> {
     use smithay::{
-        desktop::{layer_map_for_output, PopupManager, PopupPointerGrab},
+        desktop::{layer_map_for_output, PopupKind, PopupManager},
         wayland::{seat::WaylandFocus, shell::wlr_layer::KeyboardInteractivity},
     };
     // Popups open on windows (mapped, minimized or parked) and layer surfaces.
@@ -834,20 +834,16 @@ fn broken_invariant(state: &Pila) -> Option<String> {
         let map = layer_map_for_output(output);
         roots.extend(map.layers().map(|l| l.wl_surface().clone()));
     }
-    let popups = roots
-        .iter()
-        .any(|root| PopupManager::popups_for_surface(root).next().is_some());
-
-    let pointer_popup_grab = state.seat.get_pointer().is_some_and(|pointer| {
-        pointer
-            .with_grab(|_, grab| grab.downcast_ref::<PopupPointerGrab<Pila>>().is_some())
-            .unwrap_or(false)
+    // Menus: an input method's candidate window keeps no grab.
+    let popups = roots.iter().any(|root| {
+        PopupManager::popups_for_surface(root).any(|(popup, _)| matches!(popup, PopupKind::Xdg(_)))
     });
-    if pointer_popup_grab && !popups {
+
+    if state.pointer_popup_grab() && !popups {
         return Some("the pointer has a popup grab and no popup is left".into());
     }
-    // Popup grabs are the only keyboard grabs Pila takes.
-    let keyboard_grab = state.seat.get_keyboard().is_some_and(|k| k.is_grabbed());
+    // An input method's keyboard grab isn't a menu's.
+    let keyboard_grab = state.keyboard_popup_grab();
     if keyboard_grab && !popups {
         return Some("the keyboard has a popup grab and no popup is left".into());
     }

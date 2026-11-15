@@ -7,6 +7,7 @@ mod common;
 use std::time::Duration;
 
 use common::client::Ev;
+use common::protocols::{keymap_of, virtual_keyboard};
 use common::*;
 use wayland_client::protocol::wl_pointer::WlPointer;
 use wayland_protocols::{
@@ -20,10 +21,6 @@ use wayland_protocols::{
         relative_pointer::zv1::client::zwp_relative_pointer_manager_v1::ZwpRelativePointerManagerV1,
     },
     xdg::activation::v1::client::xdg_activation_v1::XdgActivationV1,
-};
-use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
-    zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
-    zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
 };
 
 fn pointer(client: &Client) -> WlPointer {
@@ -595,23 +592,6 @@ fn a_drag_shows_its_icon_under_the_pointer() {
 
 // --- Virtual keyboard ----------------------------------------------------------
 
-/// A virtual keyboard of `typist` with `keymap` (a format and text as a
-/// client received them).
-fn virtual_keyboard(typist: &Client, (format, keymap): &(u32, String)) -> ZwpVirtualKeyboardV1 {
-    let manager: ZwpVirtualKeyboardManagerV1 = typist.bind("zwp_virtual_keyboard_manager_v1", 1);
-    let keyboard = manager.create_virtual_keyboard(&typist.seat(), &typist.qh, "vk".into());
-    let fd = memfd_with(keymap);
-    use std::os::fd::AsFd;
-    keyboard.keymap(*format, fd.as_fd(), keymap.len() as u32 + 1);
-    keyboard
-}
-
-/// The keymap `client` got from pila.
-fn keymap_of(client: &Client) -> (u32, String) {
-    client.wait("a keymap", |s| s.keymap.is_some());
-    client.lock().keymap.clone().unwrap()
-}
-
 fn saw_key(client: &Client, key: u32, pressed: bool) -> bool {
     client.events().contains(&Ev::Key { key, pressed })
 }
@@ -864,18 +844,6 @@ fn a_virtual_keyboards_keymap_lasts_until_a_physical_key() {
     app.wait("the configured keymap back", |s| {
         s.keymap.is_some() && !has_marked_keymap(s)
     });
-}
-
-fn memfd_with(text: &str) -> std::os::fd::OwnedFd {
-    use std::io::Write;
-    use std::os::fd::FromRawFd;
-    // SAFETY: a new fd, owned by the File.
-    let fd = unsafe { libc::memfd_create(c"keymap".as_ptr(), libc::MFD_CLOEXEC) };
-    assert!(fd >= 0);
-    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
-    file.write_all(text.as_bytes()).unwrap();
-    file.write_all(&[0]).unwrap();
-    file.into()
 }
 
 // --- Activation ----------------------------------------------------------------

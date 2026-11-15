@@ -202,13 +202,14 @@ impl Pila {
         };
         let inhibited = self.shortcuts_inhibited();
 
-        let action = keyboard.input_from_source::<Option<Action>, _>(
+        // `input_from_source`, but while locked a key that isn't Pila's goes
+        // to the lock surface even if an input method holds the keyboard: it
+        // mustn't see what's typed there (`input_method.rs`).
+        let intercepted = keyboard.input_intercept::<FilterResult<Option<Action>>, _>(
             source,
             self,
             keycode,
             key_state,
-            serial,
-            time,
             |state, mods, handle| {
                 // A repeating binding stops when its key is released, or
                 // another is pressed (xkb repeats the last key pressed).
@@ -310,6 +311,15 @@ impl Pila {
                 FilterResult::Forward
             },
         );
+        let action = match intercepted {
+            // Absorbed: another source holds the key.
+            None => None,
+            Some((FilterResult::Intercept(action), _)) => Some(action),
+            Some((FilterResult::Forward, mods_changed)) => {
+                self.forward_key(&keyboard, keycode, key_state, serial, time, mods_changed);
+                None
+            }
+        };
 
         // Intercepted (`Some`), or forwarded to the client.
         let mut acted = action.is_some();
@@ -403,6 +413,33 @@ impl Pila {
             .is_some_and(|inhibitor| inhibitor.is_active())
     }
 
+    /// Send a key past Pila's filter on to the keyboard's grab, or to the
+    /// focus. While locked, straight to the focus, the lock surface: an input
+    /// method holding the keyboard mustn't see what's typed there
+    /// (`input_method.rs`).
+    fn forward_key(
+        &mut self,
+        keyboard: &smithay::input::keyboard::KeyboardHandle<Self>,
+        keycode: smithay::input::keyboard::Keycode,
+        key_state: KeyState,
+        serial: Serial,
+        time: InputTime,
+        mods_changed: bool,
+    ) {
+        if self.is_locked() {
+            keyboard.input_forward_bypassing_grab(
+                self,
+                keycode,
+                key_state,
+                serial,
+                time,
+                mods_changed,
+            );
+        } else {
+            keyboard.input_forward(self, keycode, key_state, serial, time, mods_changed);
+        }
+    }
+
     /// Release every key pila thinks is held. Nested: when pila's host window
     /// loses focus, the host delivers the releases of keys held at that moment
     /// to whatever got focus instead (and Smithay's winit backend drops winit's
@@ -418,22 +455,25 @@ impl Pila {
         self.stop_binding_repeat();
         for keycode in keyboard.pressed_keys() {
             let serial = SERIAL_COUNTER.next_serial();
-            keyboard.input::<(), _>(
+            let released = keyboard.input_intercept::<bool, _>(
+                smithay::input::keyboard::KeyboardSource::MAIN,
                 self,
                 keycode,
                 KeyState::Released,
-                serial,
-                time,
-                |state, _, _| {
-                    // Like a real release: a key whose press triggered a
-                    // binding was never seen by the client.
-                    if state.input.suppressed_keys.remove(&keycode) {
-                        FilterResult::Intercept(())
-                    } else {
-                        FilterResult::Forward
-                    }
-                },
+                // Like a real release: a key whose press triggered a
+                // binding was never seen by the client.
+                |state, _, _| !state.input.suppressed_keys.remove(&keycode),
             );
+            if let Some((true, mods_changed)) = released {
+                self.forward_key(
+                    &keyboard,
+                    keycode,
+                    KeyState::Released,
+                    serial,
+                    time,
+                    mods_changed,
+                );
+            }
         }
         self.input.suppressed_keys.clear();
         self.end_switch();
@@ -777,6 +817,7 @@ impl Pila {
             }
         }
 
+        let menu = self.pointer_popup_grab();
         pointer.button(
             self,
             &ButtonEvent {
@@ -788,8 +829,9 @@ impl Pila {
         );
         pointer.frame(self);
         // A click outside a menu ended its pointer grab: end the keyboard's
-        // now too (`end_finished_popup_grab`).
-        if !pointer.is_grabbed() && self.seat.get_keyboard().is_some_and(|k| k.is_grabbed()) {
+        // now too, and give the keyboard back if the menu had it
+        // (`end_finished_popup_grab`).
+        if !pointer.is_grabbed() && (menu || self.keyboard_popup_grab()) {
             self.end_finished_popup_grab();
         }
     }

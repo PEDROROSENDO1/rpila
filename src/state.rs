@@ -10,8 +10,8 @@ use std::{
 use smithay::{
     backend::renderer::{element::solid::SolidColorBuffer, utils::with_renderer_surface_state},
     desktop::{
-        find_popup_root_surface, layer_map_for_output, LayerSurface, PopupManager, Space, Window,
-        WindowSurfaceType,
+        find_popup_root_surface, layer_map_for_output, LayerSurface, PopupKind, PopupManager,
+        PopupUngrabStrategy, Space, Window, WindowSurfaceType,
     },
     input::{
         keyboard::{Keycode, XkbConfig},
@@ -293,6 +293,10 @@ pub struct InputState {
     pub repeat_firing: bool,
     /// The repeat was stopped while it ran its action.
     pub repeat_stopped: bool,
+    /// A menu that has the pointer only, opened while an input method held
+    /// the keyboard (`handlers/xdg_shell.rs`): `dismiss_popup_grab` closes
+    /// it, wherever it is.
+    pub pointer_only_menu: Option<smithay::desktop::PopupGrab<Pila>>,
 }
 
 /// A binding with `repeat = true` whose key is held: its keycode and the
@@ -1264,25 +1268,66 @@ impl Pila {
         }
     }
 
+    /// Whether the keyboard's grab is a menu's. It may be an input method's
+    /// instead (`input_method.rs`), which isn't Pila's to end.
+    pub fn keyboard_popup_grab(&self) -> bool {
+        self.seat.get_keyboard().is_some_and(|keyboard| {
+            keyboard
+                .with_grab(|_, grab| {
+                    grab.downcast_ref::<smithay::desktop::PopupKeyboardGrab<Pila>>()
+                        .is_some()
+                })
+                .unwrap_or(false)
+        })
+    }
+
+    /// Whether the pointer's grab is a menu's.
+    pub fn pointer_popup_grab(&self) -> bool {
+        self.seat.get_pointer().is_some_and(|pointer| {
+            pointer
+                .with_grab(|_, grab| {
+                    grab.downcast_ref::<smithay::desktop::PopupPointerGrab<Pila>>()
+                        .is_some()
+                })
+                .unwrap_or(false)
+        })
+    }
+
     /// If a menu holds a popup grab, dismiss its popups and release the
     /// keyboard grab. The pointer grab ends itself once the client destroys
-    /// the dismissed popups.
+    /// the dismissed popups. A menu opened while an input method held the
+    /// keyboard has the pointer only (`handlers/xdg_shell.rs`).
     pub fn dismiss_popup_grab(&mut self) {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
-        // Popup grabs are the only keyboard grabs pila takes.
-        if !keyboard.is_grabbed() {
+        let keyboard_grab = self.keyboard_popup_grab();
+        let pointer_grab = self.pointer_popup_grab();
+        // A pointer-only menu may be another surface's than the keyboard's (a
+        // panel's, while the keyboard is on a window): its grab knows its
+        // popups, and the focused surface's aren't its.
+        if let Some(mut menu) = self.input.pointer_only_menu.take() {
+            if pointer_grab && !menu.has_ended() {
+                menu.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+        }
+        if !keyboard_grab && !pointer_grab {
             return;
         }
-        // A dead focus (its window was just destroyed) has no popups left to close.
+        // A dead focus (its window was just destroyed) has no popups left to
+        // close. The input method's candidate window isn't a menu.
         if let Some(focus) = self.keyboard_focus().filter(|f| f.is_alive()) {
             let root = self.popup_root(&focus).unwrap_or(focus);
             for (popup, _) in PopupManager::popups_for_surface(&root) {
-                let _ = PopupManager::dismiss_popup(&root, &popup);
+                if matches!(popup, PopupKind::Xdg(_)) {
+                    let _ = PopupManager::dismiss_popup(&root, &popup);
+                }
             }
         }
-        keyboard.unset_grab(self);
+        if keyboard_grab {
+            keyboard.unset_grab(self);
+        }
     }
 
     /// After a popup went away: if that ended a menu's grab (none of its
@@ -1298,13 +1343,7 @@ impl Pila {
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
-        let popup_grab = pointer
-            .with_grab(|_, grab| {
-                grab.downcast_ref::<smithay::desktop::PopupPointerGrab<Pila>>()
-                    .is_some()
-            })
-            .unwrap_or(false);
-        if popup_grab {
+        if self.pointer_popup_grab() {
             // The grab sees its popups gone after the manager's cleanup;
             // then a motion where the pointer is: the grab passes it on if a
             // menu is still open (a submenu went away), and ends itself if
@@ -1322,23 +1361,34 @@ impl Pila {
         }
         // The pointer's menu grab is over (here, or by a click outside it):
         // the keyboard's too, which Smithay would only end at the next key.
-        if let Some(keyboard) = self.seat.get_keyboard() {
-            if keyboard.is_grabbed() {
+        self.input.pointer_only_menu = None;
+        if self.keyboard_popup_grab() {
+            if let Some(keyboard) = self.seat.get_keyboard() {
                 keyboard.unset_grab(self);
             }
         }
         // The keyboard goes back to a window when it's on nothing, or on a
         // panel or dock that takes none (or a menu of one): Smithay gives it
-        // back to the menu's parent, right for a window only.
+        // back to the menu's parent, right for a window only, and only when
+        // the menu's keyboard grab ends with it. If that grab was gone first
+        // (an input method took the keyboard from the menu, then let it go),
+        // the keyboard is still on the menu: back to its window, or to a
+        // window if the menu is gone from it.
         let refocus = match self.keyboard_focus().filter(|focus| focus.is_alive()) {
             Some(focus) => {
-                let root = self.popup_root(&focus).unwrap_or(focus);
-                root.wl_surface()
-                    .and_then(|surface| self.layer_for_surface(&surface))
-                    .is_some_and(|(_, layer)| {
-                        layer.cached_state().keyboard_interactivity
-                            == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::None
-                    })
+                let root = self.popup_root(&focus).unwrap_or_else(|| focus.clone());
+                if let Some((_, layer)) = self.layer_for_surface(&root) {
+                    layer.cached_state().keyboard_interactivity
+                        == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::None
+                } else if self.window_for_surface(&root).is_some() {
+                    if root != focus {
+                        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                        self.set_keyboard_focus(Some(root.into()), serial);
+                    }
+                    false
+                } else {
+                    true
+                }
             }
             None => true,
         };

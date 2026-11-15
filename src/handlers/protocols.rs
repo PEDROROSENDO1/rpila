@@ -75,6 +75,8 @@ pub fn init_globals(
     // clipboard history, type into the focused client. Its handler is in
     // `virtual_keyboard.rs`.
     VirtualKeyboardManagerState::new::<Pila, _>(dh, is_privileged);
+    // text-input and input-method: input methods (fcitx5); `input_method.rs`.
+    crate::input_method::init_globals(dh);
     // Its handler is in `pointer_constraints.rs`.
     PointerConstraintsState::new::<Pila>(dh);
     XdgToplevelIconManager::new::<Pila>(dh);

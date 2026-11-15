@@ -1,4 +1,5 @@
 use crate::sync::Locked;
+use smithay::wayland::input_method::InputMethodSeat;
 use smithay::{
     desktop::{
         find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
@@ -254,27 +255,39 @@ impl XdgShellHandler for Pila {
             }
         };
 
+        // An input method holding the keyboard keeps it: a device has one
+        // grab, and Smithay can't give the input method's back. The menu
+        // takes the pointer only and the keyboard stays on the window; the
+        // input method passes on the keys it doesn't use (`input_method.rs`).
+        let keyboard = seat
+            .get_keyboard()
+            .filter(|_| !seat.input_method().keyboard_grabbed());
+        let pointer = seat.get_pointer();
         // Don't override an unrelated grab (e.g. a window move in progress);
         // a nested menu replacing its parent menu's grab is fine.
-        if let Some(keyboard) = seat.get_keyboard() {
-            if keyboard.is_grabbed()
+        let keyboard_taken = keyboard.as_ref().is_some_and(|keyboard| {
+            keyboard.is_grabbed()
                 && !(keyboard.has_grab(serial)
                     || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
-            {
-                grab.ungrab(PopupUngrabStrategy::All);
-                return;
-            }
-            keyboard.set_focus(self, grab.current_grab(), serial);
-            keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
-        }
-        if let Some(pointer) = seat.get_pointer() {
-            if pointer.is_grabbed()
+        });
+        let pointer_taken = pointer.as_ref().is_some_and(|pointer| {
+            pointer.is_grabbed()
                 && !(pointer.has_grab(serial)
                     || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
-            {
-                grab.ungrab(PopupUngrabStrategy::All);
-                return;
+        });
+        if keyboard_taken || pointer_taken {
+            grab.ungrab(PopupUngrabStrategy::All);
+            return;
+        }
+        match keyboard {
+            Some(keyboard) => {
+                keyboard.set_focus(self, grab.current_grab(), serial);
+                keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+                self.input.pointer_only_menu = None;
             }
+            None => self.input.pointer_only_menu = Some(grab.clone()),
+        }
+        if let Some(pointer) = pointer {
             pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
         }
     }
@@ -391,20 +404,26 @@ impl Pila {
         }
 
         self.popups.commit(surface);
-        if let Some(PopupKind::Xdg(ref xdg)) = self.popups.find_popup(surface) {
-            // A popup hidden by this commit lost its parent (Smithay resets
-            // the role): nothing to configure.
-            let hidden =
-                crate::state::commit_map_change(surface) == crate::state::MapChange::Unmapped;
-            if !xdg.is_initial_configure_sent() && !hidden {
-                let output = self.output_for_surface(surface);
-                self.send_initial_scale(surface, output);
-                // The initial configure is always allowed: an error (only
-                // for a configure after it) would be Smithay's.
-                if let Err(err) = xdg.send_configure() {
-                    warn!(?err, "initial popup configure refused");
+        match self.popups.find_popup(surface) {
+            Some(PopupKind::Xdg(ref xdg)) => {
+                // A popup hidden by this commit lost its parent (Smithay
+                // resets the role): nothing to configure.
+                let hidden =
+                    crate::state::commit_map_change(surface) == crate::state::MapChange::Unmapped;
+                if !xdg.is_initial_configure_sent() && !hidden {
+                    let output = self.output_for_surface(surface);
+                    self.send_initial_scale(surface, output);
+                    // The initial configure is always allowed: an error (only
+                    // for a configure after it) would be Smithay's.
+                    if let Err(err) = xdg.send_configure() {
+                        warn!(?err, "initial popup configure refused");
+                    }
                 }
             }
+            // An input method's candidate window: its size changes with
+            // what's typed (`input_method.rs`).
+            Some(PopupKind::InputMethod(ref popup)) => self.place_input_method_popup(popup),
+            None => {}
         }
     }
 

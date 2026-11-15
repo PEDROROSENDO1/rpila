@@ -5,14 +5,17 @@
 use serde_json::{json, Value};
 use smithay::{
     desktop::{
-        layer_map_for_output, utils::bbox_from_surface_tree, PopupManager, PopupPointerGrab, Window,
+        layer_map_for_output, utils::bbox_from_surface_tree, PopupKeyboardGrab, PopupManager,
+        PopupPointerGrab, Window,
     },
     input::pointer::CursorImageStatus,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Point, Rectangle},
     wayland::{
+        input_method::{InputMethodKeyboardGrab, InputMethodSeat},
         seat::WaylandFocus,
         shell::wlr_layer::{ExclusiveZone, KeyboardInteractivity, Layer},
+        text_input::TextInputSeat,
     },
 };
 
@@ -319,6 +322,31 @@ impl Pila {
                 "constrained": self.input.constrained.is_some(),
             },
             "keyboard_grabbed": self.seat.get_keyboard().is_some_and(|k| k.is_grabbed()),
+            "keyboard_grab": self.seat.get_keyboard().and_then(|k| {
+                k.with_grab(|_, grab| {
+                    if grab.downcast_ref::<PopupKeyboardGrab<Pila>>().is_some() {
+                        "popup"
+                    } else if grab.downcast_ref::<InputMethodKeyboardGrab>().is_some() {
+                        "input_method"
+                    } else {
+                        "other"
+                    }
+                })
+            }),
+            "input_method": {
+                "present": self.seat.input_method().has_instance(),
+                "grab": self.seat.input_method().keyboard_grabbed(),
+                "text_input_focus": self.seat.text_input().focus().map(|surface| {
+                    self.window_for_surface(&surface)
+                        .map(|w| crate::foreign_toplevel::title_and_app_id(&w).1)
+                        .or_else(|| {
+                            self.layer_for_surface(&surface)
+                                .map(|(_, l)| l.namespace().to_string())
+                        })
+                        .unwrap_or_else(|| "other".to_string())
+                }),
+                "popups": self.input_method_popups(),
+            },
             "window_menu": self.window_menu.as_ref().map(|menu| json!({
                 "window": crate::foreign_toplevel::title_and_app_id(&menu.window).1,
                 "geometry": rect(menu.rect),

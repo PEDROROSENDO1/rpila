@@ -42,7 +42,7 @@ NVIDIA card (a GTX 1060 with the proprietary driver, on NixOS). Other GPUs, dist
 are exactly what testing is needed for: please [report](#reporting-bugs) what works and what
 doesn't.
 
-Known gaps: touchscreens, drawing tablets, input methods (IME). **Monitors wired to another GPU**
+Known gaps: touchscreens, drawing tablets. **Monitors wired to another GPU**
 (on many laptops with two GPUs, NVIDIA ones especially, the HDMI and DisplayPort outputs are on the
 dedicated GPU) stay off by default: with `other-gpus = true` in the configuration Pila draws them with the
 seat's primary GPU and copies the picture over, which is new and untried. `pila-report` marks

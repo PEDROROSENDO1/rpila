@@ -21,6 +21,9 @@ use wayland_client::{
     },
     Connection, Dispatch, Proxy, QueueHandle,
 };
+use wayland_protocols::wp::text_input::zv3::client::{
+    zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
+};
 use wayland_protocols::{
     ext::{
         background_effect::v1::client::{
@@ -132,6 +135,11 @@ use wayland_protocols::{
             zxdg_output_manager_v1::ZxdgOutputManagerV1, zxdg_output_v1::ZxdgOutputV1,
         },
     },
+};
+use wayland_protocols_misc::zwp_input_method_v2::client::{
+    zwp_input_method_keyboard_grab_v2::ZwpInputMethodKeyboardGrabV2,
+    zwp_input_method_manager_v2::ZwpInputMethodManagerV2, zwp_input_method_v2::ZwpInputMethodV2,
+    zwp_input_popup_surface_v2::ZwpInputPopupSurfaceV2,
 };
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
@@ -299,6 +307,12 @@ logged!(
     ZwlrGammaControlV1,
     ExtBackgroundEffectManagerV1,
     ExtBackgroundEffectSurfaceV1,
+    ZwpTextInputManagerV3,
+    ZwpTextInputV3,
+    ZwpInputMethodManagerV2,
+    ZwpInputMethodV2,
+    ZwpInputMethodKeyboardGrabV2,
+    ZwpInputPopupSurfaceV2,
 );
 
 // Data devices: logged, and the current selection offer kept.
@@ -781,6 +795,7 @@ impl Client {
             auto_draw: true,
             closed: false,
             outputs: Vec::new(),
+            preferred_scale: None,
         });
         (Surf(s.surfaces.len() - 1), surface)
     }
@@ -1069,6 +1084,97 @@ impl Client {
     }
 
     /// A subsurface of `parent` at (x, y), drawn in `color`.
+    /// A text input on the seat, tagged "text_input".
+    pub fn text_input(&self) -> ZwpTextInputV3 {
+        let manager: ZwpTextInputManagerV3 = self.bind("zwp_text_input_manager_v3", 1);
+        let text_input = manager.get_text_input(&self.seat(), &self.qh, "text_input".into());
+        self.flush();
+        text_input
+    }
+
+    /// Enable `text_input` with its text cursor at `cursor` (x, y, w, h, in
+    /// the focused surface's coordinates), as an app does on `enter`.
+    pub fn enable_text_input(&self, text_input: &ZwpTextInputV3, cursor: (i32, i32, i32, i32)) {
+        text_input.enable();
+        text_input.set_cursor_rectangle(cursor.0, cursor.1, cursor.2, cursor.3);
+        text_input.commit();
+        self.flush();
+    }
+
+    /// Move `text_input`'s text cursor.
+    pub fn move_text_cursor(&self, text_input: &ZwpTextInputV3, cursor: (i32, i32, i32, i32)) {
+        text_input.set_cursor_rectangle(cursor.0, cursor.1, cursor.2, cursor.3);
+        text_input.commit();
+        self.flush();
+    }
+
+    pub fn disable_text_input(&self, text_input: &ZwpTextInputV3) {
+        text_input.disable();
+        text_input.commit();
+        self.flush();
+    }
+
+    /// An input method on the seat, tagged "input_method".
+    pub fn input_method(&self) -> ZwpInputMethodV2 {
+        let manager: ZwpInputMethodManagerV2 = self.bind("zwp_input_method_manager_v2", 1);
+        let input_method = manager.get_input_method(&self.seat(), &self.qh, "input_method".into());
+        self.flush();
+        input_method
+    }
+
+    /// The input method's keyboard grab, tagged "ime_grab".
+    pub fn grab_keyboard(&self, input_method: &ZwpInputMethodV2) -> ZwpInputMethodKeyboardGrabV2 {
+        let grab = input_method.grab_keyboard(&self.qh, "ime_grab".into());
+        self.flush();
+        grab
+    }
+
+    /// Commit `text` to the focused text input: the input method's `commit`
+    /// carries the number of `done` events it got, as the protocol asks.
+    pub fn commit_text(&self, input_method: &ZwpInputMethodV2, text: &str) {
+        let done = self
+            .logged("input_method")
+            .iter()
+            .filter(|e| e.starts_with("Done"))
+            .count();
+        input_method.commit_string(text.to_string());
+        input_method.commit(done as u32);
+        self.flush();
+    }
+
+    /// A candidate window of `size` showing `color`, tagged "ime_popup".
+    pub fn ime_popup(
+        &self,
+        input_method: &ZwpInputMethodV2,
+        color: [u8; 4],
+        size: (i32, i32),
+    ) -> (Surf, ZwpInputPopupSurfaceV2) {
+        let (surf, popup) = self.ime_popup_unpainted(input_method, color, size);
+        self.repaint(surf, size);
+        (surf, popup)
+    }
+
+    /// A candidate window with nothing drawn yet.
+    pub fn ime_popup_unpainted(
+        &self,
+        input_method: &ZwpInputMethodV2,
+        color: [u8; 4],
+        size: (i32, i32),
+    ) -> (Surf, ZwpInputPopupSurfaceV2) {
+        let (surf, surface) = self.new_surface("ime_popup", color, size);
+        let popup = input_method.get_input_popup_surface(&surface, &self.qh, "ime_popup".into());
+        self.flush();
+        (surf, popup)
+    }
+
+    /// Draw `surf` again at `size`, in its color.
+    pub fn repaint(&self, surf: Surf, size: (i32, i32)) {
+        let (surface, color) = self.surface_data(surf, |s| (s.surface.clone(), s.color));
+        let shm = self.lock().shm.clone().expect("wl_shm");
+        paint(&shm, &self.qh, &surface, color, size);
+        self.flush();
+    }
+
     pub fn subsurface(
         &self,
         parent: &WlSurface,
@@ -1192,4 +1298,36 @@ impl Client {
             .unwrap();
         event.split('"').nth(1).expect("a quoted id").to_string()
     }
+}
+
+// --- Virtual keyboards -----------------------------------------------------------
+
+/// A virtual keyboard of `typist` with `keymap` (a format and text as a
+/// client received them).
+pub fn virtual_keyboard(typist: &Client, (format, keymap): &(u32, String)) -> ZwpVirtualKeyboardV1 {
+    let manager: ZwpVirtualKeyboardManagerV1 = typist.bind("zwp_virtual_keyboard_manager_v1", 1);
+    let keyboard = manager.create_virtual_keyboard(&typist.seat(), &typist.qh, "vk".into());
+    let fd = memfd_with(keymap);
+    use std::os::fd::AsFd;
+    keyboard.keymap(*format, fd.as_fd(), keymap.len() as u32 + 1);
+    keyboard
+}
+
+/// The keymap `client` got from Pila.
+pub fn keymap_of(client: &Client) -> (u32, String) {
+    client.wait("a keymap", |s| s.keymap.is_some());
+    client.lock().keymap.clone().unwrap()
+}
+
+/// A memfd holding `text` and a NUL, as a keymap is sent.
+pub fn memfd_with(text: &str) -> std::os::fd::OwnedFd {
+    use std::io::Write;
+    use std::os::fd::FromRawFd;
+    // SAFETY: a new fd, owned by the File.
+    let fd = unsafe { libc::memfd_create(c"keymap".as_ptr(), libc::MFD_CLOEXEC) };
+    assert!(fd >= 0);
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    file.write_all(text.as_bytes()).unwrap();
+    file.write_all(&[0]).unwrap();
+    file.into()
 }

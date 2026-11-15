@@ -80,8 +80,9 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `notify-send` (notifications), `swaylock` (session lock), `wl-copy`/`wl-paste`
   (ext-data-control), `grim` + `slurp` (screenshots: ext-image-copy-capture), `wtype`
   (virtual keyboard), `wlr-randr` (output management), `wlopm` (output power), `wlsunset`
-  (gamma); `kitty` (the default terminal); `noctalia` and `dux-shell` (`scripts/shells`). X11
-  (via Xwayland): `xterm`, `xeyes`, `xdpyinfo`.
+  (gamma); `kitty` (the default terminal); `noctalia` and `dux-shell` (`scripts/shells`);
+  `fcitx5` with Rime's pinyin (input-method-v2; GTK 4, foot and kitty reach it through
+  text-input-v3). X11 (via Xwayland): `xterm`, `xeyes`, `xdpyinfo`.
 - Bare-metal smoke and performance run: `scripts/check --nested` (release build, log in
   `pila-check.log`) is for you: run it before asking the user to check anything; the user
   runs plain `scripts/check` from a TTY (log in `pila-tty.log`) for bare metal. What it
@@ -222,19 +223,21 @@ tool the user runs needs it; each is replaced as soon as an `ext-` version lands
 `wayland-protocols` and Smithay. The accepted ones (all needed by panels/shells such as
 Noctalia): `wlr-layer-shell`, `wlr-screencopy`, `wlr-foreign-toplevel-management`,
 `wlr-gamma-control`, `wlr-output-management`, `wlr-output-power-management` and
-`virtual-keyboard-unstable-v1`. Other vendor protocols (KDE, GNOME, Hyprland, …) are not
-added, even if Smithay implements them. Features with no protocol at all go through
-Pila's own config/IPC.
+`virtual-keyboard-unstable-v1`; and `input-method-unstable-v2`, which input methods (fcitx5)
+need, until its successor (`xx-input-method`, experimental) lands. Other vendor protocols (KDE,
+GNOME, Hyprland, …) are not added, even if Smithay implements them. Features with no protocol
+at all go through Pila's own config/IPC.
 
 Privileged protocols are hidden from sandboxed apps: a client that connected through
 wp-security-context (Flatpak) fails `state::is_privileged` (`ClientState::security_context`;
 Xwayland counts as privileged). Smithay globals take it as their filter (those Smithay
 gives none, keyboard-shortcuts-inhibit and ext-idle-notify, are made again hidden with
 `state::hide_from_sandboxes`), Pila's own as `GlobalDispatch::can_view`. It covers
-layer-shell, session lock, ext-data-control, virtual-keyboard, ext-foreign-toplevel-list,
-screen capture (both protocols), toplevel management, gamma, output management and power,
-ext-workspace, keyboard-shortcuts-inhibit, ext-idle-notify, and security-context itself. A
-new global that exposes or controls other clients, input or outputs must get it too.
+layer-shell, session lock, ext-data-control, virtual-keyboard, input-method,
+ext-foreign-toplevel-list, screen capture (both protocols), toplevel management, gamma, output
+management and power, ext-workspace, keyboard-shortcuts-inhibit, ext-idle-notify, and
+security-context itself. A new global that exposes or controls other clients, input or outputs
+must get it too.
 
 ## Architecture
 
@@ -284,7 +287,8 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
 - **Stacking:** a new way to raise a window must end in `Pila::keep_on_top`
   (`stacking.rs`), or always-on-top windows end up below it.
 - **Grabs:** `Pila::set_cursor` must be called after `set_grab` (`Focus::Clear` resets the
-  cursor).
+  cursor). A keyboard grab isn't always a menu's: an input method's holds the keyboard while
+  it's active; test for a menu's with `Pila::keyboard_popup_grab`, never `is_grabbed()`.
 - **Backends:** code outside them uses `Backend`'s methods rather than matching on it.
 - **Panics end the session:** past startup no `unwrap`/`expect` but on a local invariant the
   message states; `.locked()` (`sync.rs`) for a mutex, `get_or_insert` for user data, else

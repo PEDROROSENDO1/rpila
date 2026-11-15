@@ -344,6 +344,13 @@ impl Pila {
         if let Some(output) = lock_output {
             return Some(vec![output.clone()]);
         }
+        // An input method's candidate window with no text field to show at
+        // (`input_method.rs`): nowhere, whatever it draws meanwhile.
+        if smithay::wayland::compositor::get_role(&root)
+            == Some(smithay::wayland::input_method::INPUT_POPUP_SURFACE_ROLE)
+        {
+            return Some(Vec::new());
+        }
         None
     }
 
