@@ -100,11 +100,6 @@ fn set_snap_state(window: &Window, state: Option<(Side, Rectangle<i32, Logical>)
         .set(state);
 }
 
-/// The width a snapped window had before snapping.
-pub fn snapped_before_width(window: &Window) -> Option<i32> {
-    snap_state(window).map(|(_, before)| before.size.w)
-}
-
 /// The side a window is snapped to, if any.
 pub fn snapped_side(window: &Window) -> Option<Side> {
     snap_state(window).map(|(side, _)| side)

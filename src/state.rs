@@ -1616,13 +1616,8 @@ impl Pila {
             self.map_window(window.clone(), loc, true);
             self.keep_transients_above(window);
             self.x11_window_moved(window);
-        } else if crate::snap::snapped_side(window).is_some() {
-            let width = self
-                .window_rect(window)
-                .map(|r| r.size.w)
-                .unwrap_or(window.geometry().size.w);
-            let before_w = crate::snap::snapped_before_width(window).unwrap_or(width);
-            let x = at.x as i32 - before_w / 2;
+        } else if let Some(before) = crate::snap::snapped_from(window) {
+            let x = at.x as i32 - before.size.w / 2;
             // Down as far as the pointer went since the press: it keeps its
             // place on the title bar (a client's own drag starts late).
             let y = self.space.element_location(window).map_or(0, |l| l.y)
