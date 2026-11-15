@@ -35,6 +35,14 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025).
 
 ## Commands
 
+```sh
+cargo build
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test                      # cargo test <name_substring> for one test
+timeout 10 cargo run            # nested smoke test; never leave it running
+```
+
 - Lint: `cargo clippy --all-targets -- -D warnings`
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) also runs
   `cargo fmt --check`, builds with `--locked`, does a staged install and runs
@@ -109,18 +117,10 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025).
   (previous run: `pila.log.old`).
   Taking a change into the session means logging out and back in, which ends this
   Claude session; the user does it.
-- Arch package: `packaging/aur/pila-git`. Keep `depends` in its `PKGBUILD` in step with the
-  libraries Pila links (`readelf -d`) and README's package table. Packaging and releases:
-  the `release` skill.
-- Debian/Fedora packages: `packaging/nfpm.yaml`, built by `packages.yml` from a staged
-  `scripts/install`. A directory added to `install_files` and a newly linked library go there
-  too (`contents`, `depends`). The docs in `share/doc/pila` aren't in `install_files`: one
-  added for the packages goes in the `PKGBUILD`'s `package()`, `packages.yml`'s Package step
-  and `package.nix`'s `postInstall`.
-- Nix package: `flake.nix` and `package.nix` (the same files as `scripts/install`: a file
-  added to `install_files` is added there too). No Nix in this container: `compat.yml`'s Nix
-  job builds it and starts Pila from it. `flake.lock` pins nixpkgs; a dependency on a new
-  system library goes in `package.nix`'s `buildInputs` too.
+- Packages: Arch (`packaging/aur/pila-git`), Debian/Fedora (`packaging/nfpm.yaml`) and Nix
+  (`flake.nix`, `package.nix`). A file added to `scripts/install`'s `install_files` or a newly
+  linked library also goes in those packages, so read the `release` skill first (it covers
+  packaging as well as releases).
 - TTY runs (the user, on the host): `scripts/tty [config]` runs the release build
   (`--debug` for the debug one) by hand on a spare VT, under `dbus-run-session`, while the
   login session keeps running; read `pila-tty.log` and the previous run's

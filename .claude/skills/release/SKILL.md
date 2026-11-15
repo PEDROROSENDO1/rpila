@@ -1,6 +1,6 @@
 ---
 name: release
-description: How to cut a Pila release and maintain its packages (the Arch PKGBUILD, .SRCINFO and AUR; the .deb and .rpm). Use when releasing a version, bumping pkgver or changing packaging/.
+description: How to cut a Pila release and maintain its packages (the Arch PKGBUILD, .SRCINFO and AUR; the .deb and .rpm; the Nix flake). Use when releasing a version, bumping pkgver, changing packaging/, flake.nix or package.nix, adding a file to scripts/install's install_files, or linking a new system library.
 ---
 
 # Releases
@@ -61,3 +61,10 @@ flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
 `scripts/install` stages with `PREFIX=/usr`. A directory added to `install_files` goes in its
 `contents`, and a newly linked library in its `depends` (Debian's and Fedora's names), as in the
 `PKGBUILD`.
+
+# Nix package
+
+`flake.nix` and `package.nix` install the same files as `scripts/install`: a file added to
+`install_files` is added there too. A dependency on a new system library goes in
+`package.nix`'s `buildInputs`. `flake.lock` pins nixpkgs. There's no Nix in the dev container:
+`compat.yml`'s Nix job builds the package and starts Pila from it.
