@@ -24,6 +24,9 @@ fn locked_with(config: &str) -> (TestPila, Client, Client, ExtSessionLockV1) {
     let surf = locker.lock_surface(&lock, "HEADLESS-1", LOCK_COLOR);
     assert_eq!(locker.wait_surface_configured(surf), (0, 0, 1280, 800));
     locker.wait_logged("lock", "Locked");
+    // Its buffer, committed on the configure, in before a test reads pixels:
+    // the lock may be confirmed with the output still black.
+    locker.roundtrip();
     pila.wait("locked", |s| {
         s["locked"] == true && s["lock_pending"] == false
     });
