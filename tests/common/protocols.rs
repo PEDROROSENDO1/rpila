@@ -858,8 +858,43 @@ impl Client {
         grab: bool,
         color: [u8; 4],
     ) -> (Surf, XdgPopup) {
+        let (surf, _) = self.new_surface(name, color, placement.size);
+        let popup = self.popup_on(surf, parent, placement, grab);
+        (surf, popup)
+    }
+
+    /// GTK 4 hides a popover this way and keeps its `wl_surface` for the
+    /// next one (`popup_on`): the role objects destroyed, then a null
+    /// commit.
+    pub fn hide_popup_keeping_surface(&self, surf: Surf, popup: &XdgPopup) {
+        popup.destroy();
+        let xdg_surface = {
+            let mut s = self.lock();
+            let index = s
+                .popup_xdg_surfaces
+                .iter()
+                .position(|(i, _)| *i == surf.0)
+                .expect("a popup's xdg_surface");
+            s.popup_xdg_surfaces.remove(index).1
+        };
+        xdg_surface.destroy();
+        let surface = self.wl_surface_of(surf);
+        surface.attach(None, 0, 0);
+        surface.commit();
+        self.flush();
+    }
+
+    /// A popup on `surf`, a surface that has none (a new one, or one whose
+    /// popup is gone, as GTK 4 reuses a popover's).
+    pub fn popup_on(
+        &self,
+        surf: Surf,
+        parent: Result<Window, Surf>,
+        placement: &Placement,
+        grab: bool,
+    ) -> XdgPopup {
         let positioner = self.positioner(placement);
-        let (surf, surface) = self.new_surface(name, color, placement.size);
+        let surface = self.wl_surface_of(surf);
         let wm_base = self.lock().wm_base.clone().expect("xdg_wm_base");
         let xdg_surface = wm_base.get_xdg_surface(&surface, &self.qh, PopupRef(surf.0));
         let popup = match parent {
@@ -905,7 +940,7 @@ impl Client {
         surface.commit();
         positioner.destroy();
         self.flush();
-        (surf, popup)
+        popup
     }
 
     /// Lock the session; the lock object (its events are tagged "lock").

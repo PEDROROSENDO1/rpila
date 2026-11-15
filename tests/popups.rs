@@ -294,3 +294,43 @@ fn a_popup_hidden_with_a_null_commit_isnt_configured_again() {
     assert_eq!(configures, 1, "a configure answered the hiding commit");
     assert_eq!(client.error(), None);
 }
+
+/// GTK 4 keeps a popover's surface when it hides it (role objects
+/// destroyed, a null commit) and opens the next popover on it: that popup
+/// is new, gets its initial configure and shows, and a click outside ends
+/// its grab. It once got no configure and never showed, and its grab kept
+/// every click from the app until a key was pressed.
+#[test]
+fn a_popup_on_the_surface_of_a_hidden_one_is_configured_and_shows() {
+    let (mut pila, client, window, (x, y, ..)) = window_at_its_place();
+    press_in(&mut pila, &client, x + 20, y + 20);
+    let (menu, popup) = client.popup("menu", Ok(window), &Placement::default(), true, BLUE);
+    client.wait_surface_configured(menu);
+    pila.release("left");
+    pila.wait("the first popup, with its grab", |s| {
+        mapped_popup(s, "a") && s["pointer"]["grab"] == "popup"
+    });
+    client.hide_popup_keeping_surface(menu, &popup);
+    pila.wait("the first popup hidden, no grab", |s| {
+        popup_of(s, "a").is_none()
+            && s["pointer"]["grabbed"] == false
+            && s["keyboard_grabbed"] == false
+    });
+
+    client.clear_events();
+    press_in(&mut pila, &client, x + 20, y + 20);
+    client.popup_on(menu, Ok(window), &Placement::default(), true);
+    client.wait("the second popup's configure", |s| {
+        s.surfaces[menu.0].configures.len() == 2
+    });
+    pila.release("left");
+    pila.wait("the second popup, with its grab", |s| {
+        mapped_popup(s, "a") && s["pointer"]["grab"] == "popup"
+    });
+    pila.click_at(5.0, 795.0);
+    client.wait_surface_closed(menu);
+    pila.wait("the grab is gone", |s| {
+        s["pointer"]["grabbed"] == false && s["keyboard_grabbed"] == false
+    });
+    assert_eq!(client.error(), None);
+}

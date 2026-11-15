@@ -95,7 +95,8 @@ impl XdgShellHandler for Pila {
 
     // A popup's surface may live on, but it shows no more. Rare, and gone
     // from its window's bounds already: every output.
-    fn popup_destroyed(&mut self, _surface: PopupSurface) {
+    fn popup_destroyed(&mut self, surface: PopupSurface) {
+        crate::state::forget_mapped(surface.wl_surface());
         self.queue_redraw();
         // Inside the client's request: see to the menu's grab after it.
         self.loop_handle

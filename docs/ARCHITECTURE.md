@@ -557,7 +557,11 @@ Key flows and invariants:
   surface's or popup's role in the commit that unmaps it (null buffer); that commit is never
   answered as an initial commit (`state::commit_map_change` says `MapChange::Unmapped`): a
   layer surface's next commit
-  is its new initial one, and a popup can't map again (its parent is gone).
+  is its new initial one, and a popup can't map again (its parent is gone). A destroyed
+  popup's surface starts unmapped (`state::forget_mapped`, in `popup_destroyed`): GTK 4
+  opens its next popover on the same surface, and the null commit after the destroy is no
+  popup's commit any more, so without it that popover's initial commit read as a hiding one
+  and got no configure, while its grab held the app's input.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

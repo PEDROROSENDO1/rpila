@@ -2133,6 +2133,19 @@ pub fn commit_map_change(surface: &WlSurface) -> MapChange {
     }
 }
 
+/// The surface lost its role object (a destroyed popup): its next role
+/// starts unmapped, and the null commit that usually follows the destroy
+/// is no commit of a popup any more, so `commit_map_change` doesn't see it.
+/// GTK 4 opens its next popover on the same surface, whose first commit
+/// must not read as hiding a popup that was mapped.
+pub fn forget_mapped(surface: &WlSurface) {
+    smithay::wayland::compositor::with_states(surface, |states| {
+        if let Some(was) = states.data_map.get::<WasMapped>() {
+            was.0.store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+    });
+}
+
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
