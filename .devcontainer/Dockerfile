@@ -29,6 +29,8 @@ ENV TZ="${TZ}" \
 #     work on its Pila backend
 #   - labwc and valgrind: checking Noctalia changes on a wlroots compositor
 #     (headless) and its tests for memory errors
+#   - fcitx5 with Rime's pinyin: an input method (input-method-v2) for the IME
+#     tests in scripts/apps; GTK 4, foot and kitty reach it through text-input-v3
 RUN pacman -Syu --noconfirm --needed \
         git openssh github-cli less vim nano jq ripgrep fd unzip \
         rustup clang mold pkgconf gdb shellcheck cargo-audit \
@@ -39,6 +41,7 @@ RUN pacman -Syu --noconfirm --needed \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
         grim slurp wtype wlopm wlsunset noctalia quickshell dux-shell ffmpeg \
         meson just wireplumber nlohmann-json stb nodejs npm labwc valgrind \
+        fcitx5 fcitx5-rime rime-luna-pinyin \
     && rm -rf /var/cache/pacman/pkg/* \
     && dbus-uuidgen --ensure=/etc/machine-id
 
