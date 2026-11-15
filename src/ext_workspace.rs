@@ -115,14 +115,9 @@ impl Manager {
             handle.removed();
             changed = true;
         }
-        for (handle, (sent, wanted)) in self
-            .workspaces
-            .iter()
-            .zip(self.states.iter_mut().zip(states))
-        {
+        for (handle, (sent, wanted)) in self.workspaces.iter().zip(self.states.iter().zip(states)) {
             if sent != wanted {
                 handle.state(*wanted);
-                *sent = *wanted;
                 changed = true;
             }
         }

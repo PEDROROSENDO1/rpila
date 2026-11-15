@@ -8,9 +8,9 @@
 //! buffer it accepts (shm, and a dma-buf on the renderer's device), and the
 //! client asks for the copy with `copy`, or `copy_with_damage` to wait until
 //! something in the region changed since that manager's last copy of it.
-//! Copies are rendered from the scene like `capture.rs`'s, by `copy_frame`;
-//! plain copies run from an idle callback, damage ones after each rendered
-//! frame (`Pila::after_frames`). A region is in the output's logical
+//! Copies are rendered from the scene like `capture.rs`'s, by `copy_frame`,
+//! after the output's next frame (`Pila::after_frames`), plain ones or those
+//! waiting for damage alike. A region is in the output's logical
 //! coordinates, copied at the output's scale.
 
 use crate::sync::Locked;
@@ -58,10 +58,9 @@ pub struct FrameState {
     /// The region in physical pixels: the buffer size.
     size: Size<i32, Physical>,
     overlay_cursor: bool,
+    /// The buffer `copy` gave: set once, a frame copies once.
     buffer: Option<WlBuffer>,
     with_damage: bool,
-    /// `copy` was sent (a frame copies once).
-    copied: bool,
 }
 
 /// A frame's user data; `None` for one that failed at creation.
@@ -152,7 +151,6 @@ impl Pila {
             overlay_cursor,
             buffer: None,
             with_damage: false,
-            copied: false,
         })
     }
 
@@ -450,7 +448,7 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for Pila {
             // Failed at creation; nothing to copy into.
             return;
         };
-        if frame_state.copied {
+        if frame_state.buffer.is_some() {
             resource.post_error(frame::Error::AlreadyUsed, "copy sent twice");
             return;
         }
@@ -461,7 +459,8 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for Pila {
             );
             return;
         }
-        frame_state.copied = true;
+        frame_state.buffer = Some(buffer);
+        frame_state.with_damage = with_damage;
         // An output unplugged since the frame was set up has no frame of its
         // own to come: fail now (`fail_screencopies_of` only fails the copies
         // already waiting when it goes).
@@ -473,8 +472,6 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for Pila {
             resource.failed();
             return;
         };
-        frame_state.buffer = Some(buffer);
-        frame_state.with_damage = with_damage;
         state.capture.screencopies.push(resource.clone());
         // Copied after the next frame (`after_frames`): at most once per
         // refresh however fast a client asks, as with damage. Its output's

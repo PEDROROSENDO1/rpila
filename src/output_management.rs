@@ -630,22 +630,13 @@ impl Dispatch<ZwlrOutputConfigurationV1, u32> for Pila {
         _: &DisplayHandle,
         data_init: &mut DataInit<'_, Self>,
     ) {
-        let live = state
-            .outputs
-            .management
-            .configurations
-            .contains_key(resource);
+        // Gone once cancelled (a stale serial) or used.
+        let live = state.outputs.management.configurations.get_mut(resource);
         match request {
             configuration::Request::EnableHead { id, head } => {
                 let name = head.data::<String>().cloned().unwrap_or_default();
-                if !live {
-                    // Cancelled (stale serial) or already used.
+                let Some(configuration) = live else {
                     data_init.init(id, None::<(String, ZwlrOutputConfigurationV1)>);
-                    return;
-                }
-                // `live`: it's there.
-                let Some(configuration) = state.outputs.management.configurations.get_mut(resource)
-                else {
                     return;
                 };
                 if configuration.heads.contains_key(&name) {
@@ -666,15 +657,10 @@ impl Dispatch<ZwlrOutputConfigurationV1, u32> for Pila {
                 data_init.init(id, Some((name, resource.clone())));
             }
             configuration::Request::DisableHead { head } => {
-                if !live {
-                    return;
-                }
-                let name = head.data::<String>().cloned().unwrap_or_default();
-                // `live`: it's there.
-                let Some(configuration) = state.outputs.management.configurations.get_mut(resource)
-                else {
+                let Some(configuration) = live else {
                     return;
                 };
+                let name = head.data::<String>().cloned().unwrap_or_default();
                 if configuration.heads.contains_key(&name) {
                     resource.post_error(
                         configuration::Error::AlreadyConfiguredHead,

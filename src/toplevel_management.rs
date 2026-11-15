@@ -49,11 +49,8 @@ pub struct ToplevelManagement {
 /// What listeners were last told about a window, and their handles with
 /// the `wl_output`s each was told the window is on.
 struct Entry {
-    identifier: String,
-    title: String,
-    app_id: String,
-    states: Vec<u32>,
-    outputs: Vec<Output>,
+    /// What its listeners were last told.
+    last: Info,
     handles: HashMap<ZwlrForeignToplevelHandleV1, Vec<WlOutput>>,
 }
 
@@ -84,16 +81,16 @@ impl Entry {
         let Ok(handle) = client.create_resource::<ZwlrForeignToplevelHandleV1, String, Pila>(
             dh,
             manager.version(),
-            self.identifier.clone(),
+            self.last.identifier.clone(),
         ) else {
             return;
         };
         manager.toplevel(&handle);
-        handle.title(self.title.clone());
-        handle.app_id(self.app_id.clone());
-        handle.state(state_bytes(&self.states));
+        handle.title(self.last.title.clone());
+        handle.app_id(self.last.app_id.clone());
+        handle.state(state_bytes(&self.last.states));
         let mut sent = Vec::new();
-        for output in &self.outputs {
+        for output in &self.last.outputs {
             for wl_output in output.client_outputs(&client) {
                 handle.output_enter(&wl_output);
                 sent.push(wl_output);
@@ -105,13 +102,10 @@ impl Entry {
 
     /// Send what changed since the last refresh, if anything.
     fn update(&mut self, info: Info) {
-        let title = (self.title != info.title).then(|| info.title.clone());
-        let app_id = (self.app_id != info.app_id).then(|| info.app_id.clone());
-        let states = (self.states != info.states).then(|| state_bytes(&info.states));
-        self.title = info.title;
-        self.app_id = info.app_id;
-        self.states = info.states;
-        self.outputs = info.outputs;
+        let title = (self.last.title != info.title).then(|| info.title.clone());
+        let app_id = (self.last.app_id != info.app_id).then(|| info.app_id.clone());
+        let states = (self.last.states != info.states).then(|| state_bytes(&info.states));
+        self.last = info;
         for (handle, sent) in &mut self.handles {
             let mut changed = title.is_some() || app_id.is_some() || states.is_some();
             if let Some(title) = &title {
@@ -127,6 +121,7 @@ impl Entry {
             // wl_output at any time.
             let wanted: Vec<WlOutput> = match handle.client() {
                 Some(client) => self
+                    .last
                     .outputs
                     .iter()
                     .flat_map(|o| o.client_outputs(&client))
@@ -267,18 +262,15 @@ impl Pila {
             match tm.entries.get_mut(&info.identifier) {
                 Some(entry) => entry.update(info),
                 None => {
+                    let identifier = info.identifier.clone();
                     let mut entry = Entry {
-                        identifier: info.identifier.clone(),
-                        title: info.title,
-                        app_id: info.app_id,
-                        states: info.states,
-                        outputs: info.outputs,
+                        last: info,
                         handles: HashMap::new(),
                     };
                     for manager in &tm.managers {
                         entry.add_handle(&dh, manager);
                     }
-                    tm.entries.insert(info.identifier, entry);
+                    tm.entries.insert(identifier, entry);
                 }
             }
         }
