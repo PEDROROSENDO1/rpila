@@ -867,6 +867,7 @@ fn check_redraws(state: &mut Pila) {
         backend,
         blur,
         cursor_theme,
+        space,
         ..
     } = state;
     let Some(Backend::Headless(data)) = backend else {
@@ -890,7 +891,7 @@ fn check_redraws(state: &mut Pila) {
             );
             continue;
         }
-        let Some(output_geo) = state_output_geometry(&output) else {
+        let Some(output_geo) = space.output_geometry(&output) else {
             continue;
         };
         let scale = crate::scale::output_scale(&output);
@@ -919,19 +920,6 @@ fn check_redraws(state: &mut Pila) {
             }
         }
     }
-}
-
-/// An output's place in the global space, from the output itself (the
-/// `Space` is borrowed elsewhere while checking).
-fn state_output_geometry(output: &Output) -> Option<Rectangle<i32, smithay::utils::Logical>> {
-    let mode = output.current_mode()?;
-    let size = output
-        .current_transform()
-        .transform_size(mode.size)
-        .to_f64()
-        .to_logical(output.current_scale().fractional_scale())
-        .to_i32_round();
-    Some(Rectangle::new(output.current_location(), size))
 }
 
 /// An output to draw (its place, and the CPU time `prepare` took), or why

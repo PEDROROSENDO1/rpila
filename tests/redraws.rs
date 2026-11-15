@@ -404,3 +404,29 @@ fn an_animating_window_isnt_drawn_for_an_output_it_isnt_on() {
     assert_eq!(window["animating"], true, "the opening ended too soon");
     assert_eq!(window["animation_textures"], 1, "{window}");
 }
+
+/// At a scale where an output's logical width isn't whole (1280 / 1.5 =
+/// 853.33), a window and the pointer in its last, partial column change
+/// with redraws asked for them: the harness's redraw check takes the
+/// output's place from the `Space`, as drawing does.
+#[test]
+fn the_last_partial_column_of_a_scaled_output_is_checked_as_drawn() {
+    let mut pila = TestPila::with_config(
+        "[[output]]\nname = \"HEADLESS-1\"\nscale = 1.5\n\n\
+         [[window-rule]]\napp-id = \"edge\"\nposition = [653, 100]\nsize = [201, 200]\n",
+    );
+    let client = pila.client();
+    let window = client.window("edge").create();
+    pila.wait_window("edge");
+    for x in [853.2, 400.0, 853.2] {
+        pila.move_to(x, 150.0);
+        client.draw(window, Some((201, 200)));
+        pila.settle();
+    }
+    pila.wait("the pointer on the window in the last column", |s| {
+        s["pointer"]["x"].as_f64().is_some_and(|x| x > 853.0)
+            && s["pointer"]["focus"]
+                .as_str()
+                .is_some_and(|f| f.contains("edge"))
+    });
+}
