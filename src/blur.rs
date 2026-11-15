@@ -322,7 +322,6 @@ struct Entry {
     rect: Rectangle<i32, Logical>,
     /// Where it is in the global space.
     global: Point<i32, Logical>,
-    size: Size<i32, Physical>,
     scale: Scale<f64>,
     /// The region, output-local, as `inside` and `mask` were worked out from.
     rects: Vec<Rectangle<i32, Logical>>,
@@ -332,7 +331,8 @@ struct Entry {
     mask: Vec<Rectangle<i32, Physical>>,
     /// Its rounded corners, as they were cut out.
     shape: Option<Shape>,
-    /// Level 0 is `size`; each further level half of the one before.
+    /// Level 0 is the blurred area's size in pixels; each further level
+    /// half of the one before.
     levels: Vec<GlesTexture>,
     /// Level 0 as a render buffer: its commit is bumped when re-blurred, so
     /// the output's damage tracking repaints it.
@@ -654,47 +654,44 @@ impl BlurCache {
         };
         let clear = render::clear_color(scene);
 
-        let fresh = match self.entries.get(key) {
-            // A tracker keeps its scale: it can't draw for another one.
-            Some(entry) if entry.size == size && entry.scale == scale => false,
-            _ => {
-                debug!(?rect, ?size, "blur: allocated");
-                self.allocated += 1;
-                let mut levels = Vec::with_capacity(BLUR_PASSES + 1);
-                for k in 0..=BLUR_PASSES {
-                    let level: Size<i32, Buffer> =
-                        ((size.w >> k).max(1), (size.h >> k).max(1)).into();
-                    levels.push(blur_texture(renderer, level)?);
-                }
-                let buffer_size = levels[0].size();
-                let result = TextureRenderBuffer::from_texture(
-                    renderer,
-                    levels[0].clone(),
-                    1,
-                    Transform::Normal,
-                    Some(vec![Rectangle::from_size(buffer_size)]),
-                );
-                self.entries.insert(
-                    key.clone(),
-                    Entry {
-                        rect,
-                        global: origin,
-                        size,
-                        scale,
-                        rects: Vec::new(),
-                        inside: Vec::new(),
-                        mask: Vec::new(),
-                        shape: None,
-                        levels,
-                        result,
-                        tracker: OutputDamageTracker::new(size, scale, Transform::Normal),
-                        drawn: false,
-                        used: true,
-                    },
-                );
-                true
+        let level0: Size<i32, Buffer> = (size.w, size.h).into();
+        // A tracker keeps its scale: it can't draw for another one. A new
+        // entry isn't `drawn`, so it's blurred below.
+        let reusable = |entry: &Entry| entry.levels[0].size() == level0 && entry.scale == scale;
+        if !self.entries.get(key).is_some_and(reusable) {
+            debug!(?rect, ?size, "blur: allocated");
+            self.allocated += 1;
+            let mut levels = Vec::with_capacity(BLUR_PASSES + 1);
+            for k in 0..=BLUR_PASSES {
+                let level: Size<i32, Buffer> = ((size.w >> k).max(1), (size.h >> k).max(1)).into();
+                levels.push(blur_texture(renderer, level)?);
             }
-        };
+            let buffer_size = levels[0].size();
+            let result = TextureRenderBuffer::from_texture(
+                renderer,
+                levels[0].clone(),
+                1,
+                Transform::Normal,
+                Some(vec![Rectangle::from_size(buffer_size)]),
+            );
+            self.entries.insert(
+                key.clone(),
+                Entry {
+                    rect,
+                    global: origin,
+                    scale,
+                    rects: Vec::new(),
+                    inside: Vec::new(),
+                    mask: Vec::new(),
+                    shape: None,
+                    levels,
+                    result,
+                    tracker: OutputDamageTracker::new(size, scale, Transform::Normal),
+                    drawn: false,
+                    used: true,
+                },
+            );
+        }
         let entry = self.entries.get_mut(key).expect("inserted above");
         entry.used = true;
         let reshaped = entry.rects != rects || entry.rect != rect || entry.shape != shape;
@@ -722,7 +719,7 @@ impl BlurCache {
             Ok((None, _)) => false,
             Err(err) => return Err(render_error(&err)),
         };
-        if entry.drawn && !changed && !reshaped && !fresh && !BLUR_ALWAYS {
+        if entry.drawn && !changed && !reshaped && !BLUR_ALWAYS {
             return Ok(());
         }
 
