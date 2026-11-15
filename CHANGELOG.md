@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.7 (2026-11-14)
 
 - **GTK 4 apps no longer freeze after a dropdown or menu is opened a second time:** GTK hides a
   popover by destroying its popup and opens the next one on the same surface, which Pila took
