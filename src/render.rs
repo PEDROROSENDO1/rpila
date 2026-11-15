@@ -666,12 +666,15 @@ fn single_window_elements(
     }
     let location: Point<i32, Physical> =
         (entry.render_location - output_location).to_physical_precise_round(scale);
+    // The paths that draw the surfaces themselves apply what
+    // `Window::render_elements` would: an X11 window's own opacity.
+    let surface_alpha = entry.alpha * own_opacity(&entry.window);
     match (rounding, shaders) {
         _ if surfaces == Surfaces::MainOnly => {
             let main = entry
                 .window
                 .wl_surface()
-                .map(|surface| main_surface_element(renderer, &surface, location, entry.alpha))
+                .map(|surface| main_surface_element(renderer, &surface, location, surface_alpha))
                 .unwrap_or_default();
             match (rounding, shaders) {
                 (Some(rounding), Some(shaders)) => elements.extend(
@@ -689,7 +692,7 @@ fn single_window_elements(
             shaders,
             output_location,
             scale,
-            entry.alpha,
+            surface_alpha,
         )),
         _ => elements.extend(AsRenderElements::<GlesRenderer>::render_elements::<
             PilaRenderElement,
@@ -728,6 +731,15 @@ fn single_window_elements(
         )));
     }
     elements
+}
+
+/// The opacity an X11 window sets on itself (`_NET_WM_WINDOW_OPACITY`), as
+/// Smithay's `X11Surface::render_elements` applies it; 1 for anything else.
+fn own_opacity(window: &Window) -> f32 {
+    window
+        .x11_surface()
+        .and_then(|x11| x11.opacity())
+        .map_or(1.0, |opacity| opacity as f32 / u32::MAX as f32)
 }
 
 /// `window`'s main surface at `location`, from its renderer state alone

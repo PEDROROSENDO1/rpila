@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **An X11 app's own transparency shows with rounded corners:** an app that sets
+  `_NET_WM_WINDOW_OPACITY` on its window (terminals' opacity settings, `picom-trans`) was drawn
+  opaque when the window had a `corner-radius`. It dates from 0.2.0, when rounded corners came.
+
 ## 0.5.8 (2026-11-15)
 
 - **Input methods (IME):** fcitx5 and other input methods that speak input-method-v2 type Chinese,

@@ -78,6 +78,14 @@ impl X11 {
     /// A window that asks to start minimized (`WM_HINTS` IconicState) if
     /// `iconic`.
     fn window_in_state(&self, class: &str, size: (u16, u16), color: u32, iconic: bool) -> u32 {
+        let id = self.unmapped_window(class, size, color, iconic);
+        self.conn.map_window(id).unwrap();
+        self.conn.flush().unwrap();
+        id
+    }
+
+    /// `window_in_state`, not mapped yet: for properties set before.
+    fn unmapped_window(&self, class: &str, size: (u16, u16), color: u32, iconic: bool) -> u32 {
         let id = self.conn.generate_id().unwrap();
         self.conn
             .create_window(
@@ -138,8 +146,6 @@ impl X11 {
                 )
                 .unwrap();
         }
-        self.conn.map_window(id).unwrap();
-        self.conn.flush().unwrap();
         id
     }
 
@@ -949,4 +955,46 @@ fn mod_right_drag_resizes_an_x11_window_from_its_corner() {
     pila.release("right");
     pila.key_release("Super");
     pila.wait("the grab ends", |s| s["pointer"]["grabbed"] == false);
+}
+
+/// An X11 window's own opacity (`_NET_WM_WINDOW_OPACITY`, as compositing
+/// apps and `xprop`/`picom-trans` set it) over the background, with the
+/// window rule `config` (none, or rounded corners).
+fn x11_opacity_shows(config: &str) {
+    let mut pila = TestPila::with_config(config);
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.unmapped_window("Translucent", (300, 200), 0xff0000, false);
+    let opacity = x.atom("_NET_WM_WINDOW_OPACITY");
+    x.conn
+        .change_property32(
+            PropMode::REPLACE,
+            id,
+            opacity,
+            AtomEnum::CARDINAL,
+            &[u32::MAX / 2],
+        )
+        .unwrap();
+    x.conn.map_window(id).unwrap();
+    x.conn.flush().unwrap();
+    let state = pila.wait("the window", |s| x11_window(s, "Translucent").is_some());
+    let (wx, wy, w, h) = rect(&x11_window(&state, "Translucent").unwrap()["geometry"]);
+    // Red at half over the background ([31, 33, 38]): about [143, 16, 19].
+    pila.wait_pixel_is(
+        (wx + w / 2) as f64,
+        (wy + h / 2) as f64,
+        "red at half opacity over the background",
+        |[r, g, b, _]| (130..=156).contains(&r) && g < 30 && b < 30,
+    );
+}
+
+#[test]
+fn an_x11_windows_own_opacity_shows() {
+    x11_opacity_shows("");
+}
+
+#[test]
+fn an_x11_windows_own_opacity_shows_with_rounded_corners() {
+    x11_opacity_shows("[[window-rule]]\napp-id = \"Translucent\"\ncorner-radius = 24\n");
 }

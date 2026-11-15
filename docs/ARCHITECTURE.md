@@ -1139,7 +1139,8 @@ Key flows and invariants:
   show a square backdrop; radius
   at most half the shorter side and, with a bar, its height). `render::single_window_elements`
   then builds the window's elements itself (`rounded_window_elements`: popups first and unclipped, as
-  `Window::render_elements` does) and wraps its own surface elements that reach into a
+  `Window::render_elements` does, and an X11 window's own opacity, `render::own_opacity`, as
+  Smithay's `X11Surface::render_elements` does) and wraps its own surface elements that reach into a
   corner in `RoundedSurface`, whose `draw` overrides the default texture program with one
   that fades out the corner (`input_to_geo` inverts Smithay's `build_texture_mat`, so
   keep it in step with Smithay). Elements away from the corners stay plain (direct
