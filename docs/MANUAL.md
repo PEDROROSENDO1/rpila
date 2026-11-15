@@ -610,6 +610,9 @@ session, and `pila-check --help` lists the rest.
 |---|---|
 | The Pila session doesn't start | Pick another session at the login screen and read the log. `pila --check-config` rules out the configuration. |
 | A notification says the configuration is invalid | It gives the line and the problem; fix it and save. `pila --check-config` checks it again. A key binding must be under `[bindings]`. |
+| A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
+| Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
+| The play/pause key does nothing | Pila binds no media keys by default: `"XF86AudioPlay" = "spawn playerctl play-pause"` under `[bindings]` (needs `playerctl`), or your shell's command. |
 | `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Install `libnotify` and run a notification daemon (Noctalia, mako). |

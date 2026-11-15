@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- **GTK 4 apps no longer freeze after a dropdown or menu is opened a second time:** GTK hides a
+  popover by destroying its popup and opens the next one on the same surface, which Pila took
+  for one being hidden: it never told the new popup it could show itself, so the app drew
+  nothing, and its grab kept every click from the app (the button stayed pressed) until a key
+  was pressed. Reported by a tester in HandBrake and a text editor; it dates from 0.4.2.
+- **A key binding can repeat while its key is held:** written as a table,
+  `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`,
+  it runs again after `repeat-delay` and at `repeat-rate` (`[keyboard]`) until the key is
+  released or another one is pressed: for volume and brightness keys. The plain form is
+  unchanged and runs once a press. Only keys repeat, not a wheel notch or a modifier alone.
+- **Num Lock on at startup:** `numlock = true` under `[keyboard]`. Pila also turns it on again when
+  a change to `[keyboard]` loads another keymap, which starts with every lock off.
+- **A quick turn of the mouse wheel switches one workspace, not all of them:** Mod and the wheel
+  ran the binding for every notch, and a light flick is many notches. A wheel binding now doesn't
+  run again within `wheel-binding-cooldown` (`[input]`, 150 ms by default; 0 runs it each
+  notch) of its last run; the notches in between are dropped, and don't reach the app either.
+- **An `[[output]]` section for a monitor that already has one is a warning:** only the first
+  one counted, and the second's settings did nothing, silently. `pila --check-config` prints the
+  warning after OK, and a notification says it at startup and on reload.
+
 ## 0.5.6 (2026-11-14)
 
 - **`corner-radius` no longer gives GTK apps a double corner:** apps that draw their own shadow

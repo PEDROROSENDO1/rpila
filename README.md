@@ -123,11 +123,12 @@ A short report helps even if everything works:
   (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full shell
   such as Noctalia or Dux Shell. Sandboxed apps (Flatpak) don't see the protocols that read the
   screen or act on other windows and input (wp-security-context).
-- **Input:** keyboard layout and repeat, touchpad and mouse settings (tap, natural scrolling,
+- **Input:** keyboard layout, repeat and Num Lock at startup, touchpad and mouse settings (tap, natural scrolling,
   speed, disable while typing, ...), three-finger swipes to switch windows and maximize,
   four-finger swipes to switch workspaces (configurable), other touchpad gestures for apps,
   pointer lock and confinement for games, shaking the pointer to find it (`[cursor]`), any key
-  bindable (media keys included), and the mouse wheel with modifiers.
+  bindable (media keys included, repeating while held if asked), and the mouse wheel with
+  modifiers.
 - **Configuration** in one TOML file, applied live when saved.
 - **Scripting:** `pila msg` lists windows, monitors and workspaces as text or JSON and runs any
   action ([docs/IPC.md](https://github.com/igalmarino/pila/blob/main/docs/IPC.md)).
