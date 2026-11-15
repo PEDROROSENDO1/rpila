@@ -264,8 +264,7 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
   `unmap_window`/`raise_window`. The tests' headless check (`PILA_HEADLESS_CHECK_REDRAWS`)
   panics on an output that changed with no redraw asked. An idle callback inserted outside
   an event source must ping `Pila::wake`, or it runs after the next event, however late;
-  redraws requested from `after_frames` go through `defer_redraws` (`step_animations` does
-  the same by hand).
+  redraws requested from `after_frames` go through `defer_redraws`.
 - **Session lock:** the focus types (`focus.rs`) refuse input to anything but a lock
   surface while locked, and `Pila::under` hits nothing else; a new path that tries panics in
   debug builds ("refused while locked"). A new path still refuses what it shouldn't do while

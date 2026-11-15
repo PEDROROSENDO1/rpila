@@ -780,30 +780,22 @@ impl Pila {
     }
 
     /// Redraw `outputs` (`None`: every one) for the next frame of something
-    /// animating, from `after_frames`.
+    /// animating, from `after_frames` (so `defer_redraws`).
     fn redraw_after_frames(&mut self, outputs: Option<Vec<Output>>) {
-        // From an idle callback, with the loop woken so it runs right
-        // away (calloop wouldn't): this runs after the event loop's
-        // dispatch, too late for the winit source to see a redraw
-        // request before the loop sleeps.
-        // Only the outputs they show on, and as what may bring nothing
-        // (`redraw::Content::Maybe`): the next frame is for the next
-        // vblank, not for now. An output with a frame in flight draws it
-        // at its vblank anyway; one whose redraw just found nothing new
-        // (nothing animates there, or an animation is waiting for its
-        // client) waits for it, where asking for it as a change would
-        // redraw it as fast as this runs, every redraw calling this
-        // again. An animation's first frame is asked as a change when
+        // As what may bring nothing (`redraw::Content::Maybe`): the next
+        // frame is for the next vblank, not for now. An output with a frame
+        // in flight draws it at its vblank anyway; one whose redraw just
+        // found nothing new (nothing animates there, or an animation is
+        // waiting for its client) waits for it, where asking for it as a
+        // change would redraw it as fast as this runs, every redraw calling
+        // this again. An animation's first frame is asked as a change when
         // it starts (`queue_redraw`, every output).
-        self.deferred_redraw_idles += 1;
-        self.loop_handle.insert_idle(move |state| {
-            state.deferred_redraw_idles = state.deferred_redraw_idles.saturating_sub(1);
-            let outputs = outputs.unwrap_or_else(|| state.space.outputs().cloned().collect());
-            for output in outputs {
-                state.request_redraw(&output, false);
+        let outputs = outputs.unwrap_or_else(|| self.space.outputs().cloned().collect());
+        self.defer_redraws(|state| {
+            for output in &outputs {
+                state.request_redraw_as(output, crate::redraw::Content::Maybe);
             }
         });
-        self.wake.ping();
     }
 
     /// The outputs the animations in progress show on, `None` for every one

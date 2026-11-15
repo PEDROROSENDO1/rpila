@@ -143,8 +143,7 @@ pub struct Pila {
     pub capture_due: bool,
     /// Redraws held back by `defer_redraws` (`redraw.rs`), while it runs.
     pub deferred_redraws: Option<Vec<crate::redraw::Deferred>>,
-    /// The idle callbacks `defer_redraws` and `redraw_after_frames` inserted
-    /// that haven't run yet:
+    /// The idle callbacks `defer_redraws` inserted that haven't run yet:
     /// redraws asked for and not yet queued, which the tests' state
     /// (`redraw_pending`) and redraw check count as asked.
     pub deferred_redraw_idles: usize,

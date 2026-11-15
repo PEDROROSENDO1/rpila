@@ -179,8 +179,8 @@ Key flows and invariants:
   that has damage anyway is suspect, and Pila panics if no request explains it within 20 ms (a
   request may come later in the same iteration). Not while animating or a lock is pending, while
   an animation whose time is up is still held (`Pila::animations_held`: `step_animations` hasn't
-  asked for its last frame yet), nor while an idle callback of `defer_redraws` or
-  `redraw_after_frames` hasn't run (`Pila::deferred_redraw_idles`): those redraws are asked for,
+  asked for its last frame yet), nor while an idle callback of `defer_redraws`
+  hasn't run (`Pila::deferred_redraw_idles`): those redraws are asked for,
   not yet queued. The state counts both too: such an animation as `running`, such a redraw as
   `redraw_pending`, so a test's `settle` doesn't stop before them. With
   `PILA_HEADLESS_CHECK_INVARIANTS=1` (also set by the harness), every 50 ms
@@ -391,7 +391,7 @@ Key flows and invariants:
   redraw itself is an idle `render_all`), and anything else inserting an idle callback
   outside an event source (e.g. from `after_frames`, the `event_loop.run` callback) must
   ping it too. Redraws requested from `after_frames` are held back into an
-  idle callback plus the ping (`defer_redraws`; `step_animations` does it by hand): nested, the winit source has already checked for redraw
+  idle callback plus the ping (`defer_redraws`): nested, the winit source has already checked for redraw
   requests by then. Smithay calls `cursor_image` with the pointer locked, so its redraw
   (where the pointer is) goes through an idle callback too; the same named or hidden cursor
   again (some clients set it on every motion) asks for none (a surface may bring a new hotspot).
