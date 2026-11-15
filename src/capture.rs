@@ -273,13 +273,9 @@ impl Captures {
             };
             session.composited = true;
             let damage = match damage {
-                Some(damage) if session.captured_once => {
-                    if damage.is_empty() {
-                        continue;
-                    }
-                    damage
-                }
-                Some(_) => vec![Rectangle::from_size(size)],
+                // A new tracker's first damage is all of it.
+                Some(damage) if damage.is_empty() => continue,
+                Some(damage) => damage,
                 None => {
                     session.tracker = None;
                     vec![Rectangle::from_size(size)]
@@ -310,13 +306,13 @@ pub struct Session {
     paint_cursors: bool,
     /// The size and scale last advertised to the client.
     geometry: Option<(Size<i32, Physical>, Scale<f64>)>,
-    /// Damage since the last copied frame.
+    /// Damage since the last copied frame; `None` before the first (or
+    /// after `start_over`): a new tracker's first damage is the whole frame.
     tracker: Option<OutputDamageTracker>,
     /// The session's frame object, if the client has one.
     frame: Option<ExtImageCopyCaptureFrameV1>,
     /// `frame` asked to be captured and hasn't been yet.
     pending: bool,
-    captured_once: bool,
     stopped: bool,
     /// The frame its output just composited filled or checked its pending
     /// frame in this event-loop iteration (`Captures::take_composited`):
@@ -361,7 +357,6 @@ impl Session {
     /// still source would never send it.
     fn start_over(&mut self) {
         self.tracker = None;
-        self.captured_once = false;
     }
 
     fn fail(&mut self, reason: FailureReason) {
@@ -595,13 +590,9 @@ impl Pila {
                 }
             };
         let damage = match damage {
-            Some(damage) if session.captured_once => {
-                if damage.is_empty() {
-                    return;
-                }
-                damage
-            }
-            Some(_) => vec![Rectangle::from_size(size)],
+            // A new tracker's first damage is all of it.
+            Some(damage) if damage.is_empty() => return,
+            Some(damage) => damage,
             // What changed is unknown: all of it, with a new tracker.
             None => {
                 session.tracker = None;
@@ -622,7 +613,6 @@ impl Pila {
             }
         };
         session.pending = false;
-        session.captured_once = true;
         let resource = session.resource.clone();
         self.send_copied(resource, frame, damage, copied, shown_on.as_ref());
     }
@@ -687,7 +677,6 @@ impl Pila {
             }
         };
         session.pending = false;
-        session.captured_once = true;
         self.send_copied(job.resource, job.frame, job.damage, copied, Some(output));
     }
 
@@ -1229,7 +1218,6 @@ impl Dispatch<ExtImageCopyCaptureManagerV1, ()> for Pila {
                     tracker: None,
                     frame: None,
                     pending: false,
-                    captured_once: false,
                     stopped: false,
                     composited: false,
                 };
@@ -1283,7 +1271,6 @@ impl Dispatch<ExtImageCopyCaptureCursorSessionV1, Mutex<bool>> for Pila {
                     tracker: None,
                     frame: None,
                     pending: false,
-                    captured_once: false,
                     stopped: false,
                     composited: false,
                 };
