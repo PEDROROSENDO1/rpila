@@ -251,9 +251,7 @@ struct OutputSurface {
     connector: connector::Handle,
     /// The mode in use, to set the CRTC up again.
     mode: DrmMode,
-    /// Disabled (`[[output]]` or a display tool): no surface, no global,
-    /// not mapped; still listed as a head.
-    enabled: bool,
+    /// Its `wl_output` global: `None` while disabled (`enabled`).
     global: Option<GlobalId>,
     /// A frame was queued and its vblank hasn't arrived yet.
     frame_pending: bool,
@@ -355,6 +353,12 @@ struct Request {
 }
 
 impl OutputSurface {
+    /// Not disabled (`[[output]]` or a display tool): a disabled one has no
+    /// surface, no global and isn't mapped, but is still listed as a head.
+    fn enabled(&self) -> bool {
+        self.global.is_some()
+    }
+
     /// Something changed on this output at `now`; `content`: surely shows.
     fn ask_redraw(&mut self, content: crate::redraw::Content, now: Duration) {
         self.redraw_needed = true;
@@ -696,7 +700,7 @@ impl UdevData {
                     physical: (props.size.w, props.size.h),
                     current_mode: surface.modes.iter().position(|m| *m == surface.mode),
                     modes,
-                    enabled: surface.enabled,
+                    enabled: surface.enabled(),
                     position: (loc.x, loc.y),
                     transform: surface.output.current_transform(),
                     scale: surface.output.current_scale().fractional_scale(),

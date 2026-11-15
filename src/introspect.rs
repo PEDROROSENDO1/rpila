@@ -192,13 +192,13 @@ impl Pila {
                         "name": output.name(),
                         "make": output.physical_properties().make,
                         "model": output.physical_properties().model,
-                        "enabled": o.enabled,
+                        "enabled": o.enabled(),
                         "power": o.power,
                         "geometry": self.space.output_geometry(output).map(rect),
                         "mode": mode.map(|m| json!({ "w": m.size.w, "h": m.size.h, "refresh_mhz": m.refresh })),
                         "scale": output.current_scale().fractional_scale(),
                         "transform": format!("{:?}", output.current_transform()),
-                        "usable": o.enabled.then(|| {
+                        "usable": o.enabled().then(|| {
                             let map = layer_map_for_output(output);
                             let zone = map.non_exclusive_zone();
                             let loc = self.space.output_geometry(output).unwrap_or_default().loc;

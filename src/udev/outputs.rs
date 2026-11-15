@@ -333,7 +333,7 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
         if let Some(on) = config.and_then(|c| c.adaptive_sync) {
             vrr.push((id, on));
         }
-        if !surface.enabled {
+        if !surface.enabled() {
             continue;
         }
         right_edge = right_edge.max(loc.x + width);
@@ -432,7 +432,7 @@ fn retrain_bad_links(state: &mut Pila) {
     let bad: Vec<(OutputId, Output, Option<property::Handle>)> = data
         .outputs
         .iter()
-        .filter(|(_, s)| s.enabled && s.drm_output.is_some())
+        .filter(|(_, s)| s.enabled() && s.drm_output.is_some())
         .filter_map(|(id, s)| {
             let (prop, value) = link_status(&data.devices.get(&id.node)?.drm, s.connector)?;
             (value == LINK_STATUS_BAD).then(|| (*id, s.output.clone(), Some(prop)))
@@ -565,7 +565,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             Some(Backend::Udev(data)) => data
                 .outputs
                 .values()
-                .filter(|s| s.enabled)
+                .filter(|s| s.enabled())
                 .map(|s| {
                     let o = &s.output;
                     let scale = o.current_scale().fractional_scale();
@@ -617,7 +617,6 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             drm_output: None,
             connector: connector.handle(),
             mode: drm_mode,
-            enabled: false,
             global: None,
             frame_pending: false,
             last_vblank: None,
@@ -722,7 +721,7 @@ pub(super) fn enable_output(state: &mut Pila, id: OutputId) -> bool {
     else {
         return false;
     };
-    if surface.enabled {
+    if surface.enabled() {
         return true;
     }
     let name = surface.output.name();
@@ -743,7 +742,6 @@ pub(super) fn enable_output(state: &mut Pila, id: OutputId) -> bool {
         })
         .flatten();
     surface.drm_output = Some(drm_output);
-    surface.enabled = true;
     surface.frame_pending = false;
     surface.redraw_needed = true;
     surface.recovery = Recovery::default();
@@ -767,10 +765,9 @@ pub(super) fn disable_output(state: &mut Pila, id: OutputId) {
     let Some(surface) = data.outputs.get_mut(&id) else {
         return;
     };
-    if !surface.enabled {
+    if !surface.enabled() {
         return;
     }
-    surface.enabled = false;
     surface.drm_output = None;
     surface.scanout_feedback = None;
     surface.frame_pending = false;
@@ -842,7 +839,7 @@ pub(super) fn keep_a_screen_on(state: &mut Pila) {
     let Some(Backend::Udev(data)) = &state.backend else {
         return;
     };
-    if data.outputs.values().any(|s| s.enabled) {
+    if data.outputs.values().any(|s| s.enabled()) {
         return;
     }
     let internal: Vec<OutputId> = data
@@ -877,10 +874,9 @@ pub(super) fn connector_disconnected(state: &mut Pila, id: OutputId) {
     // Before it's unmapped: the windows of the monitor that went away move
     // onto the built-in screen, if that has to come back.
     keep_a_screen_on(state);
+    // Enabled: it has a global, and is mapped.
     if let Some(global) = surface.global {
         crate::state::retire_global(&state.display_handle, &state.loop_handle, global);
-    }
-    if surface.enabled {
         state.space.unmap_output(&surface.output);
         state.output_removed(&surface.output);
     }

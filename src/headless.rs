@@ -153,7 +153,7 @@ pub fn parse_output_spec(spec: &str) -> Result<OutputSpec, String> {
 pub struct HeadlessOutput {
     pub output: Output,
     pub modes: Vec<Mode>,
-    pub enabled: bool,
+    /// Its `wl_output` global: `None` while disabled (`enabled`).
     global: Option<GlobalId>,
     /// What the output shows: the last frame drawn.
     texture: Option<GlesTexture>,
@@ -272,7 +272,7 @@ impl HeadlessData {
                         })
                         .collect(),
                     current_mode: current.and_then(|c| o.modes.iter().position(|m| *m == c)),
-                    enabled: o.enabled,
+                    enabled: o.enabled(),
                     position: (loc.x, loc.y),
                     transform: o.output.current_transform(),
                     scale: o.output.current_scale().fractional_scale(),
@@ -374,6 +374,11 @@ impl HeadlessData {
 }
 
 impl HeadlessOutput {
+    /// Not disabled (`[[output]]` or a display tool).
+    pub fn enabled(&self) -> bool {
+        self.global.is_some()
+    }
+
     fn ask_redraw(&mut self) {
         self.redraw_needed = true;
         // A request explains the damage the check found.
@@ -596,7 +601,6 @@ pub fn add_output(state: &mut Pila, spec: &OutputSpec) -> bool {
         damage_tracker: OutputDamageTracker::from_output(&output),
         output,
         modes,
-        enabled: false,
         global: None,
         texture: None,
         redraw_needed: true,
@@ -629,11 +633,9 @@ pub fn remove_output(state: &mut Pila, name: &str) -> bool {
     };
     let removed = data.outputs.remove(index);
     state.outputs.monitors.remove(name);
+    info!(name, "output disconnected");
     if let Some(global) = removed.global {
         crate::state::retire_global(&state.display_handle, &state.loop_handle, global);
-    }
-    info!(name, "output disconnected");
-    if removed.enabled {
         state.space.unmap_output(&removed.output);
         state.output_removed(&removed.output);
     }
@@ -706,8 +708,7 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
         );
         o.redraw_needed = true;
         if !enabled {
-            if o.enabled {
-                o.enabled = false;
+            if o.enabled() {
                 o.drawn = false;
                 if let Some(global) = o.global.take() {
                     crate::state::retire_global(&display_handle, &loop_handle, global);
@@ -717,8 +718,7 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
             }
             continue;
         }
-        if !o.enabled {
-            o.enabled = true;
+        if !o.enabled() {
             o.global = Some(o.output.create_global::<Pila>(&display_handle));
             info!(name = o.output.name(), "output enabled");
         }
@@ -858,7 +858,7 @@ fn check_redraws(state: &mut Pila) {
         .outputs
         .iter()
         .enumerate()
-        .filter(|(_, o)| o.enabled && o.power && o.drawn && !o.redraw_needed)
+        .filter(|(_, o)| o.enabled() && o.power && o.drawn && !o.redraw_needed)
         .map(|(index, _)| index)
         .collect();
     if candidates.is_empty() {
@@ -939,7 +939,7 @@ fn prepare(state: &mut Pila, index: usize, lock_pending: bool) -> Prepared {
         return Err(false);
     };
     // An output that is off or asleep shows nothing, locked or not.
-    if !o.enabled || !o.power {
+    if !o.enabled() || !o.power {
         return Err(true);
     }
     if !o.redraw_needed && !lock_pending {
@@ -1310,7 +1310,7 @@ pub fn redraw_pending(data: &HeadlessData) -> bool {
         || data
             .outputs
             .iter()
-            .any(|o| o.enabled && o.power && o.redraw_needed)
+            .any(|o| o.enabled() && o.power && o.redraw_needed)
 }
 
 #[cfg(test)]
