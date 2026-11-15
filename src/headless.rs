@@ -162,7 +162,6 @@ pub struct HeadlessOutput {
     redraw_needed: bool,
     /// The texture holds a frame (else the next one is drawn whole).
     drawn: bool,
-    last_frame: Option<Instant>,
     /// The last redraw, with something new or not: an output redraws at most
     /// once per refresh.
     last_render: Option<Instant>,
@@ -602,7 +601,6 @@ pub fn add_output(state: &mut Pila, spec: &OutputSpec) -> bool {
         texture: None,
         redraw_needed: true,
         drawn: false,
-        last_frame: None,
         last_render: None,
         check,
         frames: 0,
@@ -1095,11 +1093,9 @@ fn render_output(
         return false;
     };
     o.drawn = true;
-    let now = Instant::now();
     let period = crate::frame_stats::refresh_period(&output);
     if damaged {
         o.frames += 1;
-        o.last_frame = Some(now);
     } else {
         o.idle += 1;
     }

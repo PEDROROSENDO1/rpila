@@ -11,8 +11,6 @@
 //! hand, or nested as a window inside another Wayland or X11 session
 //! (`winit.rs`).
 
-#![allow(irrefutable_let_patterns)]
-
 pub mod animation;
 pub mod backend;
 pub mod bell;
