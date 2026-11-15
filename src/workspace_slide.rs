@@ -360,8 +360,8 @@ impl Pila {
             .is_some_and(|slide| !slide.progress.done(now))
     }
 
-    /// Drop a finished slide (`step_animations`); whether there was one.
-    pub fn end_finished_slide(&mut self, now: Duration) -> bool {
+    /// Drop a finished slide (`step_animations`).
+    pub fn end_finished_slide(&mut self, now: Duration) {
         let done = self
             .workspace_slide
             .as_ref()
@@ -370,6 +370,5 @@ impl Pila {
             let slide = self.workspace_slide.take();
             self.retire_slide(slide);
         }
-        done
     }
 }

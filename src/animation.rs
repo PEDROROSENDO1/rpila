@@ -741,7 +741,8 @@ impl Pila {
             }
         }
         let now = self.animation_time();
-        let before = self.animation_count();
+        // Held until now: those that end get their last frame.
+        let held = self.animations_held();
         let animations = &mut self.animations;
         animations.appearing.retain(|a| {
             let done = a.visibility.done(now);
@@ -772,10 +773,8 @@ impl Pila {
             }
             !done
         });
-        let slide_ended = self.end_finished_slide(now);
-        let left = self.animation_count() + usize::from(self.workspace_slide.is_some());
-        let before = before + usize::from(slide_ended);
-        if left > 0 || left != before || cursor.is_some() {
+        self.end_finished_slide(now);
+        if held || cursor.is_some() {
             self.redraw_after_frames(outputs);
         }
     }
