@@ -564,41 +564,10 @@ impl XwmHandler for Pila {
         self.begin_resize(window, edges.into(), start, SERIAL_COUNTER.next_serial());
     }
 
+    // Selections (clipboard, primary) the other way: X11 apps set and read
+    // them. Only the X11 app with keyboard focus may read, like Wayland's
+    // data device.
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
-        self.x11_selection_access(xwm)
-    }
-
-    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
-        self.x11_new_selection(selection, mime_types);
-    }
-
-    fn send_selection(
-        &mut self,
-        _xwm: XwmId,
-        selection: SelectionTarget,
-        mime_type: String,
-        fd: OwnedFd,
-    ) {
-        self.x11_send_selection(selection, mime_type, fd);
-    }
-
-    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
-        self.x11_cleared_selection(selection);
-    }
-
-    fn move_request(&mut self, _xwm: XwmId, surface: X11Surface, _button: u32) {
-        let (Some(window), Some(start)) = (self.window_for_x11(&surface), x11_grab(self, &surface))
-        else {
-            return;
-        };
-        self.begin_move(window, start, SERIAL_COUNTER.next_serial());
-    }
-}
-
-// Selections (clipboard, primary) the other way: X11 apps set and read them.
-// Only the X11 app with keyboard focus may read, like Wayland's data device.
-impl Pila {
-    fn x11_selection_access(&self, xwm: XwmId) -> bool {
         let focus = self.seat.get_keyboard().and_then(|k| k.current_focus());
         let allowed = matches!(
             &focus,
@@ -608,7 +577,7 @@ impl Pila {
         allowed
     }
 
-    fn x11_new_selection(&mut self, selection: SelectionTarget, mime_types: Vec<String>) {
+    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
         match selection {
             SelectionTarget::Clipboard => {
                 set_data_device_selection(&self.display_handle, &self.seat, mime_types, ())
@@ -619,7 +588,13 @@ impl Pila {
         }
     }
 
-    fn x11_send_selection(&mut self, selection: SelectionTarget, mime_type: String, fd: OwnedFd) {
+    fn send_selection(
+        &mut self,
+        _xwm: XwmId,
+        selection: SelectionTarget,
+        mime_type: String,
+        fd: OwnedFd,
+    ) {
         let result = match selection {
             SelectionTarget::Clipboard => {
                 request_data_device_client_selection(&self.seat, mime_type, fd)
@@ -637,6 +612,21 @@ impl Pila {
         }
     }
 
+    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
+        self.x11_cleared_selection(selection);
+    }
+
+    fn move_request(&mut self, _xwm: XwmId, surface: X11Surface, _button: u32) {
+        let (Some(window), Some(start)) = (self.window_for_x11(&surface), x11_grab(self, &surface))
+        else {
+            return;
+        };
+        self.begin_move(window, start, SERIAL_COUNTER.next_serial());
+    }
+}
+
+impl Pila {
+    /// An X11 app gave up a selection it set (or Xwayland went away).
     fn x11_cleared_selection(&mut self, selection: SelectionTarget) {
         // Only clear what X11 set (pila's selection user data); a Wayland
         // client's selection stays.
