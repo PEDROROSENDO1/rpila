@@ -18,10 +18,7 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{Logical, Rectangle},
-    wayland::{
-        compositor::get_parent,
-        xdg_system_bell::{XdgSystemBellHandler, XdgSystemBellState},
-    },
+    wayland::xdg_system_bell::{XdgSystemBellHandler, XdgSystemBellState},
 };
 use tracing::debug;
 
@@ -69,17 +66,6 @@ pub fn init_global(dh: &smithay::reexports::wayland_server::DisplayHandle) {
 }
 
 impl Pila {
-    /// The window `surface` belongs to (a subsurface or popup counts as its
-    /// window's).
-    fn window_of(&self, surface: &WlSurface) -> Option<Window> {
-        let mut root = surface.clone();
-        while let Some(parent) = get_parent(&root) {
-            root = parent;
-        }
-        let root = self.popup_root(&root).unwrap_or(root);
-        self.window_for_surface(&root)
-    }
-
     fn flash_window(&mut self, window: &Window) {
         let flash = window.user_data().get_or_insert(BellFlash::default);
         flash.until.set(Some(Instant::now() + FLASH));
@@ -101,7 +87,7 @@ impl XdgSystemBellHandler for Pila {
         }
         let window = surface
             .as_ref()
-            .and_then(|s| self.window_of(s))
+            .and_then(|s| self.window_of_surface(s))
             .or_else(|| self.focused_window());
         debug!(window = window.is_some(), "bell");
         if let Some(window) = window {

@@ -950,6 +950,18 @@ impl Pila {
         find_popup_root_surface(&popup).ok()
     }
 
+    /// The surface `surface` is part of at the top: its root (a subsurface's
+    /// parent's, and so on), and a popup's window or layer surface.
+    pub(crate) fn owner_surface(&self, surface: &WlSurface) -> WlSurface {
+        let root = crate::redraw::root_surface(surface);
+        self.popup_root(&root).unwrap_or(root)
+    }
+
+    /// The window `surface` is part of: itself, a subsurface or a popup of it.
+    pub(crate) fn window_of_surface(&self, surface: &WlSurface) -> Option<Window> {
+        self.window_for_surface(&self.owner_surface(surface))
+    }
+
     /// The output under `pos`, or the first output.
     pub fn output_at(&self, pos: Point<f64, Logical>) -> Option<Output> {
         self.space

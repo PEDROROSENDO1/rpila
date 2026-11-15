@@ -30,8 +30,7 @@ use smithay::{
     utils::{Logical, Rectangle, Scale, Transform},
     wayland::{
         compositor::{
-            get_parent, send_surface_state, with_surface_tree_downward, SurfaceData,
-            TraversalAction,
+            send_surface_state, with_surface_tree_downward, SurfaceData, TraversalAction,
         },
         fractional_scale::with_fractional_scale,
     },
@@ -79,11 +78,7 @@ impl Pila {
     /// The output the window, popup or layer surface `surface` belongs to is
     /// on (for a window on several, the first), if it's mapped.
     pub fn output_for_surface(&self, surface: &WlSurface) -> Option<Output> {
-        let mut root = surface.clone();
-        while let Some(parent) = get_parent(&root) {
-            root = parent;
-        }
-        let root = self.popup_root(&root).unwrap_or(root);
+        let root = self.owner_surface(surface);
         if let Some(window) = self.window_for_surface(&root) {
             return self.window_output(&window);
         }

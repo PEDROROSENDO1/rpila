@@ -13,9 +13,8 @@ use smithay::{
     wayland::{
         buffer::BufferHandler,
         compositor::{
-            add_blocker, add_pre_commit_hook, get_parent, is_sync_subsurface, with_states,
-            BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
-            SurfaceAttributes,
+            add_blocker, add_pre_commit_hook, is_sync_subsurface, with_states, BufferAssignment,
+            CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes,
         },
         dmabuf::{get_dmabuf, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
         drm_syncobj::{DrmSyncobjCachedState, DrmSyncobjHandler, DrmSyncobjState},
@@ -61,11 +60,7 @@ impl CompositorHandler for Pila {
         self.commit_paced(surface);
 
         if !is_sync_subsurface(surface) {
-            let mut root = surface.clone();
-            while let Some(parent) = get_parent(&root) {
-                root = parent;
-            }
-            if let Some(window) = self.window_for_surface(&root) {
+            if let Some(window) = self.window_for_surface(&crate::redraw::root_surface(surface)) {
                 window.on_commit();
                 self.geometry_committed(&window);
             }

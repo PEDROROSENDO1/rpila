@@ -15,8 +15,8 @@ use smithay::{
     utils::{Logical, Point, Size},
     wayland::{
         compositor::{
-            get_parent, with_surface_tree_downward, BufferAssignment, SubsurfaceCachedState,
-            SurfaceAttributes, SurfaceData, TraversalAction, SUBSURFACE_ROLE,
+            with_surface_tree_downward, BufferAssignment, SubsurfaceCachedState, SurfaceAttributes,
+            SurfaceData, TraversalAction, SUBSURFACE_ROLE,
         },
         shell::{
             wlr_layer::{ExclusiveZone, LayerSurfaceCachedState, LAYER_SURFACE_ROLE},
@@ -50,10 +50,7 @@ fn past(what: &str, value: impl std::fmt::Debug) -> String {
 /// is a protocol error, and is clamped or dropped so that what applies
 /// before the client is gone is within it.
 pub fn check_commit(surface: &wl_surface::WlSurface) {
-    let mut root = surface.clone();
-    while let Some(parent) = get_parent(&root) {
-        root = parent;
-    }
+    let root = crate::redraw::root_surface(surface);
     let errors = std::cell::RefCell::new(Vec::new());
     with_surface_tree_downward(
         &root,

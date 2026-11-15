@@ -17,7 +17,7 @@ use smithay::{
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::{Logical, Point, Rectangle},
     wayland::{
-        compositor::{get_parent, RegionAttributes},
+        compositor::RegionAttributes,
         pointer_constraints::{
             with_pointer_constraint, PointerConstraint, PointerConstraintsHandler,
         },
@@ -26,7 +26,7 @@ use smithay::{
     },
 };
 
-use crate::Pila;
+use crate::{redraw::root_surface, Pila};
 
 /// What the active constraint (if any) allows for the next pointer motion.
 pub enum Constraint {
@@ -35,14 +35,6 @@ pub enum Constraint {
     /// Motion must stay on the surface, and inside the region if there's one
     /// (surface-local coordinates).
     Confined(Option<RegionAttributes>),
-}
-
-fn root(surface: &WlSurface) -> WlSurface {
-    let mut root = surface.clone();
-    while let Some(parent) = get_parent(&root) {
-        root = parent;
-    }
-    root
 }
 
 /// Whether the surface-local point `local` is in the constraint's region.
@@ -110,7 +102,7 @@ impl Pila {
         origin: Point<f64, Logical>,
         pos: Point<f64, Logical>,
     ) {
-        if self.is_locked() || !self.has_keyboard_focus(&root(surface)) {
+        if self.is_locked() || !self.has_keyboard_focus(&root_surface(surface)) {
             return;
         }
         let Some(pointer) = self.seat.get_pointer() else {
@@ -137,7 +129,7 @@ impl Pila {
             return;
         };
         let focused_root = focused.map(|f| self.popup_root(f).unwrap_or_else(|| f.clone()));
-        if surface.is_alive() && focused_root.as_ref() == Some(&root(&surface)) {
+        if surface.is_alive() && focused_root.as_ref() == Some(&root_surface(&surface)) {
             return;
         }
         self.input.constrained = None;

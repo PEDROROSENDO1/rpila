@@ -13,7 +13,6 @@ use std::collections::HashSet;
 use smithay::{
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     wayland::{
-        compositor::get_parent,
         idle_inhibit::IdleInhibitHandler,
         idle_notify::{IdleNotifierHandler, IdleNotifierState},
     },
@@ -48,10 +47,7 @@ impl Pila {
 
     /// Whether `surface` belongs to a mapped window or a layer surface.
     fn is_visible(&self, surface: &WlSurface) -> bool {
-        let mut root = surface.clone();
-        while let Some(parent) = get_parent(&root) {
-            root = parent;
-        }
+        let root = crate::redraw::root_surface(surface);
         let mapped_window = self
             .space
             .elements()
