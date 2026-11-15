@@ -20,7 +20,6 @@
 //!   `cancelled`.
 //! - `pixels` `x`, `y`, `w`, `h` (global logical): the pixels of the last
 //!   frame, as `rgba` (a flat array) with its physical `width`/`height`.
-//! - `screenshot` `output`, `path`: the output's last frame as a PPM file.
 //! - `output_add` `spec` (`NAME:WxH[@HZ][=MAKE/MODEL[/SERIAL]]`),
 //!   `output_remove` `name`.
 //! - `output_fail_next`: the next time outputs are applied, the backend fails.
@@ -270,14 +269,6 @@ fn handle(state: &mut Pila, request: &Value) -> Result<Value, String> {
             json!({})
         }
         "pixels" => return pixels(state, request),
-        "screenshot" => {
-            screenshot(
-                state,
-                str_field(request, "output")?,
-                str_field(request, "path")?,
-            )?;
-            json!({})
-        }
         "output_add" => {
             let spec = headless::parse_output_spec(str_field(request, "spec")?)?;
             if !headless::add_output(state, &spec) {
@@ -514,24 +505,4 @@ fn pixels(state: &mut Pila, request: &Value) -> Result<Value, String> {
     };
     let rgba = data.read_pixels(&output, rect)?;
     Ok(json!({ "width": rect.size.w, "height": rect.size.h, "rgba": rgba }))
-}
-
-fn screenshot(state: &mut Pila, name: &str, path: &str) -> Result<(), String> {
-    let output = state
-        .space
-        .outputs()
-        .find(|o| o.name() == name)
-        .cloned()
-        .ok_or("no such output")?;
-    let mode = output.current_mode().ok_or("no mode")?;
-    let rect = Rectangle::from_size((mode.size.w, mode.size.h).into());
-    let Some(Backend::Headless(data)) = &mut state.backend else {
-        return Err("not headless".into());
-    };
-    let rgba = data.read_pixels(&output, rect)?;
-    let mut ppm = format!("P6\n{} {}\n255\n", mode.size.w, mode.size.h).into_bytes();
-    for px in rgba.as_chunks::<4>().0 {
-        ppm.extend_from_slice(&px[..3]);
-    }
-    std::fs::write(path, ppm).map_err(|e| e.to_string())
 }
