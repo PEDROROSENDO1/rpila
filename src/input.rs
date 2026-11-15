@@ -207,6 +207,12 @@ impl Pila {
         };
         let inhibited = self.shortcuts_inhibited();
 
+        // What the filter leaves for after the key was handled: a press for
+        // the window menu, a binding's repeat to start, a tap's action (run
+        // once the client got the release).
+        let mut menu_key = None;
+        let mut repeat_next = None;
+        let mut tap_action = None;
         // `input_from_source`, but while locked a key that isn't Pila's goes
         // to the lock surface even if an input method holds the keyboard: it
         // mustn't see what's typed there (`input_method.rs`).
@@ -253,7 +259,7 @@ impl Pila {
                 // The window menu takes every press while it's open.
                 if key_state == KeyState::Pressed && state.window_menu.is_some() {
                     state.input.suppressed_keys.insert(keycode);
-                    state.input.menu_key = Some(handle.modified_sym());
+                    menu_key = Some(handle.modified_sym());
                     return FilterResult::Intercept(None);
                 }
                 // While locked, everything goes to the locker; debug builds
@@ -287,7 +293,7 @@ impl Pila {
                         if let Some(action) = action {
                             state.input.suppressed_keys.insert(keycode);
                             if sym.is_some_and(|sym| state.config.repeats(sym, mods)) {
-                                state.input.repeat_next = Some((keycode, action.clone()));
+                                repeat_next = Some((keycode, action.clone()));
                             }
                             return FilterResult::Intercept(Some(action));
                         }
@@ -304,7 +310,7 @@ impl Pila {
                             .mod_tap
                             .is_some_and(|tap| tap.keycode == keycode) =>
                     {
-                        state.input.tap_action = state
+                        tap_action = state
                             .input
                             .mod_tap
                             .take()
@@ -328,16 +334,16 @@ impl Pila {
 
         // Intercepted (`Some`), or forwarded to the client.
         let mut acted = action.is_some();
-        if let Some(sym) = self.input.menu_key.take() {
+        if let Some(sym) = menu_key {
             self.window_menu_key(sym);
         }
         if let Some(action) = action.flatten() {
             self.run_action(action, serial);
         }
-        if let Some((keycode, action)) = self.input.repeat_next.take() {
+        if let Some((keycode, action)) = repeat_next {
             self.start_binding_repeat(keycode, action);
         }
-        if let Some(action) = self.input.tap_action.take() {
+        if let Some(action) = tap_action {
             self.run_action(action, serial);
             acted = true;
         }

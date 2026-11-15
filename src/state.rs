@@ -268,23 +268,15 @@ pub struct InputState {
     /// The last pointer button press: a client may ask for the window menu
     /// with its serial after the release (`window_menu::recent_press`).
     pub last_press: Option<crate::window_menu::LastPress>,
-    /// A key pressed while the window menu is open, for it (`window_menu.rs`).
-    pub menu_key: Option<smithay::input::keyboard::Keysym>,
     /// A modifier key pressed alone, which runs its tap binding when
     /// released if nothing else happened before (`Config::tap_action`).
     pub mod_tap: Option<ModTap>,
-    /// The action of a tap just released, run after the release reached
-    /// the client.
-    pub tap_action: Option<crate::config::Action>,
     /// Mouse wheel bindings: the `value120` scrolled toward a notch on each
     /// axis (horizontal, vertical), for wheels that send parts of one.
     pub wheel_v120: [f64; 2],
     /// Mouse wheel bindings: when one last ran on each axis, for
     /// `wheel-binding-cooldown`.
     pub wheel_ran: [Option<std::time::Instant>; 2],
-    /// A binding with `repeat = true` just pressed: its key and action, for
-    /// `start_binding_repeat` once it has run.
-    pub repeat_next: Option<(Keycode, crate::config::Action)>,
     /// The binding running again while its key is held (`input.rs`).
     pub binding_repeat: Option<BindingRepeat>,
     /// Set while a repeat runs its action, which may stop the repeat
