@@ -217,7 +217,7 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
         .iter()
         .map(|(id, _)| {
             let name = data.outputs[id].output.name();
-            (*id, effective_output_config(state, &name))
+            (*id, state.effective_output_config(&name))
         })
         .collect();
 
@@ -549,7 +549,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
         Some(monitor) => state.outputs.monitors.insert(name.clone(), monitor),
         None => state.outputs.monitors.remove(&name),
     };
-    let output_config = effective_output_config(state, &name);
+    let output_config = state.effective_output_config(&name);
     let modes = connector.modes().to_vec();
     let Some(drm_mode) = pick_mode(&name, &modes, Some(&output_config)) else {
         warn!(name, "connector has no modes");
@@ -825,22 +825,6 @@ pub(super) fn apply_vrr(surface: &OutputSurface) {
         Ok(false) => {}
         Err(None) => info!(name, "adaptive sync not supported by the monitor"),
         Err(Some(err)) => warn!(name, ?err, on, "couldn't set adaptive sync"),
-    }
-}
-
-/// `[[output]]` for `name`, with what a display tool set at runtime on top
-/// (`Pila::outputs.overrides`).
-pub(super) fn effective_output_config(state: &Pila, name: &str) -> OutputConfig {
-    let file = state
-        .output_section(name)
-        .unwrap_or_else(|| OutputConfig::named(name));
-    with_overrides(state, file)
-}
-
-pub(super) fn with_overrides(state: &Pila, file: OutputConfig) -> OutputConfig {
-    match state.outputs.overrides.get(&file.name) {
-        Some(over) => file.overridden_by(over),
-        None => file,
     }
 }
 
