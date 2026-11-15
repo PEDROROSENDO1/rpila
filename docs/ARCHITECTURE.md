@@ -763,9 +763,9 @@ Key flows and invariants:
   offscreen textures are kept by size (up to 4) for the next copies, and dropped from
   `after_frames` once no session, waiting screencopy or screencopy damage tracker is left
   (`Captures::trim_textures`). A
-  session's first frame is copied at once (idle), later ones in `after_frames` (after a
-  frame drawn, or `capture_due`: a commit shown on no output, a capture request) only when
-  the session's own damage tracker sees a change. A copy that fails (at once or on the GPU)
+  session's frames are copied in `after_frames` (after a frame drawn, or `capture_due`: a
+  commit shown on no output, a capture request), the first one at once (a capture request
+  sets `capture_due`), later ones only when the session's own damage tracker sees a change. A copy that fails (at once or on the GPU)
   starts the session over (`Session::start_over`: new tracker, next frame copied at once and
   whole), since its tracker already counted the changes as seen and a still source would
   never send the next frame. Size changes re-send constraints and

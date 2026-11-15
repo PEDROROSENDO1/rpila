@@ -1749,7 +1749,7 @@ impl Pila {
             let started = std::time::Instant::now();
             // One scene for every capture of this pass, built at the first.
             let mut input = None;
-            self.process_captures_with(&mut input);
+            self.process_captures(&mut input);
             self.process_screencopies(&mut input);
             self.capture.trim_textures();
             captures = started.elapsed();

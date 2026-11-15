@@ -444,16 +444,10 @@ impl Pila {
     }
 
     /// Copy every pending frame whose source changed (or that is a
-    /// session's first). Called after each rendered frame and when a first
-    /// capture is requested.
-    pub fn process_captures(&mut self) {
-        self.process_captures_with(&mut None);
-    }
-
-    /// `process_captures`, with `input` the scene of this pass, built by the
-    /// first capture that needs it (`after_frames` shares it with the
-    /// screencopies).
-    pub fn process_captures_with(&mut self, input: &mut Option<crate::render::FrameInput>) {
+    /// session's first), from `after_frames`: after a frame drawn, or with
+    /// `capture_due`. `input` is the scene of this pass, built by the first
+    /// capture that needs it (`after_frames` shares it with the screencopies).
+    pub fn process_captures(&mut self, input: &mut Option<crate::render::FrameInput>) {
         if !self.capture.sessions.iter().any(|s| s.pending) {
             return;
         }
@@ -1406,14 +1400,9 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, FrameData> for Pila {
                     return;
                 }
                 session.pending = true;
-                // Processed in `after_frames`, frame drawn or not.
+                // Processed in `after_frames` of this very iteration, frame
+                // drawn or not: a first frame is copied right away.
                 state.capture_due = true;
-                if !session.captured_once {
-                    // The first frame is copied right away.
-                    state
-                        .loop_handle
-                        .insert_idle(|state| state.process_captures());
-                }
                 if let Target::Toplevel(identifier) = session.target.clone() {
                     if !state.is_locked() {
                         if let Some(window) = state.window_for_identifier(&identifier) {
