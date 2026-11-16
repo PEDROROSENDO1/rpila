@@ -479,16 +479,20 @@ autostart = [
 ```
 
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
-fuzzel, swaybg, mako, swaylock, wlsunset (night light), grim and slurp (screenshots),
+fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
 wl-clipboard (`wl-copy`, `wl-paste`), wtype, wlr-randr and wlopm (monitors), fcitx5 (input
 methods), and the shells Noctalia and Dux Shell; Pila's tests and scripts check most of them.
-Tools that use the same protocols should work too, though nobody has tried them yet:
-idle daemons (`swayidle`, ext-idle-notify), clipboard managers (ext-data-control) and screen
-recorders (`wf-recorder`, screencopy).
+Tools that use the same protocols should work too, though nobody has tried them yet: clipboard
+managers (ext-data-control) and screen recorders (`wf-recorder`, screencopy).
+
+**Lighter bars, in part:** ironbar shows the windows (`launcher`), the focused one and the clock,
+but its `workspaces` module only knows sway, Hyprland and niri, and its `clipboard` module wants
+wlr-data-control, which Pila replaces with the standard ext-data-control. nwg-panel shows its
+clock and controls, with no taskbar or workspaces (it has them for sway, Hyprland and niri only).
 
 **What can't work:** bars and modules that talk to another compositor's own IPC rather than a
-Wayland protocol, such as dwlb (dwl's), HyprPanel (Hyprland's) and waybar's `sway/*`,
-`hyprland/*` and `niri/*` modules; and X11 bars such as polybar, which can't see Wayland windows.
+Wayland protocol, such as dwlb (dwl's), HyprPanel (Hyprland's), waybar's `sway/*`,
+`hyprland/*` and `niri/*` modules and the like in ironbar and nwg-panel; and X11 bars such as polybar, which can't see Wayland windows.
 A bar that uses standard protocols and fails on Pila is a bug: please
 [report it](https://github.com/igalmarino/pila/issues).
 

@@ -22,11 +22,7 @@ Unreleased section has all of it.
 
 ## Next
 
-- **More bars tried on Pila:** ironbar and nwg-panel (lighter than waybar, which a tester asked
-  for), and swayidle, once they're in the dev container; each goes into the manual's list as it
-  works or doesn't, and one that uses standard protocols and fails is a bug.
-
-A feature users ask for goes here first.
+Nothing planned beyond what waits below: a feature users ask for goes here first.
 
 ## Waiting for hardware and testers
 
