@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.9 (2026-11-15)
 
 - **An X11 app's own transparency shows with rounded corners:** an app that sets
   `_NET_WM_WINDOW_OPACITY` on its window (terminals' opacity settings, `picom-trans`) was drawn
@@ -8,6 +8,11 @@
 - **Modal X11 dialogs keep the focus,** as Wayland ones (xdg-dialog) already did: a dialog that
   sets `_NET_WM_STATE_MODAL` (before it shows, or later) gets the focus whenever its parent window
   would, so a click on the parent or Mod+Tab to it lands on the dialog.
+- **Monitors placed automatically next to one with a fractional scale no longer overlap it:** the
+  next monitor started one column of pixels too far left (a 1280 px wide monitor at 1.5 is 853.33
+  px wide; Pila placed the next one at 853 where its layout ends at 854).
+- **The headless backend picks a mode as bare metal does:** of several modes of the same size it
+  took the fastest instead of the preferred one.
 
 ## 0.5.8 (2026-11-15)
 
