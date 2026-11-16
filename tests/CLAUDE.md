@@ -41,6 +41,11 @@ What breaks silently:
 
 - The client's `wait` closures run with its lock held: read the `Shared` given, never call
   the client (that deadlocks).
+- Input injected through the control socket (`move_by`, `press`, ...) and a client's
+  requests (acks, commits) reach Pila through different sockets, in no set order: a test
+  whose input must come after a client's earlier requests settles Pila and roundtrips the
+  client first (`pila.settle(); client.roundtrip();`). CI's slower runners lose that race
+  where a local run never does.
 - A test expecting a protocol error calls `Client::expect_error` before the bad request
   (`wait_error` insists): it stops the client's thread from writing, since a write after Pila
   closes the connection fails and wayland-backend then never reads the protocol error waiting
