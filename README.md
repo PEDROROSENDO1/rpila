@@ -36,9 +36,9 @@ How to use and set it up is in the [user manual](https://github.com/igalmarino/p
 
 Pila is **alpha**: usable day to day (its author runs it as their only desktop and
 develops it from inside itself), but developed on one machine: an AMD laptop (Mesa, `amdgpu`)
-with an external monitor, on Arch Linux with Noctalia's greeter. Testers report it working on Intel integrated
-GPUs, on Debian with SDDM, on NixOS, from LightDM in an Arch virtual machine, and on one
-NVIDIA card (a GTX 1060 with the proprietary driver, on NixOS). Other GPUs, distros and setups
+with an external monitor, on Arch Linux with Noctalia's greeter, and tried from GDM. Testers
+report it working on Intel integrated GPUs, on Debian with SDDM, on NixOS, from LightDM in an
+Arch virtual machine, and on one NVIDIA card (a GTX 1060 with the proprietary driver, on NixOS). Other GPUs, distros and setups
 are exactly what testing is needed for: please [report](#reporting-bugs) what works and what
 doesn't.
 
