@@ -168,4 +168,9 @@ exercise, the user checks by hand) or only eyes can judge it. Known bugs are tes
 
 ## Known bugs (ignored tests)
 
-None.
+- `input_method::a_click_on_the_candidate_window_of_a_text_field_in_a_popover_leaves_it_open`:
+  while a popover (a menu, a GTK popover with a search field) holds the pointer, the input
+  method's candidate window gets no hover, and a click on a candidate closes the popover.
+  Smithay's popup grab (`PopupPointerGrab`) gives the pointer only to the popover's own client
+  and dismisses the popover on a press anywhere else; the fix is a grab of Pila's around it that
+  lets the candidate window have the pointer.

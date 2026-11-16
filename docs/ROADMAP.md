@@ -14,8 +14,10 @@ doesn't speak yet.
 
 Small, testable in CI, no new hardware needed.
 
-1. **Input methods' known limits in the manual:** a click on a candidate closes a popover that
-   holds the pointer, and arrow keys don't walk a GTK menu opened while the input method is on.
+1. **An input method's candidate window takes the pointer inside a popover:** in a text field
+   in a popover (a GTK search field), the candidate window doesn't react to the pointer, and a
+   click on it closes the popover (a known bug, its test ignored: `tests/FEATURES.md`). A grab
+   of Pila's around Smithay's popup grab lets the candidate window have it.
 2. **`wp-alpha-modifier-v1`:** a client fades one of its surfaces without redrawing it (video
    players, overlays). Smithay already applies it when drawing; Pila offers the global and
    checks captures, blur and animations keep it.

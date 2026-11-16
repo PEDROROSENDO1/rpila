@@ -771,6 +771,60 @@ fn a_text_field_in_a_popup_gets_its_candidate_window_below_its_cursor() {
 }
 
 #[test]
+#[ignore = "bug: Smithay's popup grab gives no pointer to another client's surface and a click there dismisses the popover"]
+fn a_click_on_the_candidate_window_of_a_text_field_in_a_popover_leaves_it_open() {
+    let mut pila = TestPila::start();
+    let app = pila.client();
+    let window = app.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let ime = pila.client();
+    let input_method = ime.input_method();
+    let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+    pila.move_to((x + 20) as f64, (y + 20) as f64);
+    pila.press("left");
+    app.wait("the press", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::Button { pressed: true, .. }))
+    });
+    // A popover with a text field, as a GTK search entry in a menu.
+    let (menu, _) = app.popup(
+        "menu",
+        Ok(window),
+        &common::protocols::Placement {
+            size: (200, 150),
+            anchor_rect: (100, 10, 1, 1),
+            ..common::protocols::Placement::default()
+        },
+        true,
+        [255, 0, 0, 255],
+    );
+    app.wait_surface_configured(menu);
+    pila.release("left");
+    pila.wait("the popover's grab", |s| s["pointer"]["grab"] == "popup");
+    let text_input = app.text_input();
+    app.wait_logged("text_input", "Enter");
+    app.enable_text_input(&text_input, (20, 30, 2, 20));
+    ime.wait_logged("input_method", "Activate");
+    let (_candidates, _popup) = ime.ime_popup(&input_method, IME_COLOR, (100, 40));
+    let state = pila.wait("the candidate window", |s| !popups(s).is_empty());
+    let geometry = &popups(&state)[0]["geometry"];
+    let (px, py) = (geometry[0].as_i64().unwrap(), geometry[1].as_i64().unwrap());
+    // A click on a candidate picks it: the popover stays, its text field
+    // keeps the input method.
+    pila.click_at((px + 10) as f64, (py + 10) as f64);
+    ime.wait("the click", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::Button { pressed: true, .. }))
+    });
+    let state = pila.settle();
+    assert_eq!(state["pointer"]["grab"], "popup", "the popover closed");
+    assert_eq!(count(&ime, "input_method", "Deactivate"), 0);
+    let _ = text_input;
+}
+
+#[test]
 fn the_candidate_window_stays_clear_of_a_panel() {
     use common::protocols::LayerSpec;
     use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::Anchor;
