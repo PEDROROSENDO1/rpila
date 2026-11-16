@@ -266,6 +266,8 @@ pub fn run(args: &[String]) -> i32 {
     if request["request"] == "subscribe" {
         return follow(reader, json_output);
     }
+    // Answered: pila's connection isn't held while printing (to a pager).
+    drop(reader);
     // A closed pipe (`| head`) isn't an error worth saying.
     let mut out = std::io::stdout().lock();
     if json_output {
@@ -285,7 +287,7 @@ pub fn run(args: &[String]) -> i32 {
 fn follow(mut reader: BufReader<UnixStream>, json_output: bool) -> i32 {
     // Events come when something changes: no timeout from here on.
     if let Err(err) = reader.get_ref().set_read_timeout(None) {
-        eprintln!("pila msg: {err}");
+        eprintln!("pila msg: can't talk to pila: {err}");
         return EXIT_NO_PILA;
     }
     let mut out = std::io::stdout().lock();
