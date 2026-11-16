@@ -17,6 +17,9 @@
 - **X11 apps can be turned off, and Xwayland is optional:** `[xwayland] enabled = false` reserves no
   X display and sets no `DISPLAY`, for a session with no X11 at all; turned off while X11 apps run,
   Xwayland stays for them until it stops. Applies on save, like the rest.
+- **For packagers: Xwayland is now an optional dependency** (`optdepends` in `pila-git`, a
+  recommendation in the `.deb` and `.rpm`, and `withXwayland ? true` in the Nix package): Pila
+  runs without it, with no X11 apps.
 - **For packagers: Pila's Smithay fork also carries Smithay's X display reservation** (its pull
   request #2269, not merged yet), with which Xwayland starts on demand and its window manager
   leaves no event source behind.

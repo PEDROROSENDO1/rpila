@@ -15,6 +15,9 @@
   systemdLibs,
   wayland,
   xwayland,
+  # X11 apps (Xwayland on Pila's PATH); false: none, as with
+  # `[xwayland] enabled = false`.
+  withXwayland ? true,
   # The commit it's built from, for `pila --version`.
   commit ? null,
 }:
@@ -102,7 +105,8 @@ rustPlatform.buildRustPackage {
       -t $out/etc/xdg/xdg-desktop-portal-wlr
     install -Dm644 README.md config.example.toml docs/MANUAL.md docs/IPC.md -t $out/share/doc/pila
     install -Dm644 docs/pila.1 -t $out/share/man/man1
-
+  ''
+  + lib.optionalString withXwayland ''
     # After the user's own, if they have one.
     wrapProgram $out/bin/pila --suffix PATH : ${lib.makeBinPath [ xwayland ]}
   '';

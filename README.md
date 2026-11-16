@@ -162,7 +162,7 @@ On a TTY or as a login session, Mod is **Super**:
 Pila needs Rust 1.89 or newer. If your distro's Rust is older, install it with
 [rustup](https://rustup.rs). It also needs `pkg-config` and the development files of
 `libseat`, `libinput`, `libudev`, `gbm` (Mesa) and `xkbcommon`. At runtime it loads EGL
-(Mesa) and starts `Xwayland` for X11 apps. Package names on common distros (they may
+(Mesa) and, for X11 apps, starts `Xwayland` if it's installed (optional). Package names on common distros (they may
 differ between releases):
 
 | Distro | Packages |

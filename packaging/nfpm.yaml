@@ -47,8 +47,9 @@ overrides:
       - libseat1
       - libudev1
       - libxkbcommon0
-      - xwayland
+    # X11 apps: Pila runs without (and with [xwayland] enabled = false).
     recommends:
+      - xwayland
       - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
@@ -71,8 +72,8 @@ overrides:
       - libseat
       - systemd-libs
       - libxkbcommon
-      - xorg-x11-server-Xwayland
     recommends:
+      - xorg-x11-server-Xwayland
       - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk

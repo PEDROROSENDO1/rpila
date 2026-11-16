@@ -120,7 +120,8 @@ jobs:
           grep -F 'Exec=/usr/bin/pila-session' /usr/share/wayland-sessions/pila.desktop
           test -f /etc/xdg/xdg-desktop-portal/pila-portals.conf
           test -f /etc/xdg/xdg-desktop-portal-wlr/pila
-      # If it starts, it's still running when its time is up.
+      # If it starts, it's still running when its time is up. Xwayland is only
+      # recommended: it starts without, X11 apps aside.
       - name: Smoke test
         run: |
           status=0
@@ -128,7 +129,7 @@ jobs:
             timeout 5 pila --backend headless >pila.log 2>&1 || status=$?
           tail -n 20 pila.log
           test "$status" = 124
-          grep -F 'Xwayland ready' pila.log
+          grep -F "Xwayland isn't installed" pila.log
 
   attach:
     name: Attach to the release
