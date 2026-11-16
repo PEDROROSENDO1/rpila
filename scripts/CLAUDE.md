@@ -20,7 +20,7 @@ through memory; the redraws per output that found nothing new, `idle` in
 the frame statistics, at most one per refresh on bare metal; the event loop's own work after each iteration, `loop`,
 how often it did all of its housekeeping and the CPU it took; on bare metal, how many frames
 were an app's buffer as it is, `direct`: direct scanout, which the fullscreen terminal may
-bring). `--vrr` (bare metal) asks every
+bring; and how many were torn, `torn`, by `vkcube` with vsync off, fullscreen, where it's installed). `--vrr` (bare metal) asks every
 monitor for adaptive sync and checks it comes on where a monitor can do it, that Pila then
 reports a variable refresh (`refresh reported to clients` on `pila::frames`), and that it's
 still on after `wlopm` powers the monitors off and on; whether the monitor's refresh follows

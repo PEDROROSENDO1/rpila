@@ -120,6 +120,10 @@ use wayland_protocols::{
             wp_security_context_v1::WpSecurityContextV1,
         },
         single_pixel_buffer::v1::client::wp_single_pixel_buffer_manager_v1::WpSinglePixelBufferManagerV1,
+        tearing_control::v1::client::{
+            wp_tearing_control_manager_v1::WpTearingControlManagerV1,
+            wp_tearing_control_v1::WpTearingControlV1,
+        },
         viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
     },
     xdg::{
@@ -286,6 +290,8 @@ logged!(
     WpAlphaModifierV1,
     WpAlphaModifierSurfaceV1,
     WpPointerWarpV1,
+    WpTearingControlManagerV1,
+    WpTearingControlV1,
     WpSinglePixelBufferManagerV1,
     ZxdgExporterV2,
     ZxdgExportedV2,
@@ -660,6 +666,13 @@ impl Client {
         let manager: WpAlphaModifierV1 = self.bind("wp_alpha_modifier_v1", 1);
         let modifier = manager.get_surface(surface, &self.qh, "alpha".into());
         modifier.set_multiplier((multiplier * u32::MAX as f64) as u32);
+    }
+
+    /// A tearing control object for `surface` (wp-tearing-control), tagged
+    /// "tearing".
+    pub fn tearing_control(&self, surface: &WlSurface) -> WpTearingControlV1 {
+        let manager: WpTearingControlManagerV1 = self.bind("wp_tearing_control_manager_v1", 1);
+        manager.get_tearing_control(surface, &self.qh, "tearing".into())
     }
 
     /// Bind the first `wl_output` global again, as a client that binds an

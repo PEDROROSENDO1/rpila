@@ -5,6 +5,13 @@
 - **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
   overlays set its transparency, and Pila applies it on screen, in screenshots and screen
   sharing, and behind blur (a window faded that way gets its backdrop).
+- **Tearing for games** (wp-tearing-control): a fullscreen game with vsync off (Vulkan's
+  immediate present mode, which Mesa turns into the request) has its frames shown at once with an
+  asynchronous page flip, on a TTY, when the driver takes it. `tearing = false` in the
+  configuration turns it off. The frame statistics count those frames apart (`torn`), and
+  `pila-check` runs `vkcube` that way where it's installed.
+- **For packagers: Pila's Smithay fork also carries Smithay's asynchronous page flips** (its pull
+  request #1948, not merged yet), still at `github.com/igalmarino/smithay`, branch `pila`.
 - **Resizing a window with the pointer keeps up with the app:** Pila sent a new size for every
   pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
   sends the next one once the app has acknowledged the last, so a slow app (a browser, an

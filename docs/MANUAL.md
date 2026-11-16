@@ -567,6 +567,13 @@ as the app drew it: Pila draws nothing for those frames, which saves GPU work an
 picture as it is). If a fullscreen window flickers or its colors look wrong,
 `direct-scanout = false` in the configuration turns it off as soon as the file is saved.
 
+A game with vsync off (in its own settings, or Vulkan's immediate present mode) asks for its frames
+to be shown at once rather than at the monitor's next refresh: less latency, at the price of
+tearing, a frame showing partly over the last one. Pila does so while the game is fullscreen and
+nothing but it changes on that monitor (the pointer moving over it waits for the refresh), on a
+TTY, when the graphics driver takes it. With vsync on in the game, nothing tears. `tearing = false`
+in the configuration turns it off for every game.
+
 ## Window and layer rules
 
 Rules change how particular windows or panels behave. A `[[window-rule]]` matches windows by

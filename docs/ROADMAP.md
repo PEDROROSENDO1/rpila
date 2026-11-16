@@ -18,15 +18,11 @@ Nothing open: what was here is in the changelog's Unreleased section.
 
 ## Next
 
-1. **Tearing for fullscreen games (`wp-tearing-control-v1`):** a fullscreen game that asks for it
-   gets its frames on screen at once instead of at the next vblank. Needs asynchronous page flips
-   in Smithay's DRM code, added to Pila's Smithay fork until Smithay has them; used only for a
-   fullscreen window shown by direct scanout. Measured on bare metal only.
-2. **`xwayland-keyboard-grab`:** X11 apps that take the whole keyboard (virtual machines, remote
+1. **`xwayland-keyboard-grab`:** X11 apps that take the whole keyboard (virtual machines, remote
    desktops) get it, under the same rules as keyboard-shortcuts-inhibit: the binding that quits
    Pila and the lock screen still work.
-3. **Smithay update:** onto Smithay's current main (xdg-decoration v2 among the changes), with
-   the fork's fix rebased on it.
+2. **Smithay update:** onto Smithay's current main (xdg-decoration v2 among the changes), with
+   the fork's additions rebased on it.
 
 ## Waiting for hardware and testers
 

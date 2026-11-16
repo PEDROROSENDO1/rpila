@@ -187,6 +187,21 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Whether the frame of the output at `output` may tear (`tearing.rs`):
+    /// the window in front there is fullscreen over all of it and its frames
+    /// may tear, plainly drawn, with nothing of Pila's over it and not locked.
+    pub fn tears(&self, output: Rectangle<i32, Logical>) -> bool {
+        if self.locked || self.slide.is_some() || self.window_menu.is_some() {
+            return false;
+        }
+        self.windows
+            .iter()
+            .find(|w| w.frame_rect().overlaps(output))
+            .is_some_and(|w| {
+                w.tearing && w.effect.is_none() && w.frame_rect().contains_rect(output)
+            })
+    }
+
     pub fn layers(&self) -> impl Iterator<Item = &SceneLayer> {
         self.upper.iter().chain(&self.lower)
     }
@@ -240,6 +255,9 @@ pub struct SceneWindow {
     /// Everything of it that may be drawn, global (`Pila::window_visual_rect`):
     /// an output it doesn't touch leaves it out (`window_elements`).
     pub bounds: Rectangle<i32, Logical>,
+    /// Fullscreen, and its frames may tear: its app asks (`tearing.rs`) and
+    /// the config allows it.
+    pub tearing: bool,
 }
 
 impl SceneWindow {

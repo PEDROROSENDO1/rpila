@@ -55,6 +55,7 @@ const PUBLIC: &[&str] = &[
     "wp_pointer_warp_v1",
     "wp_presentation",
     "wp_single_pixel_buffer_manager_v1",
+    "wp_tearing_control_manager_v1",
     "wp_viewporter",
     "xdg_activation_v1",
     "xdg_system_bell_v1",

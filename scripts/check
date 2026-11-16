@@ -279,6 +279,24 @@ if [ "${1:-}" = "--workload" ]; then
             sleep 1
             mark "fullscreen end"
         fi
+
+        # A fullscreen game with vsync off: vkcube (package vulkan-tools) with
+        # Vulkan's immediate present mode, for which Mesa asks for its frames
+        # to tear (wp-tearing-control). On bare metal they go out with
+        # asynchronous page flips (`tearing.rs`), if the driver takes them.
+        if command -v vkcube >/dev/null && command -v python3 >/dev/null; then
+            mark "tearing begin"
+            vkcube --present_mode 0 >/dev/null 2>&1 &
+            held=$!
+            sleep 2
+            python3 -I "$helpers/toplevel-action" full >/dev/null
+            sleep 4
+            stop "$held"
+            sleep 1
+            mark "tearing end"
+        else
+            mark "tearing skip (no vkcube)"
+        fi
     fi
 
     if command -v fuzzel >/dev/null; then
@@ -698,6 +716,18 @@ if grep -q 'using another GPU for its monitors' "$log"; then
         info "monitors on another GPU: their frames copied through memory (no buffer could be shared between the GPUs)"
     else
         info "monitors on another GPU: their frames copied between the GPUs (no copy through memory logged)"
+    fi
+fi
+
+# Frames shown at once, torn (`tearing` in the frame statistics: bare metal),
+# which the vkcube scenario brings where the driver takes asynchronous page
+# flips. Reported, not judged.
+if [ -n "$stats" ] && grep -q 'backend=Udev' "$log" && grep -q 'check: tearing begin' "$log"; then
+    torn=$(sum torn)
+    if [ "$torn" -gt 0 ]; then
+        info "frames torn (shown at once: a fullscreen game with vsync off): $torn"
+    else
+        info "no frame torn: the driver refused asynchronous page flips, or vkcube didn't ask"
     fi
 fi
 

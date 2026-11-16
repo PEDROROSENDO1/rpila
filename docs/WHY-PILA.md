@@ -132,7 +132,7 @@ virtual-keyboard, input-method-v2), each to be dropped when one lands. No KDE, G
 Among the less common ones: xdg-session-management (window placement and state restored across
 client and compositor restarts), ext-background-effect, ext-workspace, ext-image-copy-capture,
 ext-data-control, xdg-dialog, xdg-toplevel-tag, xdg-system-bell, wp-fifo, wp-commit-timing,
-wp-alpha-modifier, wp-pointer-warp, linux-drm-syncobj, wp-security-context, cursor-shape, pointer-constraints and
+wp-alpha-modifier, wp-pointer-warp, wp-tearing-control, linux-drm-syncobj, wp-security-context, cursor-shape, pointer-constraints and
 relative-pointer, idle-notify and idle-inhibit, text-input-v3. Xwayland runs through Smithay's X11 window
 manager, restarted if it dies, with selections bridged both ways.
 

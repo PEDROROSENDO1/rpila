@@ -430,6 +430,21 @@ Key flows and invariants:
   the framebuffers'). With the opaque swapchain the same switch takes 0.06 ms with
   `others_pending=1` (two monitors, Renoir). Bare metal only: `scripts/check`'s fullscreen scenario
   reports the count on a TTY.
+- **Tearing** (`tearing.rs`, wp-tearing-control-v1; bare metal, `tearing`, on by default): a
+  surface's presentation hint is double-buffered surface state (`TearingHint`, applied on
+  commit; destroying the object goes back to vsync on the next commit; a second object for a
+  surface is `tearing_control_exists`). `Scene::tears` decides per output: not locked, no
+  workspace slide or window menu, and the window in front there is fullscreen over all of it and
+  `SceneWindow::tearing` (its main surface asks, and the config allows it). `render_output` passes
+  `PresentationMode::Async` to `render_frame` then, and Smithay's `DrmCompositor` (Pila's fork:
+  Smithay's pull request #1948) flips asynchronously only when nothing but the primary plane
+  changed in a way the last flip shows the plane took (the pointer moving over the game is a
+  normal flip), and goes back to a normal flip, until the plane changes, when the driver refuses
+  one; a composited frame tears too, not only direct scanout. In `frame_finish` a torn frame
+  (`with_pending_frame`'s mode) misses no refresh and isn't late, its presentation feedback has
+  no `Vsync`, and it leaves `last_vblank_time`, the grid the next vblank is reckoned from, as it
+  was; the frame statistics count it apart (`torn`). The headless backend can't tear: the state
+  tells what the DRM backend would ask (`tears` per output).
 - **Frame statistics** (`frame_stats.rs`, `RUST_LOG=pila::frames=debug`): every backend calls
   `Pila::record_frame` with a frame's CPU time (logged per output every 5 s: frames, average
   and worst, missed refreshes; each frame over half the period on its own); winit and udev

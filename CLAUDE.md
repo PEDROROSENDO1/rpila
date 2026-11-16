@@ -172,7 +172,9 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   every 5 s, frames, average and worst CPU time and missed refreshes, plus every frame
   over half the period, and apart the redraws that found nothing new to show (`idle`, with
   their summed CPU time; `scripts/check` reports them per output) and, on bare metal, the
-  frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn).
+  frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn) and
+  those shown at once by an asynchronous flip (`torn`: a fullscreen game with vsync off, which
+  miss no refresh).
   Missed refreshes are vblanks with no new frame while an animation runs and, on bare metal,
   a frame asked for in time but shown a vblank late, animation or not (`late`): exact on bare
   metal (the DRM sequence of the vblanks that showed frames) and an estimate nested (gaps

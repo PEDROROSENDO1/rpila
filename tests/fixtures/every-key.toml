@@ -13,6 +13,7 @@ workspaces = 4
 corner-radius = 8
 other-gpus = false
 direct-scanout = true
+tearing = true
 
 [shadow]
 enabled = true

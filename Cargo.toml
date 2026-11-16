@@ -45,14 +45,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # on purpose, with a full test run and a bare-metal check.
 #
 # From Pila's fork for now, branch `pila`: Smithay's 3a08ff96 (2026-11-14) plus
-# one fix, kept until Smithay has it: a text cursor with no width (GTK's) is
-# kept, so input methods' candidate windows go next to it
-# (`input_method::a_text_cursor_with_no_width_places_the_candidate_window`
-# fails without). On a bump: rebase that branch on the new rev, or go back to
-# `https://github.com/Smithay/smithay.git` once the fix is there.
+# what it lacks, each kept until Smithay has it:
+# - a text cursor with no width (GTK's) is kept, so input methods' candidate
+#   windows go next to it
+#   (`input_method::a_text_cursor_with_no_width_places_the_candidate_window`
+#   fails without);
+# - asynchronous page flips, Smithay's pull request #1948 rebased (tearing,
+#   `tearing.rs`: Pila doesn't build without its `PresentationMode`; the flips
+#   themselves are bare metal's, `scripts/check` with vkcube).
+# On a bump: rebase that branch on the new rev, or go back to
+# `https://github.com/Smithay/smithay.git` once it has them.
 [dependencies.smithay]
 git = "https://github.com/igalmarino/smithay.git"
-rev = "b8f524b3e3c27ba9e6e9565aebc7fb8838609385"
+rev = "64a430226eed4f46e0d20592ed83c8f0b9750f2c"
 default-features = false
 features = [
     "backend_winit",
@@ -80,3 +85,4 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 # X11 test clients (`tests/x11.rs`), through pila's Xwayland.
 x11rb = "0.13"
+

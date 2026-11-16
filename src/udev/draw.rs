@@ -5,10 +5,11 @@ use super::*;
 use smithay::{
     backend::{
         allocator::Buffer as _,
-        drm::compositor::PrimaryPlaneElement,
+        drm::compositor::{FrameError, PrimaryPlaneElement},
         renderer::{
             element::{Id, RenderElement as _, UnderlyingStorage},
             gles::GlesTarget,
+            PresentationMode,
         },
     },
     utils::{Rectangle, Transform},
@@ -267,12 +268,20 @@ fn draw(
     // The frame is a client's buffer as it is, on the primary plane.
     let mut direct = false;
     let clear = render::clear_color(scene);
+    // A fullscreen game that asks for it gets its frames shown at once, torn
+    // (`tearing.rs`): an asynchronous page flip, which Smithay makes only when
+    // nothing but the primary plane changed, and else a normal one.
+    let presentation = if scene.tears(output_geo) {
+        PresentationMode::Async
+    } else {
+        PresentationMode::VSync
+    };
     // The elements' states and whether nothing changed, or why it failed.
     let render_started = std::time::Instant::now();
     let rendered = match &mut lent {
         OutputRenderer::Primary(lent) => {
             let renderer = lent.as_mut();
-            match drm_output.render_frame(renderer, &elements, clear, flags) {
+            match drm_output.render_frame(renderer, &elements, clear, flags, presentation) {
                 Ok(result) => {
                     direct = matches!(result.primary_element, PrimaryPlaneElement::Element(_));
                     match &result.primary_element {
@@ -327,7 +336,7 @@ fn draw(
                 .map(super::secondary::PrimaryGpuElement)
                 .collect();
             drm_output
-                .render_frame(lent, &elements, clear, flags)
+                .render_frame(lent, &elements, clear, flags, presentation)
                 .map(|result| (result.states, result.is_empty))
                 .map_err(|err| format!("{err:?}"))
         }
@@ -518,6 +527,13 @@ pub(super) fn frame_finish(
     }
 
     let frame_duration = crate::frame_stats::refresh_period(&surface.output);
+    // The frame was flipped at once, not at a vblank (`tearing.rs`): it has
+    // no place on the grid of refreshes, so it misses none and isn't late.
+    let torn = surface.drm_output.as_ref().is_some_and(|drm_output| {
+        drm_output.with_pending_frame(|frame| {
+            frame.is_some_and(|frame| frame.presentation_mode == PresentationMode::Async)
+        })
+    });
     // The kernel's vblank timestamp, when it gives a monotonic one.
     let hw_time = metadata.as_ref().and_then(|m| match m.time {
         DrmEventTime::Monotonic(time) if !time.is_zero() => Some(time),
@@ -528,8 +544,8 @@ pub(super) fn frame_finish(
     // vblanks since the last frame shown, beyond one, were missed (if it's
     // still running: the pause after one ends doesn't count).
     let missed = match metadata.is_some().then_some(surface.last_vblank).flatten() {
-        Some(last) => missed_refreshes(last, seq, surface.back_to_back && animating),
-        None => 0,
+        Some(last) if !torn => missed_refreshes(last, seq, surface.back_to_back && animating),
+        _ => 0,
     };
     // A frame asked for in time to show at a vblank, shown at a later one
     // (`frame_stats::late_refreshes`). With adaptive sync vblanks have no
@@ -537,7 +553,7 @@ pub(super) fn frame_finish(
     let shown = hw_time.unwrap_or_else(|| now.into());
     let request = surface.queued_request.take();
     let late = request
-        .filter(|_| !surface.presented_variable)
+        .filter(|_| !surface.presented_variable && !torn)
         .map_or(0, |r| {
             crate::frame_stats::late_refreshes(r.at, r.after, r.vblank, shown, frame_duration)
         });
@@ -557,17 +573,26 @@ pub(super) fn frame_finish(
         );
     }
     surface.last_vblank = metadata.is_some().then_some(seq);
-    surface.last_vblank_time = Some(hw_time.unwrap_or_else(|| now.into()));
-    tracing::trace!(target: "pila::frames", output = surface.output.name(), seq, missed, "shown");
+    // The time of a torn flip isn't a vblank's: the grid the next vblank is
+    // reckoned from (`idle_until`, `commit_pacing`) stays the last one's.
+    if !torn || surface.last_vblank_time.is_none() {
+        surface.last_vblank_time = Some(hw_time.unwrap_or_else(|| now.into()));
+    }
+    tracing::trace!(target: "pila::frames", output = surface.output.name(), seq, missed, torn, "shown");
     let output = surface.output.clone();
+    let vsync = if torn {
+        wp_presentation_feedback::Kind::empty()
+    } else {
+        wp_presentation_feedback::Kind::Vsync
+    };
     let (time, flags) = match hw_time {
         Some(time) => (
             time.into(),
-            wp_presentation_feedback::Kind::Vsync
+            vsync
                 | wp_presentation_feedback::Kind::HwClock
                 | wp_presentation_feedback::Kind::HwCompletion,
         ),
-        None => (now, wp_presentation_feedback::Kind::Vsync),
+        None => (now, vsync),
     };
     // Powered off meanwhile: the vblank belongs to the frame that was
     // dropped with the surface.
@@ -592,10 +617,10 @@ pub(super) fn frame_finish(
         );
     }
     match drm_output.frame_submitted() {
-        Ok(Some(Some(mut feedback))) => {
+        Ok(Some(mut feedback)) => {
             feedback.presented(time, refresh, seq, flags);
         }
-        Ok(_) => {}
+        Ok(None) | Err(FrameError::EmptyFrame) => {}
         Err(err) => warn!(?err, "frame submission failed"),
     }
 
@@ -603,6 +628,9 @@ pub(super) fn frame_finish(
     let missed = u32::try_from(missed).unwrap_or(u32::MAX).max(late);
     state.record_missed(&output, missed);
     state.record_late(&output, late);
+    if torn {
+        state.record_torn_frame(&output);
+    }
     if state.lock_pending() {
         maybe_confirm_lock(state);
     }

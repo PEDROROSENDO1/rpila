@@ -61,6 +61,7 @@ pub mod state;
 pub mod surface_limits;
 pub mod switcher;
 pub mod sync;
+pub mod tearing;
 pub mod test_control;
 pub mod text;
 pub mod toplevel_management;

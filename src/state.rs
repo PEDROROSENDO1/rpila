@@ -905,6 +905,11 @@ impl Pila {
             effect: now.and_then(|now| self.window_effect(window, now)),
             slid: None,
             bounds: self.window_visual_rect(window).unwrap_or(frame),
+            tearing: fullscreen
+                && self.config.tearing
+                && window
+                    .wl_surface()
+                    .is_some_and(|surface| crate::tearing::wants_async(&surface)),
         })
     }
 

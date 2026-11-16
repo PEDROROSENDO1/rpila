@@ -93,6 +93,7 @@ pub fn init_globals(
     crate::bell::init_global(dh);
     crate::commit_pacing::init_globals(dh);
     crate::blur::init_global(dh);
+    crate::tearing::init_global(dh);
     // Sandboxes (Flatpak) connect their apps through it; they can't make
     // contexts of their own.
     SecurityContextState::new::<Pila, _>(dh, is_privileged);

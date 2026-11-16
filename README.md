@@ -108,7 +108,8 @@ A short report helps even if everything works:
   settings (output power and management), blur behind panels and windows (background-effect),
   workspace indicators and switchers (ext-workspace), a visual system bell, dialogs that stay
   above their window and modal ones that keep the focus (xdg-dialog, and X11's), window rules by tag
-  (xdg-toplevel-tag), surfaces an app fades without drawing them again (wp-alpha-modifier),
+  (xdg-toplevel-tag), games with vsync off shown at once, torn (wp-tearing-control), surfaces an
+  app fades without drawing them again (wp-alpha-modifier),
   the pointer moved by the app it's on (wp-pointer-warp: games, SDL 3),
   Vulkan's FIFO presentation (wp-fifo, wp-commit-timing), explicit sync
   (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full shell

@@ -28,7 +28,9 @@
 //! On bare metal a frame can be a client's buffer as it is (direct scanout:
 //! a fullscreen video or game that is all the output shows, on the primary
 //! plane; `udev/draw.rs::frame_flags`): nothing is drawn for it. Those are
-//! counted in `frames` and apart, `direct`.
+//! counted in `frames` and apart, `direct`. A frame shown at once, torn, by an
+//! asynchronous page flip rather than at a vblank (`tearing.rs`) is counted
+//! apart too, `torn`, and misses no refresh.
 //!
 //! Screen captures (`capture.rs`, `screencopy.rs`) build their frames on
 //! the event loop too, after the outputs' (`Pila::after_frames`): a frame's
@@ -63,6 +65,7 @@ pub struct FrameStats {
     missed: u32,
     late: u32,
     direct: u32,
+    torn: u32,
     idle: u32,
     idle_cpu: Duration,
 }
@@ -82,6 +85,9 @@ pub struct Report {
     /// Frames that were a client's buffer as it is (direct scanout; bare
     /// metal), counted in `frames` too.
     pub direct: u32,
+    /// Frames shown at once, torn, rather than at a vblank (`tearing.rs`;
+    /// bare metal), counted in `frames` too.
+    pub torn: u32,
     /// Redraws that had nothing to show, and their CPU time.
     pub idle: u32,
     pub idle_cpu: Duration,
@@ -128,6 +134,7 @@ impl FrameStats {
             missed: self.missed,
             late: self.late,
             direct: self.direct,
+            torn: self.torn,
             idle: self.idle,
             idle_cpu: self.idle_cpu,
         };
@@ -151,6 +158,11 @@ impl FrameStats {
     /// The frame about to be recorded is a client's buffer as it is.
     pub fn direct(&mut self) {
         self.direct += 1;
+    }
+
+    /// A frame was shown at once, torn.
+    pub fn torn(&mut self) {
+        self.torn += 1;
     }
 }
 
@@ -285,6 +297,7 @@ fn log_report(output: &str, report: &Report) {
         missed = report.missed,
         late = report.late,
         direct = report.direct,
+        torn = report.torn,
         idle = report.idle,
         idle_cpu_ms = ms(report.idle_cpu),
         "frames"
@@ -397,6 +410,11 @@ impl Pila {
     /// the primary plane (see the module docs).
     pub fn record_direct_frame(&mut self, output: &Output) {
         self.frame_stats.entry(output.name()).or_default().direct();
+    }
+
+    /// A frame of `output` was shown at once, torn (`tearing.rs`).
+    pub fn record_torn_frame(&mut self, output: &Output) {
+        self.frame_stats.entry(output.name()).or_default().torn();
     }
 
     /// A frame of `output` was shown `count` refreshes late (counted in

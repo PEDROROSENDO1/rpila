@@ -1232,6 +1232,7 @@ struct ConfigFile {
     corner_radius: Option<u32>,
     other_gpus: Option<bool>,
     direct_scanout: Option<bool>,
+    tearing: Option<bool>,
     shadow: ShadowFile,
     colors: ColorsFile,
     animations: AnimationsFile,
@@ -1526,6 +1527,10 @@ pub struct Config {
     /// video or game) goes to the screen as it is, with no frame of Pila's
     /// own (`udev/draw.rs::frame_flags`). On unless turned off.
     pub direct_scanout: bool,
+    /// Whether a fullscreen window that asks for it (wp-tearing-control: a
+    /// game with vsync off) has its frames shown at once, torn, rather than at
+    /// the next vblank (`tearing.rs`). On unless turned off.
+    pub tearing: bool,
     pub shadow: ShadowConfig,
     pub colors: Colors,
     /// Which animations play and how long they last (`animation.rs`).
@@ -1815,6 +1820,7 @@ impl Config {
             corner_radius,
             other_gpus: file.other_gpus.unwrap_or(false),
             direct_scanout: file.direct_scanout.unwrap_or(true),
+            tearing: file.tearing.unwrap_or(true),
             shadow,
             colors,
             animations,
@@ -2519,6 +2525,16 @@ mod tests {
         let config = Config::from_toml("other-gpus = true", &no_env).unwrap();
         assert!(config.other_gpus);
         assert!(Config::from_toml("other-gpus = 2", &no_env).is_err());
+    }
+
+    #[test]
+    fn tearing_is_allowed_unless_turned_off() {
+        assert!(Config::from_toml("", &no_env).unwrap().tearing);
+        assert!(
+            !Config::from_toml("tearing = false", &no_env)
+                .unwrap()
+                .tearing
+        );
     }
 
     #[test]

@@ -60,6 +60,12 @@
 # file is saved.
 # direct-scanout = true            # (default)
 
+# A game with vsync off asks for its frames to be shown at once, torn
+# mid-refresh, for the least latency: Pila does so while it's fullscreen and
+# nothing but it changes on the monitor. On a TTY. False shows every frame at
+# the next refresh, as with vsync on. Read as soon as the file is saved.
+# tearing = true                   # (default)
+
 # The shadow under each window, stronger for the focused one. None for a
 # maximized or fullscreen window, or one whose app draws its own (past its
 # geometry, as GTK's do); a window rule's `shadow` can say otherwise, except

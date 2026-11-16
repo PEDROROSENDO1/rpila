@@ -181,6 +181,16 @@ impl Pila {
             .map(foreign_toplevel::app_id)
             .collect::<Vec<_>>();
 
+        // Whether each output's frame may tear (`tearing.rs`), as a backend
+        // that can tear decides it.
+        let scene = matches!(&self.backend, Some(Backend::Headless(_))).then(|| self.scene());
+        let tears = |output: &smithay::output::Output| {
+            let geometry = self.space.output_geometry(output);
+            scene
+                .as_ref()
+                .zip(geometry)
+                .is_some_and(|(scene, geometry)| scene.tears(geometry))
+        };
         let outputs: Vec<Value> = match &self.backend {
             Some(Backend::Headless(data)) => data
                 .outputs
@@ -207,6 +217,7 @@ impl Pila {
                         "gamma_set": o.gamma.is_some(),
                         "frames": o.frames,
                         "idle": o.idle,
+                        "tears": tears(output),
                     })
                 })
                 .collect(),
