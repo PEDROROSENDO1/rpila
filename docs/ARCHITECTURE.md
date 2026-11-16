@@ -77,6 +77,10 @@ Key flows and invariants:
   grab, so the input method never sees a key Pila used (see "Input methods").
   Bindings don't run while the focused surface (or its menu's window) holds an active
   keyboard-shortcuts inhibitor (`shortcuts_inhibited`; all requests are granted, and sandboxed apps can't make any), or
+  is an X11 window whose app grabbed the keyboard (XGrabKeyboard, which Xwayland turns into
+  xwayland-keyboard-grab, a global Smithay shows Xwayland alone: `xwayland::has_keyboard_grab`;
+  not Smithay's keyboard grab, which would hold the focus where it is and take the device's one
+  grab from an input method), or
   while the session is locked; Quit is the exception to the inhibitor (and, in debug
   builds, to the lock). Before either check, a key that wakes powered-off monitors does only
   that, Ctrl+Alt+F<N> (the keymap's `XF86_Switch_VT_<N>`) switches VT (`Action::ChangeVt`,

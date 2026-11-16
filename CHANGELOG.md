@@ -16,6 +16,10 @@
   pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
   sends the next one once the app has acknowledged the last, so a slow app (a browser, an
   Electron app) gets the latest size instead of a backlog of old ones.
+- **X11 apps that grab the keyboard get Pila's shortcuts too** (xwayland-keyboard-grab): a
+  virtual machine or remote desktop running through Xwayland gets every key while it has the
+  focus, as Wayland ones already did (keyboard-shortcuts-inhibit); clicking another window gets
+  out, and the binding that quits Pila still works.
 - **Apps can move the pointer within their own window** (wp-pointer-warp), as games and SDL 3
   do to recenter it: only the app the pointer is on, only onto its own surface, never while the
   screen is locked.

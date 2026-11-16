@@ -413,7 +413,8 @@ impl Pila {
     }
 
     /// Whether the surface with keyboard focus (or the window of a focused
-    /// menu) has an active keyboard-shortcuts inhibitor.
+    /// menu) has an active keyboard-shortcuts inhibitor, or its X11 app
+    /// grabbed the keyboard (`xwayland::has_keyboard_grab`).
     pub(crate) fn shortcuts_inhibited(&self) -> bool {
         let Some(focus) = self.keyboard_focus() else {
             return false;
@@ -422,6 +423,7 @@ impl Pila {
         self.seat
             .keyboard_shortcuts_inhibitor_for_surface(&surface)
             .is_some_and(|inhibitor| inhibitor.is_active())
+            || crate::xwayland::has_keyboard_grab(&self.seat, &surface)
     }
 
     /// Send a key past Pila's filter on to the keyboard's grab, or to the

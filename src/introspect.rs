@@ -364,6 +364,9 @@ impl Pila {
                 "hover": menu.hover,
             })),
             "locked": self.is_locked(),
+            // Whose keys Pila's bindings leave alone: the focus's, if it
+            // inhibits them (keyboard-shortcuts-inhibit, an X11 keyboard grab).
+            "shortcuts_inhibited": self.shortcuts_inhibited(),
             "lock_pending": self.lock_pending(),
             "snap_preview": self.snap_preview.map(rect),
             "animations": {

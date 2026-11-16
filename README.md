@@ -110,7 +110,8 @@ A short report helps even if everything works:
   above their window and modal ones that keep the focus (xdg-dialog, and X11's), window rules by tag
   (xdg-toplevel-tag), games with vsync off shown at once, torn (wp-tearing-control), surfaces an
   app fades without drawing them again (wp-alpha-modifier),
-  the pointer moved by the app it's on (wp-pointer-warp: games, SDL 3),
+  the pointer moved by the app it's on (wp-pointer-warp: games, SDL 3), X11 apps that grab the
+  keyboard (xwayland-keyboard-grab: virtual machines, remote desktops),
   Vulkan's FIFO presentation (wp-fifo, wp-commit-timing), explicit sync
   (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full shell
   such as Noctalia or Dux Shell. Sandboxed apps (Flatpak) don't see the protocols that read the

@@ -240,8 +240,8 @@ gives none, keyboard-shortcuts-inhibit and ext-idle-notify, are made again hidde
 layer-shell, session lock, ext-data-control, virtual-keyboard, input-method,
 ext-foreign-toplevel-list, screen capture (both protocols), toplevel management, gamma, output
 management and power, ext-workspace, keyboard-shortcuts-inhibit, ext-idle-notify, and
-security-context itself. A new global that exposes or controls other clients, input or outputs
-must get it too.
+security-context itself (xwayland-keyboard-grab is shown to Xwayland alone, by Smithay). A new
+global that exposes or controls other clients, input or outputs must get it too.
 
 ## Architecture
 

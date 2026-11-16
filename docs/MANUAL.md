@@ -547,8 +547,8 @@ X11 apps (older programs, many games, Steam) run through Xwayland, which Pila st
 the clipboard works between X11 and Wayland apps. Games can lock and confine the pointer.
 
 Apps that ask for every key while they have the focus (virtual machines, remote desktops:
-keyboard-shortcuts-inhibit) get Pila's bindings and touchpad gestures too, all but the one that
-quits Pila.
+keyboard-shortcuts-inhibit, or an X11 app that grabs the keyboard) get Pila's bindings and
+touchpad gestures too, all but the one that quits Pila. Clicking another window always gets out.
 
 A rule turns off the window animations for Steam games:
 

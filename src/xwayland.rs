@@ -18,11 +18,11 @@ use std::{
 
 use smithay::{
     desktop::Window,
-    input::pointer::GrabStartData as PointerGrabStartData,
+    input::{pointer::GrabStartData as PointerGrabStartData, Seat},
     reexports::calloop::{
         EventSource, Poll, PostAction, Readiness, RegistrationToken, Token, TokenFactory,
     },
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::{Logical, Rectangle, SERIAL_COUNTER},
     wayland::{
         compositor::CompositorHandler,
@@ -37,6 +37,7 @@ use smithay::{
             },
             SelectionTarget,
         },
+        xwayland_keyboard_grab::{XWaylandKeyboardGrab, XWaylandKeyboardGrabHandler},
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
     xwayland::{
@@ -46,7 +47,7 @@ use smithay::{
 };
 use tracing::{debug, info, warn};
 
-use crate::{focus::KeyboardFocus, state::fill_state, Pila};
+use crate::{focus::KeyboardFocus, state::fill_state, sync::Locked, Pila};
 
 /// Where X servers put their sockets. Usually created at boot (tmpfiles)
 /// or by the first X server; a minimal system or a container may lack it,
@@ -353,6 +354,40 @@ impl Pila {
             let _ = xwm.raise_window(x11);
         }
     }
+}
+
+/// The X11 surface whose app grabbed the keyboard (XGrabKeyboard, through
+/// xwayland-keyboard-grab), on the seat's user data, until Xwayland lets go.
+#[derive(Default)]
+struct XWaylandGrab(std::sync::Mutex<Option<(WlSurface, XWaylandKeyboardGrab<Pila>)>>);
+
+impl XWaylandKeyboardGrabHandler for Pila {
+    /// Not Smithay's keyboard grab: it would hold the focus where it is
+    /// (Mod+Tab, a click elsewhere, the lock screen couldn't take it) and a
+    /// device has one grab, the input method's. The grabbing surface's app
+    /// gets the keys of Pila's bindings while it has the focus instead, as
+    /// with keyboard-shortcuts-inhibit (`Pila::shortcuts_inhibited`): a
+    /// click elsewhere gets out, and Quit is never inhibited.
+    fn grab(&mut self, surface: WlSurface, seat: Seat<Self>, grab: XWaylandKeyboardGrab<Self>) {
+        debug!(surface = ?surface.id(), "X11 keyboard grab");
+        let slot = seat.user_data().get_or_insert(XWaylandGrab::default);
+        *slot.0.locked() = Some((surface, grab));
+    }
+
+    fn keyboard_focus_for_xsurface(&self, surface: &WlSurface) -> Option<KeyboardFocus> {
+        self.window_for_surface(surface)
+            .and_then(|window| crate::state::focus_target(&window))
+    }
+}
+
+/// Whether `surface`'s app holds an X11 keyboard grab on `seat`.
+pub fn has_keyboard_grab(seat: &Seat<Pila>, surface: &WlSurface) -> bool {
+    seat.user_data().get::<XWaylandGrab>().is_some_and(|slot| {
+        slot.0
+            .locked()
+            .as_ref()
+            .is_some_and(|(grabbed, grab)| grab.grab().is_alive() && grabbed == surface)
+    })
 }
 
 impl XWaylandShellHandler for Pila {

@@ -1091,3 +1091,97 @@ fn an_x11_windows_own_opacity_shows() {
 fn an_x11_windows_own_opacity_shows_with_rounded_corners() {
     x11_opacity_shows("[[window-rule]]\napp-id = \"Translucent\"\ncorner-radius = 24\n");
 }
+
+/// An X11 app that grabs the keyboard (a VM, a remote desktop: XGrabKeyboard,
+/// which Xwayland turns into xwayland-keyboard-grab) gets Pila's bindings'
+/// keys while it has the focus, as with keyboard-shortcuts-inhibit; ungrabbed,
+/// they're Pila's again.
+#[test]
+fn an_x11_keyboard_grab_gets_pilas_keys_while_focused() {
+    use x11rb::protocol::xproto::GrabMode;
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let window = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    x.wait_event("focus in", |e| matches!(e, Event::FocusIn(_)));
+    let grabbed = x
+        .conn
+        .grab_keyboard(
+            false,
+            window,
+            x11rb::CURRENT_TIME,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+        )
+        .unwrap()
+        .reply()
+        .unwrap();
+    assert_eq!(grabbed.status, x11rb::protocol::xproto::GrabStatus::SUCCESS);
+    pila.wait("the grab", |s| s["shortcuts_inhibited"] == true);
+    // Super+m maximizes no more: m goes to the app (X keycode = evdev + 8).
+    pila.combo("Super+m");
+    x.wait_event("m", |e| matches!(e, Event::KeyPress(k) if k.detail == 58));
+    assert_eq!(
+        x11_window(&pila.settle(), "XApp").unwrap()["maximized"],
+        false
+    );
+    // Ungrabbed: Pila's again.
+    x.conn.ungrab_keyboard(x11rb::CURRENT_TIME).unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("no grab", |s| s["shortcuts_inhibited"] == false);
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        x11_window(s, "XApp").is_some_and(|w| w["maximized"] == true)
+    });
+}
+
+/// An X11 keyboard grab doesn't hold the focus: a click on another window
+/// takes it, and Pila's bindings work there.
+#[test]
+fn an_x11_keyboard_grab_doesnt_keep_the_focus() {
+    use x11rb::protocol::xproto::GrabMode;
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let client = pila.client();
+    client.window("b").size(300, 200).create();
+    pila.wait_focus("b");
+    let window = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    x.wait_event("focus in", |e| matches!(e, Event::FocusIn(_)));
+    x.conn
+        .grab_keyboard(
+            false,
+            window,
+            x11rb::CURRENT_TIME,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+        )
+        .unwrap()
+        .reply()
+        .unwrap();
+    pila.wait("the grab", |s| s["shortcuts_inhibited"] == true);
+    // The Wayland window, clear of the X11 one.
+    let state = pila.settle();
+    let (bx, by, bw, bh) = rect(&window_in(&state, "b").unwrap()["geometry"]);
+    let (xx, xy, xw, xh) = rect(&x11_window(&state, "XApp").unwrap()["geometry"]);
+    let spot = [
+        (bx + 5, by + 5),
+        (bx + bw - 5, by + bh - 5),
+        (bx + 5, by + bh - 5),
+        (bx + bw - 5, by + 5),
+    ]
+    .into_iter()
+    .find(|&(px, py)| !(xx..xx + xw).contains(&px) || !(xy..xy + xh).contains(&py))
+    .expect("a part of b the X11 window doesn't cover");
+    pila.click_at(spot.0 as f64, spot.1 as f64);
+    pila.wait_focus("b");
+    assert_eq!(pila.state()["shortcuts_inhibited"], false);
+    pila.combo("Super+m");
+    pila.wait("b maximized", |s| {
+        window_in(s, "b").is_some_and(|w| w["maximized"] == true)
+    });
+}

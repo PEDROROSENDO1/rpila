@@ -18,10 +18,7 @@ Nothing open: what was here is in the changelog's Unreleased section.
 
 ## Next
 
-1. **`xwayland-keyboard-grab`:** X11 apps that take the whole keyboard (virtual machines, remote
-   desktops) get it, under the same rules as keyboard-shortcuts-inhibit: the binding that quits
-   Pila and the lock screen still work.
-2. **Smithay update:** onto Smithay's current main (xdg-decoration v2 among the changes), with
+1. **Smithay update:** onto Smithay's current main (xdg-decoration v2 among the changes), with
    the fork's additions rebased on it.
 
 ## Waiting for hardware and testers
