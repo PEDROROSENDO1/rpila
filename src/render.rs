@@ -131,6 +131,12 @@ pub enum Behind {
     Layer(usize),
     /// The window at this index of `Scene::windows`.
     Window(usize),
+    /// A popup of the window at this index of `Scene::windows`, at this
+    /// place among its popups (`PopupBlur::index`).
+    WindowPopup(usize, usize),
+    /// A popup of the upper layer surface at this index of `Scene::upper`,
+    /// at this place among its popups.
+    LayerPopup(usize, usize),
 }
 
 /// Where in the scene to start drawing from (it's drawn front to back).
@@ -207,12 +213,26 @@ impl Scene {
     }
 }
 
+/// A popup (a menu, or an input method's candidate window) that asks for
+/// the screen behind it to be blurred (`blur::popup_blurs`).
+#[derive(Clone)]
+pub struct PopupBlur {
+    pub surface: WlSurface,
+    /// Its place among its root's popups, front to back
+    /// (`PopupManager::popups_for_surface`, as they're drawn).
+    pub index: usize,
+    /// Where it's blurred, in space coordinates.
+    pub rects: Vec<Rectangle<i32, Logical>>,
+}
+
 /// A layer surface and where it's drawn, in space coordinates.
 pub struct SceneLayer {
     pub layer: LayerSurface,
     pub location: Point<i32, Logical>,
     /// Where the screen behind it is blurred (surface-local; `blur.rs`).
     pub blur: Vec<Rectangle<i32, Logical>>,
+    /// Its popups that ask for blur (upper layer surfaces only).
+    pub popup_blur: Vec<PopupBlur>,
     /// While it appears: drawn through a texture (`animation.rs`).
     pub effect: Option<WindowEffect>,
 }
@@ -233,6 +253,8 @@ pub struct SceneWindow {
     pub render_location: Point<i32, Logical>,
     /// Where the screen behind it is blurred, in space coordinates (`blur.rs`).
     pub blur: Vec<Rectangle<i32, Logical>>,
+    /// Its popups that ask for blur.
+    pub popup_blur: Vec<PopupBlur>,
     /// Nothing behind its geometry shows through (`blur::is_opaque`).
     pub opaque: bool,
     pub title_bar: Option<SceneTitleBar>,
@@ -346,11 +368,51 @@ pub fn elements_behind(
     scale: Scale<f64>,
     backdrop: Backdrop<'_>,
 ) -> Vec<PilaRenderElement> {
+    // A popup's own window or layer surface is behind it, with its popups
+    // further back.
+    let mut elements = Vec::new();
     let start = match surface {
         Behind::Layer(index) => Start::Upper(index + 1),
         Behind::Window(index) => Start::Window(index + 1),
+        Behind::WindowPopup(index, popup) => {
+            let entry = &scene.windows[index];
+            let shaders = (entry.rounding.is_some() || entry.shadow.is_some())
+                .then(|| rounded::Shaders::get(renderer))
+                .flatten();
+            elements.extend(single_window_elements(
+                renderer,
+                entry,
+                shaders.as_ref(),
+                Surfaces::Tree,
+                popup + 1,
+                area.loc,
+                scale,
+                &mut *backdrop,
+            ));
+            Start::Window(index + 1)
+        }
+        Behind::LayerPopup(index, popup) => {
+            let entry = &scene.upper[index];
+            elements.extend(single_layer_elements(
+                renderer,
+                &entry.layer,
+                entry.location,
+                Surfaces::Tree,
+                popup + 1,
+                area.loc,
+                scale,
+                Some(&mut *backdrop),
+            ));
+            elements.extend(backdrop(
+                entry.layer.wl_surface(),
+                area.loc,
+                scale,
+                entry.alpha(),
+            ));
+            Start::Upper(index + 1)
+        }
     };
-    scene_elements_from(
+    elements.extend(scene_elements_from(
         renderer,
         scene,
         area.loc,
@@ -358,7 +420,8 @@ pub fn elements_behind(
         backdrop,
         start,
         Some(area),
-    )
+    ));
+    elements
 }
 
 /// `scene_elements` from `start`. `visible`: the global area drawn (an
@@ -412,6 +475,7 @@ fn scene_elements_from(
                     output_location,
                     scale,
                     None,
+                    Some(&mut *backdrop),
                 ));
                 // Right behind the surface (elements go front to back).
                 elements.extend(backdrop(
@@ -486,6 +550,7 @@ fn scene_elements_from(
         output_location,
         scale,
         visible,
+        None,
     ));
     elements
 }
@@ -503,24 +568,32 @@ fn layer_shows(entry: &SceneLayer, visible: Option<Rectangle<i32, Logical>>) -> 
     }
 }
 
-/// `visible`: as in `scene_elements_from`.
+/// `visible`: as in `scene_elements_from`. `backdrop`: for the popups that
+/// ask for blur.
 fn layer_elements(
     renderer: &mut GlesRenderer,
     layers: &[SceneLayer],
     output_location: Point<i32, Logical>,
     scale: Scale<f64>,
     visible: Option<Rectangle<i32, Logical>>,
+    mut backdrop: Option<Backdrop<'_>>,
 ) -> Vec<PilaRenderElement> {
     let mut elements = Vec::new();
     for entry in layers.iter().filter(|entry| layer_shows(entry, visible)) {
-        let plain = |renderer: &mut GlesRenderer, origin: Point<i32, Logical>, scale| {
+        let mut plain = |renderer: &mut GlesRenderer, origin: Point<i32, Logical>, scale| {
+            let backdrop = match &mut backdrop {
+                Some(backdrop) if !entry.popup_blur.is_empty() => Some(&mut **backdrop as _),
+                _ => None,
+            };
             single_layer_elements(
                 renderer,
                 &entry.layer,
                 entry.location,
                 Surfaces::Tree,
+                0,
                 origin,
                 scale,
+                backdrop,
             )
         };
         let animated = entry.effect.as_ref().and_then(|effect| {
@@ -543,21 +616,49 @@ fn layer_elements(
     elements
 }
 
-/// A layer surface's elements (with its popups), its top-left at `location`,
-/// relative to `origin`.
+/// A layer surface's elements (with its popups from the `first_popup`th on,
+/// `popup_elements`), its top-left at `location`, relative to `origin`.
+#[allow(clippy::too_many_arguments)]
 fn single_layer_elements(
     renderer: &mut GlesRenderer,
     layer: &LayerSurface,
     location: Point<i32, Logical>,
     surfaces: Surfaces,
+    first_popup: usize,
     origin: Point<i32, Logical>,
     scale: Scale<f64>,
+    backdrop: Option<Backdrop<'_>>,
 ) -> Vec<PilaRenderElement> {
     let location: Point<i32, Physical> = (location - origin).to_physical_precise_round(scale);
     match surfaces {
-        Surfaces::Tree => AsRenderElements::<GlesRenderer>::render_elements::<PilaRenderElement>(
-            layer, renderer, location, scale, 1.0,
-        ),
+        Surfaces::Tree if first_popup == 0 && backdrop.is_none() => {
+            AsRenderElements::<GlesRenderer>::render_elements::<PilaRenderElement>(
+                layer, renderer, location, scale, 1.0,
+            )
+        }
+        Surfaces::Tree => {
+            let surface = layer.wl_surface();
+            let mut elements = popup_elements(
+                renderer,
+                surface,
+                location,
+                Point::default(),
+                first_popup,
+                origin,
+                scale,
+                1.0,
+                backdrop,
+            );
+            elements.extend(render_elements_from_surface_tree(
+                renderer,
+                surface,
+                location,
+                scale,
+                1.0,
+                Kind::Unspecified,
+            ));
+            elements
+        }
         Surfaces::MainOnly => main_surface_element(renderer, layer.wl_surface(), location, 1.0)
             .into_iter()
             .map(PilaRenderElement::Surface)
@@ -626,6 +727,7 @@ fn window_elements(
                 entry,
                 shaders.as_ref(),
                 Surfaces::Tree,
+                0,
                 output_location,
                 scale,
                 &mut *backdrop,
@@ -647,14 +749,18 @@ pub enum Surfaces {
     MainOnly,
 }
 
-/// One window's elements (front to back): its flash, surfaces and popups,
-/// its title bar, its blurred backdrop, then its shadow. The last two are part
-/// of it wherever it's drawn (a texture that animates, or a slide).
+/// One window's elements (front to back): its flash, popups (each with its
+/// blurred backdrop) and surfaces, its title bar, its blurred backdrop, then
+/// its shadow. The last two are part of it wherever it's drawn (a texture that
+/// animates, or a slide). From `first_popup` on: what's behind that popup
+/// (its flash is in front of them all).
+#[allow(clippy::too_many_arguments)]
 fn single_window_elements(
     renderer: &mut GlesRenderer,
     entry: &SceneWindow,
     shaders: Option<&rounded::Shaders>,
     surfaces: Surfaces,
+    first_popup: usize,
     output_location: Point<i32, Logical>,
     scale: Scale<f64>,
     backdrop: Backdrop<'_>,
@@ -672,7 +778,7 @@ fn single_window_elements(
         )));
     }
     // In front of this window only (elements go front to back).
-    if let Some((buffer, rect)) = &entry.flash {
+    if let Some((buffer, rect)) = entry.flash.as_ref().filter(|_| first_popup == 0) {
         elements.push(solid_element(
             renderer,
             buffer,
@@ -702,17 +808,26 @@ fn single_window_elements(
                 None => elements.extend(main.into_iter().map(PilaRenderElement::Surface)),
             }
         }
-        (Surfaces::Tree, Some((rounding, shaders))) => elements.extend(rounded_window_elements(
-            renderer,
-            &entry.window,
-            location,
-            rounding,
-            shaders,
-            output_location,
-            scale,
-            surface_alpha,
-        )),
-        (Surfaces::Tree, None) => {
+        // By hand when the popups need their backdrops, or a part of them.
+        (Surfaces::Tree, rounded)
+            if rounded.is_some() || first_popup > 0 || !entry.popup_blur.is_empty() =>
+        {
+            let popup_backdrop =
+                (!entry.popup_blur.is_empty()).then_some(&mut *backdrop as Backdrop<'_>);
+            elements.extend(window_tree_elements(
+                renderer,
+                &entry.window,
+                location,
+                first_popup,
+                rounded,
+                output_location,
+                scale,
+                surface_alpha,
+                popup_backdrop,
+            ))
+        }
+        // Smithay's own.
+        (Surfaces::Tree, _) => {
             elements.extend(AsRenderElements::<GlesRenderer>::render_elements::<
                 PilaRenderElement,
             >(
@@ -1042,7 +1157,16 @@ fn animated_window_element(
         return Vec::new();
     }
     let mut draw = |r: &mut GlesRenderer, origin, s| {
-        single_window_elements(r, entry, shaders, Surfaces::Tree, origin, s, &mut *backdrop)
+        single_window_elements(
+            r,
+            entry,
+            shaders,
+            Surfaces::Tree,
+            0,
+            origin,
+            s,
+            &mut *backdrop,
+        )
     };
     let user_data = entry.window.user_data();
     match animated_element(
@@ -1238,7 +1362,16 @@ pub fn snapshot_layer(
         Surfaces::Tree => rect.merge(layer_content_rect(layer, rect.loc)),
         Surfaces::MainOnly => rect,
     };
-    let elements = single_layer_elements(renderer, layer, rect.loc, surfaces, content.loc, scale);
+    let elements = single_layer_elements(
+        renderer,
+        layer,
+        rect.loc,
+        surfaces,
+        0,
+        content.loc,
+        scale,
+        None,
+    );
     snapshot(renderer, content, animation::center(rect), scale, &elements)
 }
 
@@ -1264,6 +1397,7 @@ pub fn snapshot_window(
         entry,
         shaders.as_ref(),
         surfaces,
+        0,
         rect.loc,
         scale,
         backdrop,
@@ -1299,38 +1433,38 @@ fn ghost_element(
     )
 }
 
-/// A window's elements, as `Window::render_elements` makes them (popups in
-/// front, unclipped), with its own surfaces clipped to `rounding`.
+/// A window's elements by hand, as `Window::render_elements` makes them
+/// (popups in front, unclipped): its popups from the `first_popup`th on
+/// (`popup_elements`), then its own surfaces, clipped to `rounded` if given.
 #[allow(clippy::too_many_arguments)]
-fn rounded_window_elements(
+fn window_tree_elements(
     renderer: &mut GlesRenderer,
     window: &Window,
     location: Point<i32, Physical>,
-    rounding: &Rounding,
-    shaders: &rounded::Shaders,
+    first_popup: usize,
+    rounded: Option<(&Rounding, &rounded::Shaders)>,
     output_location: Point<i32, Logical>,
     scale: Scale<f64>,
     alpha: f32,
+    backdrop: Option<Backdrop<'_>>,
 ) -> Vec<PilaRenderElement> {
     let Some(surface) = window.wl_surface() else {
         return Vec::new();
     };
-    let mut elements: Vec<PilaRenderElement> = Vec::new();
-    if let Some(toplevel) = window.toplevel() {
-        for (popup, popup_offset) in PopupManager::popups_for_surface(toplevel.wl_surface()) {
-            let offset: Point<i32, Physical> = (window.geometry().loc + popup_offset
-                - popup.geometry().loc)
-                .to_physical_precise_round(scale);
-            elements.extend(render_elements_from_surface_tree::<_, PilaRenderElement>(
-                renderer,
-                popup.wl_surface(),
-                location + offset,
-                scale,
-                alpha,
-                Kind::Unspecified,
-            ));
-        }
-    }
+    let mut elements = match window.toplevel() {
+        Some(toplevel) => popup_elements(
+            renderer,
+            toplevel.wl_surface(),
+            location,
+            window.geometry().loc,
+            first_popup,
+            output_location,
+            scale,
+            alpha,
+            backdrop,
+        ),
+        None => Vec::new(),
+    };
     let surfaces = render_elements_from_surface_tree::<_, WaylandSurfaceRenderElement<GlesRenderer>>(
         renderer,
         &surface,
@@ -1339,10 +1473,50 @@ fn rounded_window_elements(
         alpha,
         Kind::Unspecified,
     );
-    elements.extend(
-        rounded::clip_surfaces(surfaces, shaders, rounding, output_location, scale)
-            .map(PilaRenderElement::from),
-    );
+    match rounded {
+        Some((rounding, shaders)) => elements.extend(
+            rounded::clip_surfaces(surfaces, shaders, rounding, output_location, scale)
+                .map(PilaRenderElement::from),
+        ),
+        None => elements.extend(surfaces.into_iter().map(PilaRenderElement::Surface)),
+    }
+    elements
+}
+
+/// The popups of `root` (a toplevel's or a layer surface's) from the `first`th
+/// on, front to back as `PopupManager::popups_for_surface` gives them and
+/// Smithay's `render_elements` draw them, placed from `location` plus `base`
+/// (a window's geometry offset). Each has its blurred backdrop right behind
+/// it when `backdrop` is given and one was prepared (`blur.rs`).
+#[allow(clippy::too_many_arguments)]
+fn popup_elements(
+    renderer: &mut GlesRenderer,
+    root: &WlSurface,
+    location: Point<i32, Physical>,
+    base: Point<i32, Logical>,
+    first: usize,
+    output_location: Point<i32, Logical>,
+    scale: Scale<f64>,
+    alpha: f32,
+    mut backdrop: Option<Backdrop<'_>>,
+) -> Vec<PilaRenderElement> {
+    let mut elements = Vec::new();
+    for (popup, offset) in PopupManager::popups_for_surface(root).skip(first) {
+        let offset: Point<i32, Physical> =
+            (base + offset - popup.geometry().loc).to_physical_precise_round(scale);
+        elements.extend(render_elements_from_surface_tree::<_, PilaRenderElement>(
+            renderer,
+            popup.wl_surface(),
+            location + offset,
+            scale,
+            alpha,
+            Kind::Unspecified,
+        ));
+        if let Some(backdrop) = backdrop.as_mut() {
+            // Whole whatever its opacity, as a window's.
+            elements.extend(backdrop(popup.wl_surface(), output_location, scale, 1.0));
+        }
+    }
     elements
 }
 

@@ -907,18 +907,27 @@ Key flows and invariants:
   `SceneWindow::blur` (`blur = true` in a rule covers the geometry and title bar, not a
   client's shadow; a window opaque over its geometry and at full opacity gets none,
   `blur::is_opaque`, which a wp-alpha-modifier multiplier below 1 makes not opaque: Smithay's
-  surface elements draw the multiplier themselves). Before an output's elements are built, `render::output_elements` (which
-  the backends and captures use) calls `BlurCache::prepare`: back to front, windows and then upper layers, so that each
+  surface elements draw the multiplier themselves). Their popups that ask (menus, an input
+  method's candidate window) go into `SceneWindow::popup_blur` and `SceneLayer::popup_blur`
+  (`render::PopupBlur`: the popup, its place among its root's popups as
+  `PopupManager::popups_for_surface` gives them, front to back, and its region; the client's
+  region alone, but a rule's `blur = false` refuses them too). A window or layer surface with
+  one has its popups drawn by hand (`render::popup_elements`, as Smithay's `render_elements`
+  places them), each with its backdrop right behind it. Before an output's elements are built, `render::output_elements` (which
+  the backends and captures use) calls `BlurCache::prepare`: back to front, windows (each
+  before its popups, back to front) and then upper layers (likewise), so that each
   backdrop has those behind it, it renders what's behind the region (`render::elements_behind`:
   only the windows and layer surfaces that reach the region; an output's frame likewise leaves
-  out the layer surfaces of other outputs) into an offscreen texture through a per-region damage tracker, and only when that
+  out the layer surfaces of other outputs; behind a popup, `Behind::WindowPopup` and
+  `Behind::LayerPopup`, its own window or layer surface with the popups further back, never
+  its flash, drawn as it is even while it animates) into an offscreen texture through a per-region damage tracker, and only when that
   changed runs the dual-Kawase passes (`BLUR_PASSES` levels, custom texture shaders,
   `Transform::Normal` throughout, textures with linear filtering and clamped edges). All
   of it covers the region's bounding box; what's outside the region (clients tessellate
   rounded shapes into strips) is then cleared to transparent (`Entry::mask`, worked out by
   edges so strips leave no gaps at a fractional scale, only when the region changes), and a
   new shape redoes it even with nothing changed behind. Damage only counts within
-  `BLUR_REACH` of the region. Only a backdrop with no mask is opaque. A change of scale
+  `BLUR_REACH` of the region. Only a layer surface's backdrop with no mask is opaque. A change of scale
   allocates anew, since a tracker keeps its scale. Entries are per surface and output: an
   output's `prepare` only drops its own, and `forget_output` those of one that's gone or
   turned off. `BlurCache::element` gives `render::scene_elements` the result (a `Texture` variant of

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Blur behind popups:** a menu or an input method's candidate window that asks for blur
+  (ext-background-effect, as fcitx5's does when its theme has blur) gets it, over windows and
+  panels alike; only windows and panels got it before. A rule's `blur = false` refuses it to their
+  popups too.
 - **Xwayland starts when an X11 app needs it, and can stop when none is left:** Pila reserves the X
   display at startup (`DISPLAY` is set for the session at once, and the startup programs no longer
   wait for X) and starts Xwayland when the first X11 app connects, so a session with no X11 app runs

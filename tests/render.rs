@@ -5,7 +5,7 @@
 mod common;
 
 use common::client::{Decorations, Window};
-use common::protocols::{LayerSpec, Surf};
+use common::protocols::{LayerSpec, Placement, Surf};
 use common::*;
 use std::time::Duration;
 use wayland_client::protocol::{wl_compositor::WlCompositor, wl_surface::WlSurface};
@@ -1093,4 +1093,116 @@ fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
     assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
     assert_eq!(pila.pixel(639.0, (y + h - 2) as f64), CLEAR, "bottom left");
     assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
+}
+
+/// A clear popup of `parent` at 10,10 of it, of `size`: over the red/green
+/// edge when its parent is the glass window at 540,300.
+fn clear_popup(client: &Client, parent: Result<Window, Surf>, size: (i32, i32)) -> Surf {
+    let placement = Placement {
+        size,
+        ..Placement::default()
+    };
+    let (popup, _) = client.popup("glass-popup", parent, &placement, false, [0, 0, 0, 0]);
+    client.wait_surface_configured(popup);
+    popup
+}
+
+#[test]
+fn a_popup_can_ask_for_blur_behind_it() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, ""));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    pila.wait("the popup", |s| !s["popups"].as_array().unwrap().is_empty());
+    pila.settle();
+    assert_eq!(pila.pixel(636.0, 400.0), CLEAR, "sharp until it asks");
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
+    wait_mixed(&mut pila, 636.0, 400.0);
+    // Its window, outside it: still clear.
+    assert_eq!(pila.pixel(636.0, 305.0), CLEAR);
+}
+
+#[test]
+fn a_popups_blur_shows_its_window() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, ""));
+    let client = pila.client();
+    two_halves(&client);
+    let window = client.window("glass").color(BLUE).create();
+    pila.wait_focus("glass");
+    pila.settle();
+    // From over the window (to 740) to over the green half.
+    let popup = clear_popup(&client, Ok(window), (400, 80));
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 400, 80)]);
+    // Just inside the window's edge: its blue blurred with the green.
+    pila.wait_pixel_is(737.0, 350.0, "a mix of blue and green", |px| {
+        px[1] > 20 && px[2] > 20
+    });
+}
+
+#[test]
+fn a_popups_blur_shows_the_popup_its_over() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, ""));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    // A blue menu from 550 to 650, and a clear submenu over its right edge.
+    let (menu, _) = client.popup("menu", Ok(window), &Placement::default(), false, BLUE);
+    client.wait_surface_configured(menu);
+    let submenu = clear_popup(&client, Err(menu), (200, 60));
+    set_blur_region(&mut pila, &client, submenu, &[(0, 0, 200, 60)]);
+    pila.wait_pixel_is(647.0, 340.0, "a mix of blue and green", |px| {
+        px[1] > 20 && px[2] > 20
+    });
+}
+
+#[test]
+fn a_layer_surfaces_popup_can_ask_for_blur_behind_it() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    two_halves(&client);
+    let (panel, _) = client.layer_surface(
+        "panel",
+        &LayerSpec {
+            layer: Layer::Top,
+            size: (200, 200),
+            ..LayerSpec::default()
+        },
+        [0, 0, 0, 0],
+    );
+    client.wait_surface_configured(panel);
+    let popup = clear_popup(&client, Err(panel), (200, 180));
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
+    wait_mixed(&mut pila, 636.0, 400.0);
+}
+
+#[test]
+fn a_candidate_window_can_ask_for_blur_behind_it() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, ""));
+    let app = pila.client();
+    halves_and_a_glass_window(&mut pila, &app);
+    let ime = pila.client();
+    let input_method = ime.input_method();
+    let text_input = app.text_input();
+    app.wait_logged("text_input", "Enter");
+    // Below the text cursor: from 630,370, over the red/green edge.
+    app.enable_text_input(&text_input, (90, 50, 2, 20));
+    ime.wait_logged("input_method", "Activate");
+    let (candidates, _popup) = ime.ime_popup(&input_method, [0, 0, 0, 0], (200, 50));
+    pila.wait("the candidate window", |s| {
+        !s["input_method"]["popups"].as_array().unwrap().is_empty()
+    });
+    pila.settle();
+    assert_eq!(pila.pixel(636.0, 400.0), CLEAR, "sharp until it asks");
+    set_blur_region(&mut pila, &ime, candidates, &[(0, 0, 200, 50)]);
+    wait_mixed(&mut pila, 636.0, 400.0);
+}
+
+#[test]
+fn a_rule_refusing_a_window_its_blur_refuses_its_popups_theirs() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "blur = false"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
+    assert_eq!(pila.pixel(636.0, 400.0), CLEAR);
+    assert_eq!(pila.state()["blur"]["entries"], 0);
 }

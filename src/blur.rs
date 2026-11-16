@@ -2,7 +2,8 @@
 //! it to be blurred (a translucent bar or terminal over the wallpaper and
 //! windows). The region is double-buffered surface state (`BlurRegion`, applied
 //! on commit by Smithay's cached state); `Pila::scene` evaluates it for each
-//! layer surface (`blur_rects`) and window (`window_blur_rects`), and the
+//! layer surface (`blur_rects`) and window (`window_blur_rects`), and their
+//! popups (`popup_blurs`: menus, an input method's candidate window), and the
 //! backends run `BlurCache::prepare` before building an output's elements: for
 //! every blurred surface it renders what's behind the region into an offscreen texture, blurs it
 //! (dual Kawase: a few downsampling and upsampling passes with custom
@@ -16,8 +17,8 @@
 //! The blur is redone only when something behind the region changed
 //! (a damage tracker per region, fed the elements behind it); otherwise the
 //! kept texture is drawn as is, and the output's own damage tracking skips
-//! it. Upper layer surfaces and windows are blurred, not lower layer surfaces,
-//! and a capture of a window has only the window.
+//! it. Upper layer surfaces, windows and their popups are blurred, not lower
+//! layer surfaces, and a capture of a window has only the window.
 //!
 //! A window's backdrop is part of what it draws (`single_window_elements`), so
 //! it goes along wherever the window is drawn into a texture: while it
@@ -42,7 +43,7 @@ use smithay::{
             Bind, Color32F, Frame, Offscreen, Renderer, Texture,
         },
     },
-    desktop::{LayerSurface, Window},
+    desktop::{LayerSurface, PopupManager, Window},
     reexports::{
         wayland_protocols::ext::background_effect::v1::server::{
             ext_background_effect_manager_v1::{
@@ -66,7 +67,7 @@ use smithay::{
 use tracing::{debug, warn};
 
 use crate::{
-    render::{self, Behind, PilaRenderElement, Scene},
+    render::{self, Behind, PilaRenderElement, PopupBlur, Scene},
     rounded::Rounding,
     Pila,
 };
@@ -177,6 +178,57 @@ pub fn window_blur_rects(
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// The popups of a window that ask for blur (`render::PopupBlur`), unless a
+/// rule refuses it the window's blur (`blur = false`). `render_location` as in
+/// `window_blur_rects`.
+pub fn window_popup_blurs(window: &Window, render_location: Point<i32, Logical>) -> Vec<PopupBlur> {
+    let Some(toplevel) = window.toplevel() else {
+        return Vec::new();
+    };
+    if crate::rules::with_window_props(window, |props| props.blur) == Some(false) {
+        return Vec::new();
+    }
+    popup_blurs(
+        toplevel.wl_surface(),
+        render_location + window.geometry().loc,
+    )
+}
+
+/// The popups of a layer surface at `location` (in space coordinates) that
+/// ask for blur, unless a rule refuses it the layer surface's (`blur = false`).
+pub fn layer_popup_blurs(layer: &LayerSurface, location: Point<i32, Logical>) -> Vec<PopupBlur> {
+    if crate::rules::layer_props(layer).blur == Some(false) {
+        return Vec::new();
+    }
+    popup_blurs(layer.wl_surface(), location)
+}
+
+/// The popups of `root` that ask for blur, menus and an input method's
+/// candidate window alike, their regions in space coordinates: their offsets
+/// are from `origin` (a window's geometry, a layer surface's top-left), as
+/// `render::popup_elements` places them. A rule's `blur = true` is for its
+/// window or layer surface: a popup's is the client's region.
+fn popup_blurs(root: &WlSurface, origin: Point<i32, Logical>) -> Vec<PopupBlur> {
+    PopupManager::popups_for_surface(root)
+        .enumerate()
+        .filter_map(|(index, (popup, offset))| {
+            let surface = popup.wl_surface();
+            let (region, size) = client_region(surface)?;
+            let loc = origin + offset - popup.geometry().loc;
+            let rects: Vec<Rectangle<i32, Logical>> =
+                region_rects(&region?, Rectangle::from_size(size))
+                    .into_iter()
+                    .map(|rect| Rectangle::new(rect.loc + loc, rect.size))
+                    .collect();
+            (!rects.is_empty()).then(|| PopupBlur {
+                surface: surface.clone(),
+                index,
+                rects,
+            })
+        })
+        .collect()
 }
 
 /// Whether nothing shows through `window`'s geometry: its main surface says
@@ -530,50 +582,70 @@ impl BlurCache {
                 scale,
             };
             // Back to front, so a blur surface behind another is blurred
-            // first and shows in the other's backdrop.
+            // first and shows in the other's backdrop: a window, then its
+            // popups in front of it.
             for (index, window) in scene.windows.iter().enumerate().rev() {
-                if window.blur.is_empty() {
-                    continue;
-                }
-                let Some(surface) = window.window.wl_surface() else {
-                    continue;
-                };
                 // Under opaque windows there's no need to look for changes
                 // behind it, frame after frame; it's kept for when it shows.
-                let above = scene.windows[..index].iter().filter_map(|w| w.covers());
-                if Rectangle::subtract_rects_many(window.blur.iter().copied(), above).is_empty() {
-                    if let Some(entry) = self
-                        .entries
-                        .get_mut(&(surface.id(), output_name.to_string()))
-                    {
-                        entry.used = true;
+                let hidden = |rects: &[Rectangle<i32, Logical>]| {
+                    let above = scene.windows[..index].iter().filter_map(|w| w.covers());
+                    Rectangle::subtract_rects_many(rects.iter().copied(), above).is_empty()
+                };
+                if let Some(surface) = window
+                    .window
+                    .wl_surface()
+                    .filter(|_| !window.blur.is_empty())
+                {
+                    if hidden(&window.blur) {
+                        self.keep(&surface, output_name);
+                    } else {
+                        self.prepare_surface(
+                            &mut target,
+                            &surface,
+                            Behind::Window(index),
+                            &window.blur,
+                            window.backdrop_rounding.as_ref(),
+                        );
                     }
-                    continue;
                 }
-                self.prepare_surface(
-                    &mut target,
-                    &surface,
-                    Behind::Window(index),
-                    &window.blur,
-                    window.backdrop_rounding.as_ref(),
-                );
+                for popup in window.popup_blur.iter().rev() {
+                    if hidden(&popup.rects) {
+                        self.keep(&popup.surface, output_name);
+                    } else {
+                        self.prepare_surface(
+                            &mut target,
+                            &popup.surface,
+                            Behind::WindowPopup(index, popup.index),
+                            &popup.rects,
+                            None,
+                        );
+                    }
+                }
             }
             for (index, layer) in scene.upper.iter().enumerate().rev() {
-                if layer.blur.is_empty() {
-                    continue;
+                if !layer.blur.is_empty() {
+                    let rects: Vec<Rectangle<i32, Logical>> = layer
+                        .blur
+                        .iter()
+                        .map(|r| Rectangle::new(r.loc + layer.location, r.size))
+                        .collect();
+                    self.prepare_surface(
+                        &mut target,
+                        layer.layer.wl_surface(),
+                        Behind::Layer(index),
+                        &rects,
+                        None,
+                    );
                 }
-                let rects: Vec<Rectangle<i32, Logical>> = layer
-                    .blur
-                    .iter()
-                    .map(|r| Rectangle::new(r.loc + layer.location, r.size))
-                    .collect();
-                self.prepare_surface(
-                    &mut target,
-                    layer.layer.wl_surface(),
-                    Behind::Layer(index),
-                    &rects,
-                    None,
-                );
+                for popup in layer.popup_blur.iter().rev() {
+                    self.prepare_surface(
+                        &mut target,
+                        &popup.surface,
+                        Behind::LayerPopup(index, popup.index),
+                        &popup.rects,
+                        None,
+                    );
+                }
             }
         }
         self.entries.retain(|k, e| k.1 != output_name || e.used);
@@ -617,6 +689,17 @@ impl BlurCache {
         if let Err(err) = self.prepare_entry(target, behind, &key, rect, size, rects, shape) {
             warn!(err, "blur failed");
             self.entries.remove(&key);
+        }
+    }
+
+    /// Keep `surface`'s backdrop on the output as it is, if it has one (hidden
+    /// for now).
+    fn keep(&mut self, surface: &WlSurface, output_name: &str) {
+        if let Some(entry) = self
+            .entries
+            .get_mut(&(surface.id(), output_name.to_string()))
+        {
+            entry.used = true;
         }
     }
 

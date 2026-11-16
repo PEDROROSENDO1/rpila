@@ -749,11 +749,17 @@ impl Pila {
                 }
             }
         }
-        let layers = |layers: Vec<(LayerSurface, Point<i32, Logical>)>| {
+        // Only upper layer surfaces are blurred behind, their popups too.
+        let layers = |layers: Vec<(LayerSurface, Point<i32, Logical>)>, upper: bool| {
             layers
                 .into_iter()
                 .map(|(layer, location)| SceneLayer {
                     blur: crate::blur::blur_rects(&layer),
+                    popup_blur: if upper {
+                        crate::blur::layer_popup_blurs(&layer, location)
+                    } else {
+                        Vec::new()
+                    },
                     effect: self.layer_effect(&layer, location, now),
                     layer,
                     location,
@@ -761,7 +767,7 @@ impl Pila {
                 .collect()
         };
         Scene {
-            upper: layers(self.upper_layers()),
+            upper: layers(self.upper_layers(), true),
             layer_ghosts: self.scene_layer_ghosts(now),
             slide,
             snap_preview: self
@@ -769,7 +775,7 @@ impl Pila {
                 .map(|rect| (self.snap_preview_buffer.clone(), rect)),
             windows,
             ghosts,
-            lower: layers(self.lower_layers()),
+            lower: layers(self.lower_layers(), false),
             dnd_icon: self.dnd_icon.as_ref().map(|icon| {
                 let at = self.pointer_location().to_i32_round() + icon.offset;
                 (icon.surface.clone(), at)
@@ -890,6 +896,7 @@ impl Pila {
             } else {
                 crate::blur::window_blur_rects(window, render_location, frame)
             },
+            popup_blur: crate::blur::window_popup_blurs(window, render_location),
             opaque,
             title_bar,
             flash: crate::bell::flash(window, loc),

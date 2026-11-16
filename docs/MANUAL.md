@@ -189,9 +189,10 @@ false }`) or for a panel or launcher. Shells that animate their own panels need 
 [Building your desktop](#building-your-desktop).
 
 **Blur and transparency.** An app can ask for what's behind part of it to be blurred
-(ext-background-effect; some terminals and shells' panels do), and Pila blurs it. A rule with
-`blur = true` blurs behind a whole window (its title bar included) or panel that doesn't ask,
-and `blur = false` refuses an app's request. Panels are blurred above the windows (the top and
+(ext-background-effect; some terminals and shells' panels do, and fcitx5's candidate window),
+and Pila blurs it, behind menus and other popups too. A rule with `blur = true` blurs behind a
+whole window (its title bar included) or panel that doesn't ask, and `blur = false` refuses an
+app's request, its popups' included. Panels are blurred above the windows (the top and
 overlay layers), not below them. A window rule's `opacity` (0.1 to 1) makes a whole window
 translucent. Rules are in [Window and layer rules](#window-and-layer-rules).
 

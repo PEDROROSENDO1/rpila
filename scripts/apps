@@ -23,7 +23,8 @@ Rime's luna_pinyin isn't installed):
 
   - fcitx5 becomes Pila's input method and takes the keyboard in the app;
   - "nihao" shows its candidate window next to the text cursor, on the
-    screen, and a space puts the two characters into the app;
+    screen, blurred behind as fcitx5 asks (blur on in its settings and
+    theme), and a space puts the two characters into the app;
   - a binding of Pila's still runs, and (GTK) a context menu opens and closes
     with Escape while the input method holds the keyboard, leaving no grab.
 
@@ -89,6 +90,10 @@ Layout=
 0=Default
 """
 FCITX5_CONFIG = "[Behavior]\nActiveByDefault=True\n"
+# Its candidate window asks for blur behind it (ext-background-effect): on in
+# its settings and in its theme (the default one, with blur).
+FCITX5_CLASSICUI = "Theme=blurred\nEnableBlur=True\n"
+FCITX5_THEMES = "/usr/share/fcitx5/themes"
 RIME_SCHEMAS = "patch:\n  schema_list:\n    - schema: luna_pinyin\n"
 PINYIN, HANZI = "nihao", "\u4f60\u597d"
 
@@ -217,10 +222,17 @@ class Workload:
         home = os.environ["HOME"]
         settings = os.path.join(home, ".config/fcitx5")
         rime = os.path.join(home, ".local/share/fcitx5/rime")
-        os.makedirs(settings)
+        os.makedirs(os.path.join(settings, "conf"))
         os.makedirs(rime)
+        theme = os.path.join(home, ".local/share/fcitx5/themes/blurred")
+        shutil.copytree(os.path.join(FCITX5_THEMES, "default"), theme)
+        with open(os.path.join(theme, "theme.conf")) as f:
+            text = f.read().replace("[InputPanel]\n", "[InputPanel]\nEnableBlur=True\n", 1)
+        with open(os.path.join(theme, "theme.conf"), "w") as f:
+            f.write(text)
         for path, text in [(os.path.join(settings, "profile"), FCITX5_PROFILE),
                            (os.path.join(settings, "config"), FCITX5_CONFIG),
+                           (os.path.join(settings, "conf/classicui.conf"), FCITX5_CLASSICUI),
                            (os.path.join(rime, "default.custom.yaml"), RIME_SCHEMAS)]:
             with open(path, "w") as f:
                 f.write(text)
@@ -271,6 +283,9 @@ class Workload:
             on_screen = (0 <= px and px + pw <= screen["w"] and 0 <= py and py + ph <= screen["h"])
             self.check("the candidate window is next to the text cursor, on the screen",
                        at_text and on_screen, f"it's at {(px, py, pw, ph)}, the window at {(x, y, w, h)}")
+            blurred = self.wait(lambda s: s["blur"]["entries"] > 0, 3)
+            self.check("the candidate window is blurred behind, as fcitx5 asks", blurred is not None,
+                       "no backdrop within 3 s")
             if shutil.which("grim"):
                 subprocess.run(["grim", os.path.join(self.out, "candidates.png")], check=False)
         self.tap("space")
