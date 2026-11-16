@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Snapping to the top and bottom halves:** the actions `snap-top` and `snap-bottom` (no default
+  binding: `Mod+Up` still maximizes and `Mod+Down` restores; bind them to the arrows in
+  `[bindings]` if you'd rather have halves). Snapping the same side again restores the window, as
+  with the other snaps.
 - **Blur behind popups:** a menu or an input method's candidate window that asks for blur
   (ext-background-effect, as fcitx5's does when its theme has blur) gets it, over windows and
   panels alike; only windows and panels got it before. A rule's `blur = false` refuses it to their

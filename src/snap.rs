@@ -1,8 +1,8 @@
 //! Snapping windows to half the screen, and moving/resizing them from the
 //! keyboard.
 //!
-//! A snapped window fills the left or right half of its output's usable area
-//! (below its title bar). It remembers where it was before (`SnapState`), so
+//! A snapped window fills a half of its output's usable area (left, right, top
+//! or bottom) or a quarter (below its title bar). It remembers where it was before (`SnapState`), so
 //! snapping the same side again, Mod+Down, or dragging it away restores that.
 //! xdg windows are told they're tiled (`TiledLeft`/`TiledRight` plus top and
 //! bottom), so client-side decorations can drop their shadows.
@@ -37,6 +37,8 @@ const CORNER: f64 = 64.0;
 pub enum Side {
     Left,
     Right,
+    Top,
+    Bottom,
     TopLeft,
     TopRight,
     BottomLeft,
@@ -49,6 +51,8 @@ impl Side {
         match self {
             Side::Left => "left",
             Side::Right => "right",
+            Side::Top => "top",
+            Side::Bottom => "bottom",
             Side::TopLeft => "top-left",
             Side::TopRight => "top-right",
             Side::BottomLeft => "bottom-left",
@@ -56,16 +60,20 @@ impl Side {
         }
     }
 
-    fn is_left(self) -> bool {
-        matches!(self, Side::Left | Side::TopLeft | Side::BottomLeft)
+    fn touches_left(self) -> bool {
+        !matches!(self, Side::Right | Side::TopRight | Side::BottomRight)
+    }
+
+    fn touches_right(self) -> bool {
+        !matches!(self, Side::Left | Side::TopLeft | Side::BottomLeft)
     }
 
     fn touches_top(self) -> bool {
-        !matches!(self, Side::BottomLeft | Side::BottomRight)
+        !matches!(self, Side::Bottom | Side::BottomLeft | Side::BottomRight)
     }
 
     fn touches_bottom(self) -> bool {
-        !matches!(self, Side::TopLeft | Side::TopRight)
+        !matches!(self, Side::Top | Side::TopLeft | Side::TopRight)
     }
 }
 
@@ -110,10 +118,10 @@ pub fn snapped_side(window: &Window) -> Option<Side> {
 pub fn side_rect(area: Rectangle<i32, Logical>, side: Side, bar: i32) -> Rectangle<i32, Logical> {
     let left_w = area.size.w / 2;
     let top_h = area.size.h / 2;
-    let (x, w) = if side.is_left() {
-        (area.loc.x, left_w)
-    } else {
-        (area.loc.x + left_w, area.size.w - left_w)
+    let (x, w) = match (side.touches_left(), side.touches_right()) {
+        (true, true) => (area.loc.x, area.size.w),
+        (true, false) => (area.loc.x, left_w),
+        (false, _) => (area.loc.x + left_w, area.size.w - left_w),
     };
     let (y, h) = match (side.touches_top(), side.touches_bottom()) {
         (true, true) => (area.loc.y, area.size.h),
@@ -186,11 +194,12 @@ impl Pila {
                     if side.touches_bottom() {
                         state.states.set(TiledBottom);
                     }
-                    state.states.set(if side.is_left() {
-                        TiledLeft
-                    } else {
-                        TiledRight
-                    });
+                    if side.touches_left() {
+                        state.states.set(TiledLeft);
+                    }
+                    if side.touches_right() {
+                        state.states.set(TiledRight);
+                    }
                 }
                 state.size = Some(rect.size);
             });
@@ -397,6 +406,11 @@ mod tests {
         let right = side_rect(area, Side::Right, 28);
         assert_eq!(left, Rectangle::new((0, 58).into(), (960, 1022).into()));
         assert_eq!(right, Rectangle::new((960, 58).into(), (961, 1022).into()));
+        // Top and bottom: the whole width, each its title bar.
+        let top = side_rect(area, Side::Top, 28);
+        let bottom = side_rect(area, Side::Bottom, 28);
+        assert_eq!(top, Rectangle::new((0, 58).into(), (1921, 497).into()));
+        assert_eq!(bottom, Rectangle::new((0, 583).into(), (1921, 497).into()));
     }
 
     #[test]

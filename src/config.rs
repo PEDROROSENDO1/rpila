@@ -346,6 +346,9 @@ pub enum Action {
     /// Snap to the left/right half of the output (`snap.rs`).
     SnapLeft,
     SnapRight,
+    /// Snap to the top/bottom half of the output.
+    SnapTop,
+    SnapBottom,
     /// Snap to a quarter of the output.
     SnapTopLeft,
     SnapTopRight,
@@ -508,6 +511,8 @@ const NAMED_ACTIONS: &[(&str, Action)] = &[
     ("fullscreen", Action::ToggleFullscreen),
     ("snap-left", Action::SnapLeft),
     ("snap-right", Action::SnapRight),
+    ("snap-top", Action::SnapTop),
+    ("snap-bottom", Action::SnapBottom),
     ("snap-top-left", Action::SnapTopLeft),
     ("snap-top-right", Action::SnapTopRight),
     ("snap-bottom-left", Action::SnapBottomLeft),
@@ -582,6 +587,8 @@ action_examples! {
     Action::Minimize => Action::Minimize,
     Action::SnapLeft => Action::SnapLeft,
     Action::SnapRight => Action::SnapRight,
+    Action::SnapTop => Action::SnapTop,
+    Action::SnapBottom => Action::SnapBottom,
     Action::SnapTopLeft => Action::SnapTopLeft,
     Action::SnapTopRight => Action::SnapTopRight,
     Action::SnapBottomLeft => Action::SnapBottomLeft,

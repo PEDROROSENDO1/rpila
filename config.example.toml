@@ -175,8 +175,9 @@
 # Actions: spawn <command>, terminal, launcher, close, cycle-focus (switch to
 # the previous window; hold the modifiers and repeat for older ones),
 # cycle-focus-back, minimize (Mod+Tab brings the window back), maximize,
-# fullscreen, snap-left, snap-right, snap-top-left, snap-top-right,
-# snap-bottom-left, snap-bottom-right, restore, move-left, move-right, move-up,
+# fullscreen, snap-left, snap-right, snap-top, snap-bottom, snap-top-left,
+# snap-top-right, snap-bottom-left, snap-bottom-right, restore, move-left,
+# move-right, move-up,
 # move-down, grow-width, shrink-width, grow-height, shrink-height, center,
 # toggle-always-on-top (above the others), toggle-all-workspaces,
 # show-desktop (minimize the workspace's windows; again, bring them back),

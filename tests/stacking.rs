@@ -738,6 +738,47 @@ fn the_quarters_take_a_quarter_of_the_output() {
 }
 
 #[test]
+fn the_top_and_bottom_halves_take_half_of_the_output() {
+    let bindings = "[bindings]\n\"Mod+1\" = \"snap-top\"\n\"Mod+2\" = \"snap-bottom\"\n";
+    let mut pila = TestPila::with_config(bindings);
+    let client = pila.client();
+    let window = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let before = rect(&pila.window("a")["geometry"]);
+    let (t, b, l, r) = (
+        states::TILED_TOP,
+        states::TILED_BOTTOM,
+        states::TILED_LEFT,
+        states::TILED_RIGHT,
+    );
+    for (combo, side, geometry, has, hasnt) in [
+        ("Super+1", "top", (0, BAR, 1280, 400 - BAR), [t, l, r], b),
+        (
+            "Super+2",
+            "bottom",
+            (0, 400 + BAR, 1280, 400 - BAR),
+            [b, l, r],
+            t,
+        ),
+    ] {
+        pila.combo(combo);
+        pila.wait(side, |s| window_in(s, "a").unwrap()["snapped"] == side);
+        client.wait_configure(window, side, |c| {
+            has.iter().all(|s| c.has(*s)) && !c.has(hasnt)
+        });
+        pila.wait("its size", |s| {
+            rect(&window_in(s, "a").unwrap()["geometry"]) == geometry
+        });
+    }
+    // Again: restored to where it was before the first.
+    pila.combo("Super+2");
+    pila.wait("restored", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["snapped"].is_null() && rect(&a["geometry"]) == before
+    });
+}
+
+#[test]
 fn a_quarter_without_a_title_bar_takes_all_of_it() {
     let mut pila = TestPila::with_config(
         "[[window-rule]]\napp-id = \"a\"\ntitle-bar = false\n[bindings]\n\"Mod+Y\" = \"snap-bottom-right\"\n",

@@ -1102,8 +1102,9 @@ Key flows and invariants:
   drag and leaves it as it is); a snapped one also goes down as far as the pointer did since
   the press, which a client's own drag (GTK's, after its own threshold) makes sizable. Keyboard
   move/resize/center go through `apply_rect`, which also configures X11 windows.
-  `Side` also names the four quarters (`snap-top-left`, ... or a drag near a corner:
-  `edge_target`); a quarter is tiled only on the edges it touches.
+  `Side` also names the top and bottom halves (`snap-top`, `snap-bottom`, from the keyboard
+  only) and the four quarters (`snap-top-left`, ... or a drag near a corner: `edge_target`);
+  each is tiled on the edges it touches.
 - **Window menu** (`window_menu.rs`): opened by a right press on Pila's title bar
   (`on_decoration_press`, at the pointer rounded down, so the pointer is inside it) or by
   `show_window_menu` (checked like a move request, `check_grab`, or with the serial of that

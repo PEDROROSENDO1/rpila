@@ -109,9 +109,18 @@ elsewhere closes it.
 **Snapping.** Drag a window with the pointer at the left or right edge of a monitor to make it
 fill that half, near a corner to fill that quarter, or at the top edge to maximize it. A preview
 shows where it would go before you let go. `Mod+Left` and `Mod+Right` do the halves from the
-keyboard; the quarters are the actions `snap-top-left`, `snap-top-right`, `snap-bottom-left`
-and `snap-bottom-right`, with no default binding. A snapped window remembers where it was:
-snapping the same side again, `Mod+Down`, or dragging it away brings it back.
+keyboard. The top and bottom halves are the actions `snap-top` and `snap-bottom` (handy on a
+monitor turned on its side), and the quarters `snap-top-left`, `snap-top-right`,
+`snap-bottom-left` and `snap-bottom-right`, with no default binding: `Mod+Up` maximizes and
+`Mod+Down` restores. A snapped window remembers where it was: snapping the same side again,
+`Mod+Down`, or dragging it away brings it back. To have the up and down arrows do halves
+instead (snapping the same side again still restores):
+
+```toml
+[bindings]
+"Mod+Up" = "snap-top"
+"Mod+Down" = "snap-bottom"
+```
 
 **Maximized and fullscreen.** `Mod+M` and `Mod+Up` maximize (the window fills the monitor, minus
 any bar), `Mod+F` makes it fullscreen; pressing them again restores the window. Maximized and fullscreen windows have square corners and
