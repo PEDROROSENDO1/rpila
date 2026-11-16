@@ -202,6 +202,7 @@ can be turned off globally or per app.
 
 ## Not there yet
 
-Pila is alpha. Missing: touchscreens and tablets (tablet-v2). NVIDIA is untested; secondary-GPU outputs are off by default and untested on
+Pila is alpha. Missing: touchscreens and tablets (tablet-v2). NVIDIA has been tried on one card
+(a GTX 1060 with the proprietary driver); secondary-GPU outputs are off by default and untested on
 real hardware. See [Status](../README.md#status), the [roadmap](ROADMAP.md) and, if you can, [help test
 it](../README.md#help-test-pila).
