@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Window events say where windows are:** `pila msg subscribe` windows events now carry `x`,
+  `y`, `width` and `height`, as `pila msg windows` does, so a taskbar can order windows by
+  position without asking again. A window being dragged or resized with the pointer keeps the
+  place it had until it's let go: a drag sends one event, not one a frame.
 - **`pila msg minimize <id>`** minimizes a window by its id, as a dock does through
   wlr-foreign-toplevel-management; `pila msg focus <id>` brings it back. Refused while the
   session is locked, like `focus` and `close`.

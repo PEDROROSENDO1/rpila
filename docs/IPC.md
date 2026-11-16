@@ -111,8 +111,9 @@ now, and then one whenever that kind changes:
 
 Each event is the whole list, as the request of the same name answers it (`keyboard` events carry
 `layouts`): replace what you had.
-Windows in events leave out `x`, `y`, `width` and `height`, which change in every frame of a move;
-ask `windows` for them. Events come once things settle on screen, as taskbars hear about them
+A window being moved or resized with the pointer keeps, in events, the `x`, `y`, `width` and
+`height` it had before, until it's let go: a drag sends one event, when it ends, rather than one
+a frame (`windows` answers with where it is now). Events come once things settle on screen, as taskbars hear about them
 (the keyboard's right away, and the monitors' power even when none is on to draw). A
 subscribed connection still answers requests (answers have `ok`, events `event`); subscribing
 again replaces the list. A subscriber that leaves more than 1 MiB unread is disconnected.

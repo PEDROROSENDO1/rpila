@@ -1178,7 +1178,9 @@ Key flows and invariants:
   last event of each it got; its first events go right after the answer (`Client::after_answer`).
   `Pila::send_ipc_events`, in `after_frames` right after the taskbars' `refresh_toplevels`, builds
   each kind someone wants (only then), and sends it to those whose last differs: whole lists,
-  windows without their geometry so that moves send nothing. A change that may come with no frame
+  the window in a pointer move or resize (`grabbed_window`) with the geometry it had in the last
+  windows event (`Subscribers::settled`), so that a drag sends one event, after the release (an
+  input event, which redraws). A change that may come with no frame
   (`set_output_power`: with every monitor off nothing is drawn) marks them due
   (`Pila::ipc_events_due`), and `after_frames` sends them even when it draws nothing. The keyboard layouts are checked
   every loop iteration instead (`send_keyboard_events`, before `after_frames` returns early): an

@@ -768,10 +768,7 @@ fn a_subscriber_gets_the_state_then_each_change() {
     let a = client.window("a").create();
     let opened = events.wait("windows", "a opens", |e| app_ids(e) == ["a"]);
     let window = &opened["windows"][0];
-    assert!(
-        window["x"].is_null() && window["width"].is_null(),
-        "{window}"
-    );
+    assert!(window["x"].is_i64() && window["width"] == 400, "{window}");
     assert_eq!(window["workspace"], 1);
     // Each change comes once, in the same order as the first events.
     events.wait("workspaces", "a counted", |e| {
@@ -790,7 +787,7 @@ fn a_subscriber_gets_the_state_then_each_change() {
 }
 
 #[test]
-fn a_subscriber_gets_only_what_it_asked_for_and_no_moves() {
+fn a_subscriber_gets_only_what_it_asked_for_and_a_drag_once_done() {
     let mut pila = TestPila::start();
     let (mut workspaces, _) = Subscription::new(&pila, Some(&["workspaces"]));
     assert_eq!(workspaces.line().unwrap()["event"], "workspaces");
@@ -801,9 +798,12 @@ fn a_subscriber_gets_only_what_it_asked_for_and_no_moves() {
         e["workspaces"][0]["windows"] == 1
     });
 
-    // A move changes where the window is, which events leave out.
-    let (mut windows, _) = Subscription::new(&pila, Some(&["windows"]));
-    assert_eq!(windows.line().unwrap()["event"], "windows");
+    // A drag changes where the window is in every frame; events say so once,
+    // when it's let go.
+    let (mut windows, first) = Subscription::new(&pila, Some(&["windows"]));
+    assert_eq!(first["ok"], true);
+    let before = windows.line().unwrap();
+    let start = named(&before, "a")["x"].as_i64().expect("x in events");
     let (x, y, ..) = rect(&pila.window("a")["geometry"]);
     pila.move_to((x + 50) as f64, (y + 50) as f64);
     pila.key_press("Super");
@@ -811,18 +811,55 @@ fn a_subscriber_gets_only_what_it_asked_for_and_no_moves() {
     for _ in 0..5 {
         pila.move_by(20.0, 10.0);
     }
-    pila.release("left");
-    pila.key_release("Super");
     pila.wait("moved", |s| {
         rect(&window_in(s, "a").unwrap()["geometry"]).0 == x + 100
     });
-    let moved = windows.during(Duration::from_millis(300));
-    assert!(moved.is_empty(), "{moved:?}");
+    let moving = windows.during(Duration::from_millis(300));
+    assert!(moving.is_empty(), "{moving:?}");
+    pila.release("left");
+    pila.key_release("Super");
+    let done = windows.during(Duration::from_millis(500));
+    assert_eq!(done.len(), 1, "{done:?}");
+    let now = &query(&pila, &["windows"]);
+    for field in ["x", "y", "width", "height"] {
+        assert_eq!(
+            named(&done[0], "a")[field],
+            named(now, "a")[field],
+            "{field}"
+        );
+    }
+    assert_eq!(named(&done[0], "a")["x"], start + 100);
     let other = workspaces.during(Duration::from_millis(100));
     assert!(
         other.iter().all(|e| e["event"] == "workspaces"),
         "{other:?}"
     );
+}
+
+/// A window moved by an action has its new place in the next event.
+#[test]
+fn a_subscriber_hears_where_a_window_went() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").size(300, 200).create();
+    pila.wait_focus("a");
+    let (mut windows, _) = Subscription::new(&pila, Some(&["windows"]));
+    let before = windows.line().unwrap();
+    let start = named(&before, "a")["x"].clone();
+    action(&pila, &["snap-right"]);
+    let event = windows.wait("windows", "a snapped", |e| {
+        named(e, "a")["x"] != start && named(e, "a")["snapped"] == "right"
+    });
+    let event = if named(&event, "a")["width"] == 300 {
+        // The client's new size comes with its next commit.
+        windows.wait("windows", "a resized", |e| named(e, "a")["width"] != 300)
+    } else {
+        event
+    };
+    let now = &query(&pila, &["windows"]);
+    for field in ["x", "y", "width", "height"] {
+        assert_eq!(named(&event, "a")[field], named(now, "a")[field], "{field}");
+    }
 }
 
 /// The pointer moving onto another monitor changes which is focused: a

@@ -18,6 +18,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     io::{Read, Write},
     net::Shutdown,
     os::unix::{
@@ -479,7 +480,14 @@ pub struct Subscribers {
     /// The layouts, and the one in use, the last keyboard event was made
     /// from (`send_keyboard_events`).
     keyboard: Option<(Vec<String>, usize)>,
+    /// Where each window was in the last windows event, by id: the window
+    /// being moved or resized with the pointer stays there until it's let
+    /// go, so that a drag sends one event rather than one a frame.
+    settled: HashMap<String, serde_json::Map<String, Value>>,
 }
+
+/// A window's geometry in IPC answers.
+const GEOMETRY: [&str; 4] = ["x", "y", "width", "height"];
 
 /// As in the config's `[[output]]`.
 fn transform_name(transform: Transform) -> &'static str {
@@ -612,22 +620,10 @@ impl Pila {
         }
     }
 
-    /// An event line: `{"event": kind, field: [...]}`. Windows leave out where
-    /// they are and their size, which change in every frame of a move.
+    /// An event line: `{"event": kind, field: [...]}`.
     fn ipc_event(&mut self, kind: Kind) -> String {
         let list = match kind {
-            Kind::Windows => self
-                .ipc_windows()
-                .into_iter()
-                .map(|mut window| {
-                    if let Value::Object(fields) = &mut window {
-                        for field in ["x", "y", "width", "height"] {
-                            fields.remove(field);
-                        }
-                    }
-                    window
-                })
-                .collect(),
+            Kind::Windows => self.ipc_windows_settled(),
             Kind::Workspaces => self.ipc_workspaces(),
             Kind::Outputs => self.ipc_outputs(),
             Kind::Keyboard => self.ipc_layouts(),
@@ -636,6 +632,38 @@ impl Pila {
         event.insert("event".into(), kind.name().into());
         event.insert(kind.field().into(), Value::Array(list));
         Value::Object(event).to_string()
+    }
+
+    /// The windows, the one being moved or resized with the pointer where it
+    /// was before (`Subscribers::settled`; as it is if it wasn't listed yet).
+    fn ipc_windows_settled(&mut self) -> Vec<Value> {
+        let grabbed = self.grabbed_window().and_then(|w| identifier(&w));
+        let mut windows = self.ipc_windows();
+        let mut settled = HashMap::with_capacity(windows.len());
+        for window in &mut windows {
+            let Value::Object(fields) = window else {
+                continue;
+            };
+            let Some(id) = fields.get("id").and_then(Value::as_str).map(str::to_string) else {
+                continue;
+            };
+            let kept = (grabbed.as_ref() == Some(&id))
+                .then(|| self.ipc_events.settled.remove(&id))
+                .flatten();
+            let geometry = match kept {
+                Some(kept) => {
+                    fields.extend(kept.clone());
+                    kept
+                }
+                None => GEOMETRY
+                    .iter()
+                    .filter_map(|&f| Some((f.to_string(), fields.get(f)?.clone())))
+                    .collect(),
+            };
+            settled.insert(id, geometry);
+        }
+        self.ipc_events.settled = settled;
+        windows
     }
 
     /// A binding's action, but with no key held: a window switch ends at once,

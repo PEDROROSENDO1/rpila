@@ -168,8 +168,6 @@ const WINDOW: &[&str] = &[
     "urgent",
     "x11",
 ];
-/// Windows in events leave these out: they change in every frame of a move.
-const WINDOW_NOT_IN_EVENTS: &[&str] = &["x", "y", "width", "height"];
 const OUTPUT: &[&str] = &[
     "name",
     "make",
@@ -278,18 +276,13 @@ fn ipc_answers_and_events_keep_their_fields() {
     let kinds = ["windows", "workspaces", "outputs", "keyboard"];
     ipc.ask(serde_json::json!({ "request": "subscribe", "events": kinds }));
     let mut seen = BTreeSet::new();
-    let window_in_events: Vec<&str> = WINDOW
-        .iter()
-        .copied()
-        .filter(|f| !WINDOW_NOT_IN_EVENTS.contains(f))
-        .collect();
     let deadline = Instant::now() + Duration::from_secs(10);
     while seen.len() < kinds.len() {
         assert!(Instant::now() < deadline, "events seen: {seen:?}");
         let event = ipc.line();
         let kind = event["event"].as_str().unwrap_or_default().to_string();
         match kind.as_str() {
-            "windows" => all_have("a window event", &event["windows"], &window_in_events),
+            "windows" => all_have("a window event", &event["windows"], WINDOW),
             "workspaces" => all_have("a workspaces event", &event["workspaces"], WORKSPACE),
             "outputs" => all_have("an outputs event", &event["outputs"], OUTPUT),
             "keyboard" => all_have("a keyboard event", &event["layouts"], LAYOUT),
