@@ -119,17 +119,29 @@ jobs:
       - run: ./result/bin/pila-check --help && test -f result/share/pila/check/capture-stream
       - run: nix develop --command cargo --version
       # EGL's drivers, which a NixOS system provides, come from Mesa here. If
-      # it starts, it's still running when its time is up.
+      # it starts, it's still running when its time is up. An X client
+      # connecting starts the package's Xwayland (on demand), which answers
+      # its handshake.
       - name: Smoke test
         run: |
           mesa="$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#mesa)"
+          cat >x11-client.py <<'EOF'
+          import os, socket, struct
+          conn = socket.socket(socket.AF_UNIX)
+          conn.connect("/tmp/.X11-unix/X" + os.environ["DISPLAY"].lstrip(":"))
+          conn.sendall(b"l\0" + struct.pack("<HHHH", 11, 0, 0, 0) + b"\0\0")
+          conn.settimeout(4)
+          print("X11 handshake:", "accepted" if conn.recv(8)[:1] == b"\1" else "refused")
+          EOF
           status=0
           XDG_RUNTIME_DIR="$(mktemp -d)" PILA_HEADLESS_DEVICE=software \
             __EGL_VENDOR_LIBRARY_DIRS="$mesa/share/glvnd/egl_vendor.d" \
-            timeout 5 ./result/bin/pila --backend headless >pila.log 2>&1 || status=$?
+            timeout 5 ./result/bin/pila --backend headless -c "python3 $PWD/x11-client.py" \
+            >pila.log 2>&1 || status=$?
           tail -n 20 pila.log
           test "$status" = 124
           grep -F 'Xwayland ready' pila.log
+          grep -F 'X11 handshake: accepted' pila.log
 
   audit:
     name: Dependencies (cargo audit)
