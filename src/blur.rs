@@ -57,6 +57,7 @@ use smithay::{
         },
     },
     utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform},
+    wayland::alpha_modifier::AlphaModifierSurfaceCachedState,
     wayland::compositor::{
         get_region_attributes, with_states, Cacheable, RectangleKind, RegionAttributes,
     },
@@ -179,7 +180,8 @@ pub fn window_blur_rects(
 }
 
 /// Whether nothing shows through `window`'s geometry: its main surface says
-/// it's opaque there. Such a window has no use for a backdrop.
+/// it's opaque there, and isn't faded (wp-alpha-modifier). Such a window has
+/// no use for a backdrop.
 pub fn is_opaque(window: &Window) -> bool {
     let Some(surface) = window.wl_surface() else {
         return false;
@@ -189,6 +191,15 @@ pub fn is_opaque(window: &Window) -> bool {
         return false;
     }
     with_states(&surface, |states| {
+        let faded = states
+            .cached_state
+            .get::<AlphaModifierSurfaceCachedState>()
+            .current()
+            .multiplier()
+            .is_some_and(|multiplier| multiplier < u32::MAX);
+        if faded {
+            return false;
+        }
         let Some(state) = states
             .data_map
             .get::<smithay::backend::renderer::utils::RendererSurfaceStateUserData>()

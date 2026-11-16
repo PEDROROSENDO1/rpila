@@ -740,6 +740,22 @@ fn an_opaque_window_at_half_opacity_has_a_backdrop() {
 }
 
 #[test]
+fn an_opaque_window_its_client_fades_has_a_backdrop() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "blur = true"));
+    let client = pila.client();
+    two_halves(&client);
+    let glass = client.window("glass").color(BLUE).create();
+    pila.wait_focus("glass");
+    let state = pila.settle();
+    assert_eq!(state["blur"]["entries"], 0);
+    let surface = client.surface(glass);
+    client.fade(&surface, 0.5);
+    surface.commit();
+    client.flush();
+    pila.wait("its backdrop", |s| s["blur"]["entries"] == 1);
+}
+
+#[test]
 fn opacity_doesnt_fade_a_windows_backdrop() {
     let blurred = |rule: &str| {
         let mut pila = TestPila::with_config(&glass_window_rule(540, 300, rule));

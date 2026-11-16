@@ -879,7 +879,8 @@ Key flows and invariants:
   layer surface into `SceneLayer::blur` (upper layers only for now) and per window into
   `SceneWindow::blur` (`blur = true` in a rule covers the geometry and title bar, not a
   client's shadow; a window opaque over its geometry and at full opacity gets none,
-  `blur::is_opaque`). Before an output's elements are built, `render::output_elements` (which
+  `blur::is_opaque`, which a wp-alpha-modifier multiplier below 1 makes not opaque: Smithay's
+  surface elements draw the multiplier themselves). Before an output's elements are built, `render::output_elements` (which
   the backends and captures use) calls `BlurCache::prepare`: back to front, windows and then upper layers, so that each
   backdrop has those behind it, it renders what's behind the region (`render::elements_behind`:
   only the windows and layer surfaces that reach the region; an output's frame likewise leaves

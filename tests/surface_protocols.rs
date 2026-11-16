@@ -41,6 +41,7 @@ use wayland_protocols::{
 
 const PUBLIC: &[&str] = &[
     "ext_background_effect_manager_v1",
+    "wp_alpha_modifier_v1",
     "wl_compositor",
     "wl_data_device_manager",
     "wl_output",
@@ -474,6 +475,84 @@ fn a_viewport_sets_the_window_size_and_single_pixel_buffers_fill_it() {
         pila.pixel((x + 150) as f64, (y + 100) as f64),
         [0, 255, 0, 255]
     );
+}
+
+// --- wp-alpha-modifier ---
+
+fn near(pixel: [u8; 4], expected: [u8; 4]) -> bool {
+    pixel
+        .iter()
+        .zip(expected)
+        .all(|(a, b)| (*a as i32 - b as i32).abs() <= 3)
+}
+
+#[test]
+fn an_alpha_multiplier_fades_a_surface_without_a_new_buffer() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client
+        .window("a")
+        .size(400, 300)
+        .color([255, 255, 0, 0])
+        .create();
+    pila.wait_focus("a");
+    client.set_auto_draw(window, false);
+    pila.settle();
+    let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+    let (px, py) = ((x + 200) as f64, (y + 150) as f64);
+    // What's behind the window: the background next to it.
+    let behind = pila.pixel((x + 500) as f64, py);
+    assert_eq!(pila.pixel(px, py), [255, 0, 0, 255]);
+    let surface = client.surface(window);
+    client.fade(&surface, 0.5);
+    surface.commit();
+    client.flush();
+    let half = |c: u8, d: u8| ((c as u32 + d as u32) / 2) as u8;
+    let expected = [
+        half(255, behind[0]),
+        half(0, behind[1]),
+        half(0, behind[2]),
+        255,
+    ];
+    let mut seen = [0; 4];
+    for _ in 0..50 {
+        pila.settle();
+        seen = pila.pixel(px, py);
+        if near(seen, expected) {
+            break;
+        }
+    }
+    assert!(near(seen, expected), "{seen:?}, not about {expected:?}");
+}
+
+#[test]
+fn a_faded_window_doesnt_cover_whats_behind_it() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let cover = client.window("cover").fullscreen().create();
+    pila.wait("the cover", |s| {
+        window_in(s, "cover").is_some_and(|w| rect(&w["geometry"]) == (0, 0, 1280, 800))
+    });
+    let cover_surface = client.surface(cover);
+    client.fade(&cover_surface, 0.5);
+    cover_surface.commit();
+    client.flush();
+    pila.settle();
+    // The window shows through: its frame callbacks keep their pace (a
+    // covered one gets about one a second).
+    let surface = client.surface(window);
+    let started = std::time::Instant::now();
+    let mut done = 0;
+    while started.elapsed() < std::time::Duration::from_millis(1000) {
+        let tag = format!("frame{done}");
+        let _frame = surface.frame(&client.qh, tag.clone());
+        client.draw(window, None);
+        client.wait_logged(&tag, "Done");
+        done += 1;
+    }
+    assert!(done >= 20, "{done} frame callbacks in 1 s");
 }
 
 // --- Cursors --------------------------------------------------------------------

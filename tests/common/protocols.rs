@@ -67,6 +67,10 @@ use wayland_protocols::{
         },
     },
     wp::{
+        alpha_modifier::v1::client::{
+            wp_alpha_modifier_surface_v1::WpAlphaModifierSurfaceV1,
+            wp_alpha_modifier_v1::WpAlphaModifierV1,
+        },
         content_type::v1::client::{
             wp_content_type_manager_v1::WpContentTypeManagerV1, wp_content_type_v1::WpContentTypeV1,
         },
@@ -278,6 +282,8 @@ logged!(
     WpPresentationFeedback,
     WpContentTypeManagerV1,
     WpContentTypeV1,
+    WpAlphaModifierV1,
+    WpAlphaModifierSurfaceV1,
     WpSinglePixelBufferManagerV1,
     ZxdgExporterV2,
     ZxdgExportedV2,
@@ -644,6 +650,14 @@ impl Client {
     {
         self.try_bind(interface, version)
             .unwrap_or_else(|| panic!("pila offers no {interface}"))
+    }
+
+    /// Multiply `surface`'s alpha by `multiplier` (wp-alpha-modifier), from
+    /// its next commit.
+    pub fn fade(&self, surface: &WlSurface, multiplier: f64) {
+        let manager: WpAlphaModifierV1 = self.bind("wp_alpha_modifier_v1", 1);
+        let modifier = manager.get_surface(surface, &self.qh, "alpha".into());
+        modifier.set_multiplier((multiplier * u32::MAX as f64) as u32);
     }
 
     /// Bind the first `wl_output` global again, as a client that binds an

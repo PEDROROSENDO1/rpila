@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
+  overlays set its transparency, and Pila applies it on screen, in screenshots and screen
+  sharing, and behind blur (a window faded that way gets its backdrop).
+- **Known bug, documented:** in a text field inside a popover (a GTK search field), clicking a
+  candidate of an input method closes the popover; pick candidates with the keyboard there.
+
 ## 0.5.9 (2026-11-15)
 
 - **An X11 app's own transparency shows with rounded corners:** an app that sets

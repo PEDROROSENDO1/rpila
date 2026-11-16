@@ -12,6 +12,7 @@ use smithay::{
         },
     },
     wayland::{
+        alpha_modifier::AlphaModifierState,
         content_type::ContentTypeState,
         foreign_toplevel_list::{ForeignToplevelListHandler, ForeignToplevelListState},
         fractional_scale::{FractionalScaleHandler, FractionalScaleManagerState},
@@ -68,6 +69,7 @@ pub fn init_globals(
     ViewporterState::new::<Pila>(dh);
     SinglePixelBufferState::new::<Pila>(dh);
     ContentTypeState::new::<Pila>(dh);
+    AlphaModifierState::new::<Pila>(dh);
     FractionalScaleManagerState::new::<Pila>(dh);
     PointerGesturesState::new::<Pila>(dh);
     RelativePointerManagerState::new::<Pila>(dh);
@@ -128,6 +130,11 @@ pub fn init_globals(
 // `Pila::new` (it needs the clock); feedback is sent from `frame.rs`.
 
 // wp_content_type_v1: a hint (video, game, photo); unused for now.
+
+// wp_alpha_modifier_v1: a client fades a surface without drawing it again.
+// Smithay's surface elements multiply their alpha by it (and claim nothing
+// opaque below 1); `blur::is_opaque` reads it too, so a faded window neither
+// covers what's behind it nor goes without a backdrop.
 
 // zwp_pointer_gestures_v1, zwp_relative_pointer_v1: the seat forwards these
 // (gestures from libinput via `gestures.rs`); the nested backend gets

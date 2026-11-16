@@ -123,6 +123,40 @@ fn an_output_capture_has_the_screens_pixels() {
 }
 
 #[test]
+fn a_window_its_client_fades_is_faded_in_a_capture() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client.window("a").size(400, 300).color(RED).create();
+    pila.wait_focus("a");
+    client.set_auto_draw(window, false);
+    let (x, y, ..) = rect(&pila.window("a")["geometry"]);
+    let surface = client.surface(window);
+    client.fade(&surface, 0.5);
+    surface.commit();
+    client.flush();
+    client.roundtrip();
+    pila.settle();
+    let source = output_source(&client, "HEADLESS-1");
+    let (session, size) = session(&client, &source, "session");
+    let (_frame, file) = capture(&client, &session, size, "frame");
+    client.wait_logged("frame", "Ready");
+    let pixel = read_pixel(&file, 1280, (x + 50) as i32, (y + 50) as i32);
+    let half = |c: u8, d: u8| ((c as i32 + d as i32) / 2) as u8;
+    let expected = [
+        half(255, BACKGROUND[0]),
+        half(0, BACKGROUND[1]),
+        half(0, BACKGROUND[2]),
+    ];
+    assert!(
+        pixel
+            .iter()
+            .zip(expected)
+            .all(|(a, b)| (*a as i32 - b as i32).abs() <= 3),
+        "{pixel:?}, not about {expected:?}"
+    );
+}
+
+#[test]
 fn a_window_capture_has_only_the_window() {
     let mut pila = TestPila::start();
     let client = pila.client();
