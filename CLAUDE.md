@@ -253,7 +253,8 @@ section per subsystem. Read a subsystem's section before changing it** (they sta
 its name and module: grep for them). A change to a flow or invariant updates its section
 in the same commit, and a new feature adds one. A rename updates the docs and comments
 that name the old path too: `docs_names::the_docs_name_only_code_that_exists` fails on a
-file or `module::item` that's gone.
+file or `module::item` that's gone (only when the name is gone from the whole code: a field
+removed whose name lives on elsewhere passes, so grep).
 
 What breaks silently anywhere in the code, whichever subsystem you're in:
 

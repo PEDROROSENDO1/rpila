@@ -1046,7 +1046,8 @@ Key flows and invariants:
   the grab the pointer is locked, so the grab ends itself through its `handle` and runs an
   item from an idle callback (with the `wake` ping); `close_window_menu` (keys,
   `forget_window`, a lock, a workspace switch) ends it through the pointer. The keyboard
-  filter gives it every press while open (`InputState::menu_key`). Drawn first by
+  filter gives it every press while open (kept as `menu_key` for after the filter, in
+  `on_keyboard`). Drawn first by
   `output_elements` from `Scene::window_menu`, its label textures and solid buffers kept in
   `MenuBuffers`.
 - **Urgency** (`urgency.rs`): a mark in a window's user data (`set_urgent`, `is_urgent`), set by

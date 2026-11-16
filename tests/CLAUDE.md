@@ -49,6 +49,8 @@ What breaks silently:
 `docs_names::the_docs_name_only_code_that_exists` fails when `docs/ARCHITECTURE.md`,
 `docs/MULTI_GPU.md`, a `CLAUDE.md`, `CONTRIBUTING.md` or a comment in `src/` names a file,
 or a path into Pila's code (`module::item`, `Type::method`), that's gone: rename it there too.
+It checks that the last name exists somewhere in the code, not on that type: `Type::field`
+passes after the field is removed if any other item, local or field shares its name.
 
 `scripts/coverage [--html]` reports line coverage per file (instrumented build in
 `target/coverage`; needs `llvm-profdata`/`llvm-cov` of rustc's LLVM major version), a guide

@@ -3,12 +3,15 @@
 //! buffers). Screenshot tools (grim) and screen sharing
 //! (xdg-desktop-portal-wlr, for browsers and OBS through PipeWire) use them.
 //! Built on the bindings from `wayland-protocols`: Smithay implements both
-//! too (`wayland::image_copy_capture`), but accepts misuses Pila treats as
-//! protocol errors (a frame attached to or captured again after `capture`,
-//! the cursor session's `duplicate_session` and `invalid_option`, shm
-//! buffers larger than advertised; `tests/capture.rs`,
-//! `a_frame_misused_is_a_protocol_error` and
-//! `a_cursor_session_is_stopped_from_the_start`).
+//! too (`wayland::image_copy_capture`), but accepts misuses Pila refuses. As
+//! protocol errors: a frame attached to or captured again after `capture`, a
+//! `capture` with no buffer, a cursor's second session (`duplicate_session`),
+//! an unknown option to the manager (`invalid_option`). By failing the frame
+//! (`buffer_constraints`): an shm buffer of another size than advertised,
+//! larger ones included. (`tests/capture.rs`:
+//! `a_frame_misused_is_a_protocol_error`,
+//! `a_cursor_session_is_stopped_from_the_start`,
+//! `a_buffer_of_the_wrong_size_fails`.)
 //!
 //! A session advertises its buffer constraints (the source's size in
 //! physical pixels and the shm formats), then copies one frame per `capture`.

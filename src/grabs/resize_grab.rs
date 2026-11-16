@@ -94,8 +94,9 @@ impl ResizeSurfaceGrab {
     ) -> Self {
         let initial_rect = initial_window_rect;
 
-        // xdg windows apply the size on their next commit (`handle_commit`
-        // moves them for top/left edges); X11 windows are configured directly.
+        // xdg windows apply the size on their next commit
+        // (`finish_resize_commit` moves them for top/left edges); X11 windows
+        // are configured directly.
         if let Some(toplevel) = window.toplevel() {
             ResizeSurfaceState::with(toplevel.wl_surface(), |state| {
                 *state = ResizeSurfaceState::Resizing {
