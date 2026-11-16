@@ -86,6 +86,10 @@ fn a_resize_waits_for_the_client_to_ack_before_its_next_configure() {
     pila.key_press("Super");
     pila.press("right");
     pila.wait("a resize grab", |s| s["pointer"]["grab"] == "resize");
+    // Whatever the press brought (a raise, the focus) configured and acked
+    // first: a configure still unacked would hold the first resize back.
+    pila.settle();
+    client.roundtrip();
     client.set_auto_ack(window, false);
     let before = client.configures(window).len();
     // A fast pointer: many motions before the app gets to the first configure.
