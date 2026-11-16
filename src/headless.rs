@@ -708,11 +708,10 @@ pub fn apply_output_config(state: &mut Pila) -> bool {
         );
         o.redraw_needed = true;
         if !enabled {
-            if o.enabled() {
+            // Enabled until now: it has a global.
+            if let Some(global) = o.global.take() {
                 o.drawn = false;
-                if let Some(global) = o.global.take() {
-                    crate::state::retire_global(&display_handle, &loop_handle, global);
-                }
+                crate::state::retire_global(&display_handle, &loop_handle, global);
                 info!(name = o.output.name(), "output disabled");
                 disabled.push(o.output.clone());
             }

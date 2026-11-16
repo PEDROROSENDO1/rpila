@@ -765,9 +765,10 @@ pub(super) fn disable_output(state: &mut Pila, id: OutputId) {
     let Some(surface) = data.outputs.get_mut(&id) else {
         return;
     };
-    if !surface.enabled() {
+    // Already disabled: no global.
+    let Some(global) = surface.global.take() else {
         return;
-    }
+    };
     surface.drm_output = None;
     surface.scanout_feedback = None;
     surface.frame_pending = false;
@@ -776,9 +777,7 @@ pub(super) fn disable_output(state: &mut Pila, id: OutputId) {
     surface.last_vblank = None;
     surface.presented_variable = false;
     let output = surface.output.clone();
-    if let Some(global) = surface.global.take() {
-        crate::state::retire_global(&state.display_handle, &state.loop_handle, global);
-    }
+    crate::state::retire_global(&state.display_handle, &state.loop_handle, global);
     info!(name = output.name(), "output disabled");
     state.space.unmap_output(&output);
     state.output_removed(&output);
