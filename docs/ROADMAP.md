@@ -14,23 +14,20 @@ doesn't speak yet.
 
 Small, testable in CI, no new hardware needed.
 
-1. **Tests for EDID parsing** (`src/edid.rs`, the least covered file outside the bare-metal
-   backend): monitor names, makers and serials come from it, and `[[output]]` sections and
-   `pila-report` read them. Unit tests on sample EDIDs, broken ones included (bad checksum,
-   truncated, no name descriptor).
-2. **Input methods' known limits in the manual:** a click on a candidate closes a popover that
+1. **Input methods' known limits in the manual:** a click on a candidate closes a popover that
    holds the pointer, and arrow keys don't walk a GTK menu opened while the input method is on.
-3. **`wp-alpha-modifier-v1`:** a client fades one of its surfaces without redrawing it (video
+2. **`wp-alpha-modifier-v1`:** a client fades one of its surfaces without redrawing it (video
    players, overlays). Smithay already applies it when drawing; Pila offers the global and
    checks captures, blur and animations keep it.
-4. **`wp-pointer-warp-v1`:** a client moves the pointer within its own focused surface (games,
+3. **`wp-pointer-warp-v1`:** a client moves the pointer within its own focused surface (games,
    SDL 3). Refused while locked, as every other input path.
-5. **Interactive resize sends one configure per frame**, not one per pointer motion (up to a
+4. **Interactive resize sends one configure per frame**, not one per pointer motion (up to a
    thousand a second with a fast mouse), as other compositors do: heavy clients (Firefox,
    Electron) resize more smoothly.
-6. **Multi-GPU: the copy between GPUs in the frame statistics,** logged apart as captures and
-   direct scanout are (`src/frame_stats.rs`), so a report from a two-GPU machine shows what it
-   costs ([MULTI_GPU.md](https://github.com/igalmarino/pila/blob/main/docs/MULTI_GPU.md),
+5. **Multi-GPU: frames copied to another GPU apart in the frame statistics,** as captures and
+   direct scanout are (`src/frame_stats.rs`): a monitor on a second GPU is drawn on the primary
+   and copied over inside the same frame today, so a report from a two-GPU machine can't tell what
+   the copy costs ([MULTI_GPU.md](https://github.com/igalmarino/pila/blob/main/docs/MULTI_GPU.md),
    "Risks").
 
 ## Next
