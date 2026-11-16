@@ -61,7 +61,7 @@ candidate window next to the text cursor and on the screen (GTK's text cursor ha
 check that Pila's Smithay keeps such a rectangle) with a blurred backdrop, as fcitx5 asks through
 ext-background-effect (the theme is opaque: `blur.entries` in Pila's state tells), a space puts 你好 into the app, Super+m still
 maximizes, and in GTK a context menu opens and Escape closes it with no grab left. The container
-has no CJK font: the candidates in `candidates.png` are boxes. Run them after changing
+has CJK fonts (wqy-microhei, noto-fonts-cjk): `candidates.png` shows the candidates readable. Run them after changing
 `input_method.rs`, the keyboard path, grabs, popups' drawing or blur, or the Smithay rev.
 
 # scripts/shells
