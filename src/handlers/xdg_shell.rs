@@ -21,8 +21,8 @@ use smithay::{
     },
     utils::{Logical, Point, Serial},
     wayland::shell::xdg::{
-        decoration::XdgDecorationHandler, PopupSurface, PositionerState, ToplevelSurface,
-        XdgShellHandler, XdgShellState,
+        decoration::XdgDecorationHandler, Configure, PopupSurface, PositionerState,
+        ToplevelSurface, XdgShellHandler, XdgShellState,
     },
 };
 use tracing::{debug, warn};
@@ -37,6 +37,12 @@ use crate::{
 impl XdgShellHandler for Pila {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
         &mut self.protocols.xdg_shell
+    }
+
+    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
+        if let Configure::Toplevel(_) = configure {
+            self.resize_acked(&surface);
+        }
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {

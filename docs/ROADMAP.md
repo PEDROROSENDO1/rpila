@@ -18,10 +18,7 @@ Small, testable in CI, no new hardware needed.
    in a popover (a GTK search field), the candidate window doesn't react to the pointer, and a
    click on it closes the popover (a known bug, its test ignored: `tests/FEATURES.md`). A grab
    of Pila's around Smithay's popup grab lets the candidate window have it.
-2. **Interactive resize sends one configure per frame**, not one per pointer motion (up to a
-   thousand a second with a fast mouse), as other compositors do: heavy clients (Firefox,
-   Electron) resize more smoothly.
-3. **Multi-GPU: frames copied to another GPU apart in the frame statistics,** as captures and
+2. **Multi-GPU: frames copied to another GPU apart in the frame statistics,** as captures and
    direct scanout are (`src/frame_stats.rs`): a monitor on a second GPU is drawn on the primary
    and copied over inside the same frame today, so a report from a two-GPU machine can't tell what
    the copy costs ([MULTI_GPU.md](https://github.com/igalmarino/pila/blob/main/docs/MULTI_GPU.md),

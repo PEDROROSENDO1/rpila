@@ -80,6 +80,43 @@ fn mod_right_drag_resizes_from_the_nearest_corner() {
 }
 
 #[test]
+fn a_resize_waits_for_the_client_to_ack_before_its_next_configure() {
+    let (mut pila, client, window, (x, y, w, h)) = one_window(Decorations::Server);
+    pila.move_to((x + w - 50) as f64, (y + h - 50) as f64);
+    pila.key_press("Super");
+    pila.press("right");
+    pila.wait("a resize grab", |s| s["pointer"]["grab"] == "resize");
+    client.set_auto_ack(window, false);
+    let before = client.configures(window).len();
+    // A fast pointer: many motions before the app gets to the first configure.
+    for _ in 0..10 {
+        pila.move_by(4.0, 3.0);
+    }
+    client.wait_configure(window, "the first", |c| c.has(states::RESIZING));
+    client.roundtrip();
+    pila.settle();
+    client.roundtrip();
+    assert_eq!(
+        client.configures(window).len(),
+        before + 1,
+        "one configure in flight"
+    );
+    // Acked: the next one has where the pointer is now.
+    client.ack(window);
+    let (w, h) = (w as i32, h as i32);
+    client.wait_configure(window, "the latest size", |c| c.size == (w + 40, h + 30));
+    assert_eq!(client.configures(window).len(), before + 2);
+    client.ack(window);
+    // The release's configure goes even before an ack.
+    pila.move_by(4.0, 3.0);
+    pila.release("right");
+    pila.key_release("Super");
+    let last = client.wait_configure(window, "resize over", |c| !c.has(states::RESIZING));
+    assert_eq!(last.size, (w + 44, h + 33));
+    client.set_auto_ack(window, true);
+}
+
+#[test]
 fn resizing_from_the_top_left_moves_the_window_once_it_commits() {
     let (mut pila, client, window, (x, y, w, h)) = one_window(Decorations::Server);
     pila.move_to((x + 50) as f64, (y + 50) as f64);

@@ -15,8 +15,13 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::{compositor, shell::xdg::SurfaceCachedState},
+    wayland::{
+        compositor,
+        shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
+    },
 };
+
+use crate::sync::Locked;
 use std::cell::RefCell;
 
 bitflags::bitflags! {
@@ -199,7 +204,12 @@ impl PointerGrab<Pila> for ResizeSurfaceGrab {
                 state.states.set(xdg_toplevel::State::Resizing);
                 state.size = Some(self.last_window_size);
             });
-            xdg.send_pending_configure();
+            // One configure in flight: a pointer reports up to a thousand
+            // motions a second, more than an app draws. The size pending
+            // when the app acks goes then (`resize_acked`).
+            if !awaiting_ack(xdg) {
+                xdg.send_pending_configure();
+            }
         } else if let Some(x11) = self.window.x11_surface() {
             // Keep the opposite edge in place when resizing from top/left.
             let mut loc = self.initial_rect.loc;
@@ -410,7 +420,36 @@ impl ResizeSurfaceState {
     }
 }
 
+/// Whether `xdg` has a configure it hasn't acked yet.
+fn awaiting_ack(xdg: &ToplevelSurface) -> bool {
+    compositor::with_states(xdg.wl_surface(), |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .is_some_and(|data| !data.locked().pending_configures().is_empty())
+    })
+}
+
 impl Pila {
+    /// `surface` acked a configure: during an interactive resize, the size the
+    /// pointer asked for since goes out (called from `ack_configure`).
+    pub fn resize_acked(&mut self, surface: &WlSurface) {
+        let resizing = ResizeSurfaceState::with(surface, |state| {
+            matches!(state, ResizeSurfaceState::Resizing { .. })
+        });
+        if !resizing {
+            return;
+        }
+        if let Some(xdg) = self
+            .window_for_surface(surface)
+            .and_then(|w| w.toplevel().cloned())
+        {
+            if !awaiting_ack(&xdg) {
+                xdg.send_pending_configure();
+            }
+        }
+    }
+
     /// A commit of `surface` after a resize from the top or left edge: the
     /// window moves so that its bottom right corner stays (called from
     /// `commit`, after `handle_xdg_commit`).

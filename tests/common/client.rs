@@ -146,6 +146,10 @@ pub struct WindowData {
     pub close_requested: bool,
     /// Draw on every configure (else the test draws).
     pub auto_draw: bool,
+    /// Ack every configure as it comes (else the test acks, `ack`).
+    pub auto_ack: bool,
+    /// The serial of the latest configure not acked yet (`auto_ack` off).
+    pub unacked: Option<u32>,
     pub outputs: Vec<String>,
     pub preferred_scale: Option<i32>,
     pub bounds: Option<(i32, i32)>,
@@ -493,6 +497,8 @@ impl<'a> WindowBuilder<'a> {
             acked: 0,
             close_requested: false,
             auto_draw: true,
+            auto_ack: true,
+            unacked: None,
             outputs: Vec::new(),
             preferred_scale: None,
             bounds: None,
@@ -713,6 +719,29 @@ impl Client {
     /// Stop drawing on configures (the test draws with `draw`).
     pub fn set_auto_draw(&self, window: Window, on: bool) {
         self.with_window(window, |w| w.auto_draw = on);
+    }
+
+    /// Stop acking configures as they come, as a busy app (the test acks
+    /// with `ack`).
+    pub fn set_auto_ack(&self, window: Window, on: bool) {
+        self.with_window(window, |w| w.auto_ack = on);
+    }
+
+    /// Ack the latest configure not acked yet, and draw at its size (with
+    /// `auto_draw`), as the app does once it gets to it.
+    pub fn ack(&self, window: Window) {
+        let mut s = self.lock();
+        let shm = s.shm.clone().expect("wl_shm");
+        let w = &mut s.windows[window.0];
+        let serial = w.unacked.take().expect("a configure to ack");
+        w.xdg_surface.ack_configure(serial);
+        w.acked += 1;
+        if w.auto_draw {
+            let size = configured_size(w);
+            draw(&shm, &self.qh, w, size);
+        }
+        drop(s);
+        self.flush();
     }
 
     /// Draw a buffer of `size` (`None`: the last configured or default size).
@@ -1131,10 +1160,14 @@ impl Dispatch<XdgSurface, usize> for Handler {
             let s = &mut *state.lock();
             let shm = s.shm.clone();
             let w = &mut s.windows[*index];
-            xdg_surface.ack_configure(serial);
-            w.acked += 1;
             let configure = std::mem::take(&mut w.pending);
             w.configures.push(configure);
+            if !w.auto_ack {
+                w.unacked = Some(serial);
+                return;
+            }
+            xdg_surface.ack_configure(serial);
+            w.acked += 1;
             if w.auto_draw && w.toplevel.is_some() {
                 let size = configured_size(w);
                 draw(shm.as_ref().expect("wl_shm"), qh, w, size);

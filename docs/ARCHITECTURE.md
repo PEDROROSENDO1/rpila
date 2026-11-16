@@ -463,7 +463,10 @@ Key flows and invariants:
   move/resize grab *before* the press is
   forwarded, so the client never sees that click. Move/resize grabs show their own cursor
   via `Pila::set_cursor`, which must be called *after* `set_grab` (`Focus::Clear` resets the
-  cursor), and reset it in `PointerGrab::unset`. Client-requested move/resize goes through
+  cursor), and reset it in `PointerGrab::unset`. A resize keeps one configure in flight for an
+  xdg window: a motion while the app hasn't acked the last one only sets the pending size, and
+  its ack sends it (`XdgShellHandler::ack_configure` → `Pila::resize_acked`); the configure that
+  ends the resize goes regardless. Client-requested move/resize goes through
   `check_grab` (`handlers/xdg_shell.rs`), which requires a live implicit grab on that
   client's surface. Popup grabs (menus, `XdgShellHandler::grab`) use Smithay's
   `PopupKeyboardGrab`/`PopupPointerGrab`; they are the only keyboard grabs Pila takes, but

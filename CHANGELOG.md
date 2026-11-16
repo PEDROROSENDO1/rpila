@@ -5,6 +5,10 @@
 - **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
   overlays set its transparency, and Pila applies it on screen, in screenshots and screen
   sharing, and behind blur (a window faded that way gets its backdrop).
+- **Resizing a window with the pointer keeps up with the app:** Pila sent a new size for every
+  pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
+  sends the next one once the app has acknowledged the last, so a slow app (a browser, an
+  Electron app) gets the latest size instead of a backlog of old ones.
 - **Apps can move the pointer within their own window** (wp-pointer-warp), as games and SDL 3
   do to recenter it: only the app the pointer is on, only onto its own surface, never while the
   screen is locked.
