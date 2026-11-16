@@ -397,7 +397,7 @@ fn committed_size(window: &Window) -> smithay::utils::Size<i32, Logical> {
 
 /// A window's app id, for the log.
 fn app_id(window: &Window) -> String {
-    crate::foreign_toplevel::title_and_app_id(window).1
+    crate::foreign_toplevel::app_id(window)
 }
 
 /// Whether a layer surface had a buffer at its last commit, to tell when

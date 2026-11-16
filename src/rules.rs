@@ -363,7 +363,7 @@ impl Pila {
     /// is handled when it's mapped, `place_new_window`.)
     pub fn apply_initial_rules(&mut self, window: &Window) {
         let props = self.resolve_window_rules(window);
-        let app_id = crate::foreign_toplevel::title_and_app_id(window).1;
+        let app_id = crate::foreign_toplevel::app_id(window);
         if let (Some((w, h)), Some(toplevel)) = (props.size, window.toplevel()) {
             debug!(target: "pila::rules", app_id, w, h, "initial size");
             toplevel.with_pending_state(|state| state.size = Some((w, h).into()));
@@ -380,7 +380,7 @@ impl Pila {
             fullscreen || props.open_fullscreen == Some(true),
         );
         if wanted != (maximized, fullscreen) {
-            let app_id = crate::foreign_toplevel::title_and_app_id(window).1;
+            let app_id = crate::foreign_toplevel::app_id(window);
             debug!(
                 target: "pila::rules",
                 app_id,

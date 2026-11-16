@@ -383,7 +383,7 @@ fn window_by_app_id(state: &Pila, app_id: &str) -> Result<smithay::desktop::Wind
         .space
         .elements()
         .chain(state.off_space_windows())
-        .find(|w| crate::foreign_toplevel::title_and_app_id(w).1 == app_id)
+        .find(|w| crate::foreign_toplevel::app_id(w) == app_id)
         .cloned()
         .ok_or_else(|| format!("no window {app_id:?}"))
 }

@@ -96,7 +96,7 @@ impl Pila {
         let focus = self.keyboard_focus()?;
         let name_of_root = |root: &WlSurface| {
             if let Some(window) = self.window_for_surface(root) {
-                Some(foreign_toplevel::title_and_app_id(&window).1)
+                Some(foreign_toplevel::app_id(&window))
             } else {
                 self.layer_for_surface(root)
                     .map(|(_, layer)| layer.namespace().to_string())
@@ -112,7 +112,7 @@ impl Pila {
             return Some("lock".into());
         }
         if let Some(window) = self.window_for_surface(&focus) {
-            return Some(foreign_toplevel::title_and_app_id(&window).1);
+            return Some(foreign_toplevel::app_id(&window));
         }
         self.layer_for_surface(&focus)
             .map(|(_, layer)| format!("layer:{}", layer.namespace()))
@@ -128,7 +128,7 @@ impl Pila {
             else {
                 continue;
             };
-            let name = foreign_toplevel::title_and_app_id(window).1;
+            let name = foreign_toplevel::app_id(window);
             roots.push((name, surface.into_owned(), loc - window.geometry().loc));
         }
         for output in self.space.outputs() {
@@ -178,7 +178,7 @@ impl Pila {
             .windows
             .unmapped
             .iter()
-            .map(|w| foreign_toplevel::title_and_app_id(w).1)
+            .map(foreign_toplevel::app_id)
             .collect::<Vec<_>>();
 
         let outputs: Vec<Value> = match &self.backend {
@@ -254,25 +254,23 @@ impl Pila {
         let pointer_focus = self
             .surface_under(pointer_loc)
             .and_then(|(surface, _)| self.window_for_surface(&surface))
-            .map(|w| foreign_toplevel::title_and_app_id(&w).1);
+            .map(|w| foreign_toplevel::app_id(&w));
         let cursor = match &self.cursor_status {
             CursorImageStatus::Hidden => "hidden".to_string(),
             CursorImageStatus::Named(icon) => icon.name().to_string(),
             CursorImageStatus::Surface(_) => "surface".to_string(),
         };
-        let focused = self
-            .focused_window()
-            .map(|w| foreign_toplevel::title_and_app_id(&w).1);
+        let focused = self.focused_window().map(|w| foreign_toplevel::app_id(&w));
         let focus_history = self
             .windows
             .focus_history
             .iter()
-            .map(|w| foreign_toplevel::title_and_app_id(w).1)
+            .map(foreign_toplevel::app_id)
             .collect::<Vec<_>>();
         let switch = self.windows.switch.as_ref().map(|s| {
             let (order, index) = s.order();
             json!({
-                "order": order.iter().map(|w| foreign_toplevel::title_and_app_id(w).1).collect::<Vec<_>>(),
+                "order": order.iter().map(foreign_toplevel::app_id).collect::<Vec<_>>(),
                 "index": index,
             })
         });
@@ -338,7 +336,7 @@ impl Pila {
                 "grab": self.seat.input_method().keyboard_grabbed(),
                 "text_input_focus": self.seat.text_input().focus().map(|surface| {
                     self.window_for_surface(&surface)
-                        .map(|w| crate::foreign_toplevel::title_and_app_id(&w).1)
+                        .map(|w| crate::foreign_toplevel::app_id(&w))
                         .or_else(|| {
                             self.layer_for_surface(&surface)
                                 .map(|(_, l)| l.namespace().to_string())
@@ -348,7 +346,7 @@ impl Pila {
                 "popups": self.input_method_popups(),
             },
             "window_menu": self.window_menu.as_ref().map(|menu| json!({
-                "window": crate::foreign_toplevel::title_and_app_id(&menu.window).1,
+                "window": crate::foreign_toplevel::app_id(&menu.window),
                 "geometry": rect(menu.rect),
                 "items": menu.labels(),
                 "checked": menu.checked(),

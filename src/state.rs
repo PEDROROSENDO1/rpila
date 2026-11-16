@@ -1205,7 +1205,7 @@ impl Pila {
         }
 
         // The app id, for window rules.
-        let app_id = crate::foreign_toplevel::title_and_app_id(&window).1;
+        let app_id = crate::foreign_toplevel::app_id(&window);
         debug!(app_id, ?location, size = ?window.geometry().size, maximized, fullscreen, "mapping window");
         self.map_window(window.clone(), location, true);
         self.announce_toplevel(&window);

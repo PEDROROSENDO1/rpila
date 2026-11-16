@@ -208,7 +208,7 @@ impl Pila {
             rect.loc.y = rect.loc.y.clamp(output.loc.y, max.y.max(output.loc.y));
         }
         debug!(
-            app_id = crate::foreign_toplevel::title_and_app_id(window).1,
+            app_id = crate::foreign_toplevel::app_id(window),
             ?rect,
             "window menu"
         );

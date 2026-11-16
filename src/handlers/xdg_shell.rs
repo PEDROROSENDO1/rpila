@@ -452,7 +452,7 @@ impl Pila {
         else {
             return false;
         };
-        let app_id = crate::foreign_toplevel::title_and_app_id(&window).1;
+        let app_id = crate::foreign_toplevel::app_id(&window);
         debug!(app_id, "window unmapped by its client");
         let was_focused = self.focused_window().as_ref() == Some(&window);
         self.forget_window(&window);

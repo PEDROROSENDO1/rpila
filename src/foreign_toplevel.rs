@@ -43,6 +43,15 @@ pub(crate) fn title(window: &Window) -> String {
     xdg_attributes(window, |data| data.title.clone().unwrap_or_default()).unwrap_or_default()
 }
 
+/// The window's app id (an X11 window's: WM_CLASS's class), empty if unset
+/// (`title_and_app_id` without the title).
+pub(crate) fn app_id(window: &Window) -> String {
+    if let Some(x11) = window.x11_surface() {
+        return x11.class();
+    }
+    xdg_attributes(window, |data| data.app_id.clone().unwrap_or_default()).unwrap_or_default()
+}
+
 /// What `read` takes from an xdg toplevel's attributes; `None` for an X11
 /// window, or one whose attributes can't be read.
 fn xdg_attributes<T>(

@@ -186,7 +186,7 @@ impl Pila {
         let windows = self.space.elements().filter_map(|window| {
             let surface = window.wl_surface()?.into_owned();
             let loc = self.space.element_location(window)?;
-            let name = crate::foreign_toplevel::title_and_app_id(window).1;
+            let name = crate::foreign_toplevel::app_id(window);
             // Popups are drawn from the window's geometry (`render.rs`).
             Some((surface, loc, name))
         });

@@ -39,7 +39,7 @@ impl Pila {
         let mark = window.user_data().get_or_insert(Urgent::default);
         if mark.0.replace(urgent) != urgent {
             tracing::debug!(
-                app_id = crate::foreign_toplevel::title_and_app_id(window).1,
+                app_id = crate::foreign_toplevel::app_id(window),
                 urgent,
                 "urgency"
             );
