@@ -639,6 +639,23 @@ fn a_mode_is_picked_as_on_bare_metal() {
     });
 }
 
+/// An output placed right of another at a fractional scale starts where the
+/// `Space` says that one ends (its logical width rounded up), not a column
+/// inside it: 1280 px at 1.5 are 853.33, so 854.
+#[test]
+fn an_output_placed_right_of_a_scaled_one_doesnt_overlap_it() {
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        config: "[[output]]\nname = \"A\"\nscale = 1.5\n".into(),
+        ..Options::default()
+    });
+    let state = pila.wait("A at 1.5", |s| s["outputs"][0]["scale"] == 1.5);
+    let (ax, _, aw, _) = rect(&state["outputs"][0]["geometry"]);
+    let (bx, ..) = rect(&state["outputs"][1]["geometry"]);
+    assert_eq!(aw, 854, "{state}");
+    assert_eq!(bx, ax + aw, "{state}");
+}
+
 // --- Monitors (`edid.rs`) ---------------------------------------------------------
 
 const MONITOR: &str = "=LEN/P27h-30/ABC";
