@@ -21,10 +21,10 @@ built around Compiz-style effects, and COSMIC's floating mode comes with the res
 [What sets Pila apart](https://github.com/igalmarino/pila/blob/main/docs/WHY-PILA.md).
 
 Pila prefers **standard protocols**: Wayland core and the official `wayland-protocols`.
-The wlroots protocols that panels and shells still need and that have no standard
-replacement yet (layer shell, screencopy, foreign toplevel management, gamma control,
-output management and power management, virtual keyboard) are supported too, each to be
-replaced when an `ext-` version lands.
+The wlroots protocols that panels, shells and input methods still need and that have no
+standard replacement yet (layer shell, screencopy, foreign toplevel management, gamma control,
+output management and power management, virtual keyboard, input method) are supported too,
+each to be replaced when an `ext-` version lands.
 
 ![Pila in 35 seconds, with Noctalia's bar: windows opening and snapping to halves and quarters, blur behind a translucent terminal, workspaces, and the configuration applied as it's saved](https://raw.githubusercontent.com/igalmarino/pila/main/docs/demo.webp)
 
@@ -122,7 +122,8 @@ A short report helps even if everything works:
   four-finger swipes to switch workspaces (configurable), other touchpad gestures for apps,
   pointer lock and confinement for games, shaking the pointer to find it (`[cursor]`), any key
   bindable (media keys included, repeating while held if asked), and the mouse wheel with
-  modifiers.
+  modifiers; input methods such as fcitx5 for Chinese, Japanese and Korean (input-method-v2,
+  text-input-v3).
 - **Configuration** in one TOML file, applied live when saved.
 - **Scripting:** `pila msg` lists windows, monitors and workspaces as text or JSON and runs any
   action ([docs/IPC.md](https://github.com/igalmarino/pila/blob/main/docs/IPC.md)).

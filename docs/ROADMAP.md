@@ -41,7 +41,9 @@ to say so.
   foreign toplevel management, gamma, output management and power, virtual keyboard, input
   method): each is swapped for its `ext-` version once one lands in wayland-protocols and
   Smithay.
-- **Smithay with the fix Pila's fork carries:** Pila goes back to Smithay's own repository.
+- **Smithay with the changes Pila's fork carries** (a text cursor with no width, asynchronous
+  page flips, the X display reserved apart from Xwayland): Pila goes back to Smithay's own
+  repository.
 
 ## Not planned
 

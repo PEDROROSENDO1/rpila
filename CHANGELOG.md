@@ -13,7 +13,6 @@
 - **For packagers: Pila's Smithay fork also carries Smithay's X display reservation** (its pull
   request #2269, not merged yet), with which Xwayland starts on demand and its window manager
   leaves no event source behind.
-
 - **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
   overlays set its transparency, and Pila applies it on screen, in screenshots and screen
   sharing, and behind blur (a window faded that way gets its backdrop).

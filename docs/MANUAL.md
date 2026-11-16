@@ -24,6 +24,7 @@ This manual says how to use Pila and set it up. Every configuration option is de
 - [Workspaces](#workspaces)
 - [Monitors](#monitors)
 - [Keyboard, mouse and touchpad](#keyboard-mouse-and-touchpad)
+- [Input methods (Chinese, Japanese, Korean, ...)](#input-methods-chinese-japanese-korean-)
 - [The configuration file](#the-configuration-file)
 - [Building your desktop](#building-your-desktop)
 - [Screenshots and screen sharing](#screenshots-and-screen-sharing)

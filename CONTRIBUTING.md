@@ -16,10 +16,10 @@ too; see [Use of AI](README.md#use-of-ai) for the terms.
 - **No distro assumptions**: the code and the host-side scripts must work without systemd
   (elogind or seatd), on any distro, with configurable install paths.
 - Before sending a change: `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and
-  `cargo test` (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu
-  and Fedora run when dependencies, the Nix files, `scripts/install` or `resources/` change,
-  and weekly). Every feature gets integration tests (`tests/*.rs`, on a
-  headless Pila; a new test goes into `tests/FEATURES.md`), and unit tests cover pure
+  `cargo test` (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu,
+  Fedora and Nix, with the oldest supported Rust, and `cargo audit` run when dependencies, the
+  Nix files, `scripts/install` or `resources/` change, and weekly). Every feature gets
+  integration tests (`tests/*.rs`, on a headless Pila; a new test goes into `tests/FEATURES.md`), and unit tests cover pure
   logic. What those can't reach is tried by hand: how things look nested (`cargo run`),
   and the DRM/KMS backend on a TTY (`scripts/tty`). `scripts/check` is a smoke and
   performance run with real programs, judged from Pila's log, frame statistics included:
@@ -96,7 +96,7 @@ container. (The author's host is Arch, with Pila as its only desktop.)
 - Test clients inside: `foot`, `weston-terminal`, `weston-simple-egl`, `wayland-info`,
   `gtk4-widget-factory` (menus and popovers), `xterm` (X11), and desktop tools to test
   against (`kitty`, `fuzzel`, `waybar`, `swaybg`, `mako`, `swaylock`, `wl-clipboard`, `grim`,
-  `slurp`, `wtype`, `wlr-randr`, `wlopm`, `wlsunset`, Noctalia and Dux Shell)
+  `slurp`, `wtype`, `wlr-randr`, `wlopm`, `wlsunset`, `fcitx5`, Noctalia and Dux Shell)
 - Claude Code (native install) with auth and history persisted across rebuilds
 
 The container follows the session it's entered from: entered from a Pila session
