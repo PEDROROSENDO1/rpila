@@ -46,7 +46,8 @@ Known gaps: touchscreens, drawing tablets. **Monitors wired to another GPU**
 (on many laptops with two GPUs, NVIDIA ones especially, the HDMI and DisplayPort outputs are on the
 dedicated GPU) stay off by default: with `other-gpus = true` in the configuration Pila draws them with the
 seat's primary GPU and copies the picture over, which is new and untried. `pila-report` marks
-them; a report from such a machine helps most.
+them; a report from such a machine helps most. What comes next, and in what order, is in the
+[roadmap](https://github.com/igalmarino/pila/blob/main/docs/ROADMAP.md).
 
 ## Help test Pila
 
