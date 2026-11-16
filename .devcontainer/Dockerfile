@@ -31,8 +31,8 @@ ENV TZ="${TZ}" \
 #     (headless) and its tests for memory errors
 #   - fcitx5 with Rime's pinyin: an input method (input-method-v2) for the IME
 #     tests in scripts/apps; GTK 4, foot and kitty reach it through
-#     text-input-v3. A CJK font (wqy-microhei, small) to read its candidates
-#     in screenshots
+#     text-input-v3. CJK fonts to read its candidates in screenshots:
+#     wqy-microhei (small, Chinese) and noto-fonts-cjk (Japanese and Korean too)
 #   - swayidle, ironbar and nwg-panel: desktop tools to try on Pila for the
 #     manual's list of what works ("Building your desktop")
 RUN pacman -Syu --noconfirm --needed \
@@ -46,7 +46,7 @@ RUN pacman -Syu --noconfirm --needed \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
         grim slurp wtype wlopm wlsunset noctalia quickshell dux-shell ffmpeg \
         meson just wireplumber nlohmann-json stb nodejs npm labwc valgrind \
-        fcitx5 fcitx5-rime rime-luna-pinyin wqy-microhei \
+        fcitx5 fcitx5-rime rime-luna-pinyin wqy-microhei noto-fonts-cjk \
     && rm -rf /var/cache/pacman/pkg/* \
     && dbus-uuidgen --ensure=/etc/machine-id
 
