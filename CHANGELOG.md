@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Blur doesn't allocate on every frame of a resize:** a blurred panel animating its size or a
+  blurred window being resized kept getting new textures for its backdrop, one set per frame;
+  they're now a little bigger than needed (with room to grow, once one has grown out of
+  them) and kept while it grows or shrinks, and given back once it shrinks to under half of
+  them. Noctalia's control center opening went from 6 allocations to 3.
+
 ## 0.6.0 (2026-11-16)
 
 - **Tearing for games** (wp-tearing-control): a fullscreen game with vsync off (Vulkan's

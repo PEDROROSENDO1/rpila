@@ -922,7 +922,16 @@ Key flows and invariants:
   `Behind::LayerPopup`, its own window or layer surface with the popups further back, never
   its flash, drawn as it is even while it animates) into an offscreen texture through a per-region damage tracker, and only when that
   changed runs the dual-Kawase passes (`BLUR_PASSES` levels, custom texture shaders,
-  `Transform::Normal` throughout, textures with linear filtering and clamped edges). All
+  `Transform::Normal` throughout, textures with linear filtering and clamped edges). A
+  backdrop's textures are its size rounded up to `BLUR_ALLOC_STEP` (`blur::capacity`), and every
+  pass draws and samples only the part in use (`Entry::size`, from the textures' origin; the
+  shaders' `tap` clamps samples to its last texels as `CLAMP_TO_EDGE` does at a texture's edge,
+  and `Shaders::up_rounded` gets its `target_size` scaled to match): a surface that grows or
+  shrinks a few pixels a frame (a panel's animation, a window being resized) keeps them, with a
+  new damage tracker for the new size, and only one that outgrows them or shrinks to under half
+  of them gets new ones (`blur::fits`); one that outgrew them gets half as much again of room
+  where it grew, since it's likely growing on (a panel opening grows by more than the step a
+  frame). All
   of it covers the region's bounding box; what's outside the region (clients tessellate
   rounded shapes into strips) is then cleared to transparent (`Entry::mask`, worked out by
   edges so strips leave no gaps at a fractional scale, only when the region changes), and a

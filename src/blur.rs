@@ -14,6 +14,10 @@
 //! strips). Everything is blurred over their bounding box, whose texture then
 //! has what's outside the region cleared to transparent (`Entry::mask`).
 //!
+//! A backdrop's textures are a little bigger than it (`BLUR_ALLOC_STEP`) and
+//! only their part in use is drawn and sampled, so a surface that changes
+//! size a few pixels a frame keeps them (`fits`).
+//!
 //! The blur is redone only when something behind the region changed
 //! (a damage tracker per region, fed the elements behind it); otherwise the
 //! kept texture is drawn as is, and the output's own damage tracking skips
@@ -82,6 +86,10 @@ const BLUR_ALWAYS: bool = false;
 /// upper bound (each pass samples `BLUR_OFFSET` times two texels of its level
 /// away at most, the levels doubling).
 const BLUR_REACH: i32 = (2 << BLUR_PASSES) * 3;
+/// A backdrop's textures are this many physical pixels bigger at a time, so
+/// one that grows a few pixels a frame (a panel's animation, a window being
+/// resized) is drawn in the same ones.
+const BLUR_ALLOC_STEP: i32 = 128;
 
 /// The surface's blur region, double-buffered with the surface state.
 #[derive(Default, Clone, Debug)]
@@ -265,10 +273,16 @@ pub fn is_opaque(window: &Window) -> bool {
     })
 }
 
-/// The blur passes' own uniforms, after `render::texture_shader_prologue`.
+/// The blur passes' own uniforms, after `render::texture_shader_prologue`,
+/// and `tap`: a sample of the part of the texture in use, whose edge texels
+/// go on past it (as `CLAMP_TO_EDGE` does at the texture's own edge).
 const UNIFORMS: &str = "\
 uniform float offset;
 uniform vec2 halfpixel;
+uniform vec2 uv_max;
+vec4 tap(vec2 uv) {
+    return texture2D(tex, min(uv, uv_max));
+}
 ";
 
 /// For `up_rounded`.
@@ -282,11 +296,11 @@ uniform float radius;
 const DOWN_FRAG: &str = "\
 void main() {
     vec2 uv = v_coords;
-    vec4 sum = texture2D(tex, uv) * 4.0;
-    sum += texture2D(tex, uv - halfpixel * offset);
-    sum += texture2D(tex, uv + halfpixel * offset);
-    sum += texture2D(tex, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
-    sum += texture2D(tex, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
+    vec4 sum = tap(uv) * 4.0;
+    sum += tap(uv - halfpixel * offset);
+    sum += tap(uv + halfpixel * offset);
+    sum += tap(uv + vec2(halfpixel.x, -halfpixel.y) * offset);
+    sum += tap(uv - vec2(halfpixel.x, -halfpixel.y) * offset);
     gl_FragColor = (sum / 8.0) * alpha;
 }
 ";
@@ -294,14 +308,14 @@ void main() {
 const UP_FRAG: &str = "\
 void main() {
     vec2 uv = v_coords;
-    vec4 sum = texture2D(tex, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture2D(tex, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture2D(tex, uv + vec2(0.0, halfpixel.y * 2.0) * offset);
-    sum += texture2D(tex, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture2D(tex, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture2D(tex, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
-    sum += texture2D(tex, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
-    sum += texture2D(tex, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    vec4 sum = tap(uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
+    sum += tap(uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += tap(uv + vec2(0.0, halfpixel.y * 2.0) * offset);
+    sum += tap(uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += tap(uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
+    sum += tap(uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    sum += tap(uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
+    sum += tap(uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
     gl_FragColor = (sum / 12.0) * alpha;
 }
 ";
@@ -325,6 +339,7 @@ impl Shaders {
         let uniforms = [
             UniformName::new("offset", UniformType::_1f),
             UniformName::new("halfpixel", UniformType::_2f),
+            UniformName::new("uv_max", UniformType::_2f),
         ];
         let compile = |renderer: &mut GlesRenderer, body: &str| {
             renderer.compile_custom_texture_shader(
@@ -351,6 +366,7 @@ impl Shaders {
             &[
                 UniformName::new("offset", UniformType::_1f),
                 UniformName::new("halfpixel", UniformType::_2f),
+                UniformName::new("uv_max", UniformType::_2f),
                 UniformName::new("target_size", UniformType::_2f),
                 UniformName::new("shape_loc", UniformType::_2f),
                 UniformName::new("shape_size", UniformType::_2f),
@@ -394,8 +410,11 @@ struct Entry {
     mask: Vec<Rectangle<i32, Physical>>,
     /// Its rounded corners, as they were cut out.
     shape: Option<Shape>,
-    /// Level 0 is the blurred area's size in pixels; each further level
-    /// half of the one before.
+    /// The blurred area's size in pixels: the part of level 0 in use.
+    size: Size<i32, Physical>,
+    /// Level 0 is at least `size`, rounded up (`capacity`); each further
+    /// level half of the one before. Only the part `level_size` gives of
+    /// each is drawn and sampled.
     levels: Vec<GlesTexture>,
     /// Level 0 as a render buffer: its commit is bumped when re-blurred, so
     /// the output's damage tracking repaints it.
@@ -428,6 +447,27 @@ pub struct BlurCache {
 }
 
 use crate::render::error_text as render_error;
+
+/// The size of level `k` of a backdrop of `size`, or of its textures.
+fn level_size(size: Size<i32, Physical>, k: usize) -> Size<i32, Physical> {
+    ((size.w >> k).max(1), (size.h >> k).max(1)).into()
+}
+
+/// The size of the textures for a backdrop of `size`: rounded up to
+/// `BLUR_ALLOC_STEP`.
+fn capacity(size: Size<i32, Physical>) -> Size<i32, Physical> {
+    let up = |n: i32| (n + BLUR_ALLOC_STEP - 1) / BLUR_ALLOC_STEP * BLUR_ALLOC_STEP;
+    (up(size.w), up(size.h)).into()
+}
+
+/// Whether textures of `allocated` (level 0) can hold a backdrop of `size`:
+/// big enough, and not over twice the size it would get now (so one that
+/// shrank gives its memory back; room to grow, half as much again, always
+/// fits).
+fn fits(allocated: Size<i32, Physical>, size: Size<i32, Physical>) -> bool {
+    let wanted = capacity(size);
+    (size.w..=wanted.w * 2).contains(&allocated.w) && (size.h..=wanted.h * 2).contains(&allocated.h)
+}
 
 /// An offscreen texture that samples its edges, not black, past them.
 fn blur_texture(
@@ -495,26 +535,39 @@ fn clear_rects(
     Ok(())
 }
 
-/// One blur pass: draw `src` into `dst` through `program`.
+/// One blur pass: draw the part of `src` in use, `src_used` from its
+/// origin, into the part of `dst` in use, `dst_used`, through `program`.
 fn pass(
     renderer: &mut GlesRenderer,
     program: &GlesTexProgram,
-    src: &GlesTexture,
-    dst: &mut GlesTexture,
+    (src, src_used): (&GlesTexture, Size<i32, Physical>),
+    (dst, dst_used): (&mut GlesTexture, Size<i32, Physical>),
     shape: Option<Shape>,
 ) -> Result<(), GlesError> {
+    // Texel spacing is the texture's; the samples stop at the last texel in
+    // use, at its center.
     let src_size = src.size();
-    let dst_size = dst.size();
-    let dst_physical: Size<i32, Physical> = (dst_size.w, dst_size.h).into();
-    let full = Rectangle::from_size(dst_physical);
-    let halfpixel = (0.5 / src_size.w as f32, 0.5 / src_size.h as f32);
+    let (tex_w, tex_h) = (src_size.w as f32, src_size.h as f32);
+    let full = Rectangle::from_size(dst_used);
+    let halfpixel = (0.5 / tex_w, 0.5 / tex_h);
+    let uv_max = (
+        (src_used.w as f32 - 0.5) / tex_w,
+        (src_used.h as f32 - 0.5) / tex_h,
+    );
     let mut uniforms = vec![
         Uniform::new("offset", BLUR_OFFSET),
         Uniform::new("halfpixel", halfpixel),
+        Uniform::new("uv_max", uv_max),
     ];
     if let Some(shape) = shape {
+        // `v_coords` are the source's texture coordinates, which reach
+        // `src_used / src_size`, not 1, at the far edge of `dst_used`.
+        let target_size = (
+            dst_used.w as f32 * tex_w / src_used.w as f32,
+            dst_used.h as f32 * tex_h / src_used.h as f32,
+        );
         uniforms.extend([
-            Uniform::new("target_size", (dst_size.w as f32, dst_size.h as f32)),
+            Uniform::new("target_size", target_size),
             Uniform::new("shape_loc", (shape.loc.x as f32, shape.loc.y as f32)),
             Uniform::new("shape_size", (shape.size.w as f32, shape.size.h as f32)),
             Uniform::new("radius", shape.radius),
@@ -523,11 +576,12 @@ fn pass(
     let mut target = renderer.bind(dst)?;
     // GL's own orientation throughout: textures drawn into a framebuffer
     // and sampled back by the renderer agree without any flip.
-    let mut frame = renderer.render(&mut target, dst_physical, Transform::Normal)?;
+    let mut frame = renderer.render(&mut target, dst_used, Transform::Normal)?;
     frame.clear(Color32F::TRANSPARENT, &[full])?;
+    let src_rect: Size<i32, Buffer> = (src_used.w, src_used.h).into();
     frame.render_texture_from_to(
         src,
-        Rectangle::from_size(src_size).to_f64(),
+        Rectangle::from_size(src_rect).to_f64(),
         full,
         &[full],
         &[],
@@ -748,25 +802,38 @@ impl BlurCache {
         };
         let clear = render::clear_color(scene);
 
-        let level0: Size<i32, Buffer> = (size.w, size.h).into();
         // A tracker keeps its scale: it can't draw for another one. A new
         // entry isn't `drawn`, so it's blurred below.
-        let reusable = |entry: &Entry| entry.levels[0].size() == level0 && entry.scale == scale;
+        let reusable = |entry: &Entry| {
+            let allocated = entry.levels[0].size();
+            fits((allocated.w, allocated.h).into(), size) && entry.scale == scale
+        };
         if !self.entries.get(key).is_some_and(reusable) {
-            debug!(?rect, ?size, "blur: allocated");
+            // One that outgrew its textures is likely growing on (a panel
+            // opening, maybe more than `BLUR_ALLOC_STEP` a frame): half as
+            // much again of room where it grew.
+            let room = |now: i32, before: i32| if now > before { now + now / 2 } else { now };
+            let wanted = match self.entries.get(key).filter(|entry| entry.scale == scale) {
+                Some(entry) => {
+                    let before = entry.levels[0].size();
+                    (room(size.w, before.w), room(size.h, before.h)).into()
+                }
+                None => size,
+            };
+            let allocated = capacity(wanted);
+            debug!(?rect, ?size, ?allocated, "blur: allocated");
             self.allocated += 1;
             let mut levels = Vec::with_capacity(BLUR_PASSES + 1);
             for k in 0..=BLUR_PASSES {
-                let level: Size<i32, Buffer> = ((size.w >> k).max(1), (size.h >> k).max(1)).into();
-                levels.push(blur_texture(renderer, level)?);
+                let level = level_size(allocated, k);
+                levels.push(blur_texture(renderer, (level.w, level.h).into())?);
             }
-            let buffer_size = levels[0].size();
             let result = TextureRenderBuffer::from_texture(
                 renderer,
                 levels[0].clone(),
                 1,
                 Transform::Normal,
-                Some(vec![Rectangle::from_size(buffer_size)]),
+                None,
             );
             self.entries.insert(
                 key.clone(),
@@ -774,6 +841,7 @@ impl BlurCache {
                     rect,
                     global: origin,
                     scale,
+                    size,
                     rects: Vec::new(),
                     inside: Vec::new(),
                     mask: Vec::new(),
@@ -788,6 +856,13 @@ impl BlurCache {
         }
         let entry = self.entries.get_mut(key).expect("inserted above");
         entry.used = true;
+        if entry.size != size {
+            // Same textures, another part of them: what was behind the old
+            // size tells nothing about the new one.
+            entry.size = size;
+            entry.tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
+            entry.drawn = false;
+        }
         let reshaped = entry.rects != rects || entry.rect != rect || entry.shape != shape;
         if reshaped {
             entry.inside = inside_region(&rects, rect, scale);
@@ -828,10 +903,17 @@ impl BlurCache {
                 .render_output(renderer, &mut target, 0, &behind, clear)
                 .map_err(|e| render_error(&e))?;
         }
+        let used = |k: usize| level_size(size, k);
         for k in 1..=BLUR_PASSES {
             let (before, after) = entry.levels.split_at_mut(k);
-            pass(renderer, &shaders.down, &before[k - 1], &mut after[0], None)
-                .map_err(|e| render_error(&e))?;
+            pass(
+                renderer,
+                &shaders.down,
+                (&before[k - 1], used(k - 1)),
+                (&mut after[0], used(k)),
+                None,
+            )
+            .map_err(|e| render_error(&e))?;
         }
         for k in (1..=BLUR_PASSES).rev() {
             let (before, after) = entry.levels.split_at_mut(k);
@@ -840,14 +922,20 @@ impl BlurCache {
                 Some(shape) => (&shaders.up_rounded, Some(shape)),
                 None => (&shaders.up, None),
             };
-            pass(renderer, program, &after[0], &mut before[k - 1], shape)
-                .map_err(|e| render_error(&e))?;
+            pass(
+                renderer,
+                program,
+                (&after[0], used(k)),
+                (&mut before[k - 1], used(k - 1)),
+                shape,
+            )
+            .map_err(|e| render_error(&e))?;
         }
         if !entry.mask.is_empty() {
             clear_rects(renderer, &mut entry.levels[0], size, &entry.mask)
                 .map_err(|e| render_error(&e))?;
         }
-        let buffer_size = entry.levels[0].size();
+        let buffer_size: Size<i32, Buffer> = (size.w, size.h).into();
         // Opaque if nothing's cleared: what's behind it isn't drawn. With a
         // mask, what's inside isn't exactly opaque either: at a fractional
         // scale, Smithay rounds an opaque region out over the cleared pixels.
@@ -886,8 +974,8 @@ impl BlurCache {
             return None;
         }
         let location: Point<f64, Physical> = (entry.global - origin).to_f64().to_physical(scale);
-        let buffer_size = entry.levels[0].size();
-        let src = Rectangle::from_size(buffer_size.to_logical(1, Transform::Normal).to_f64());
+        let in_use: Size<i32, Buffer> = (entry.size.w, entry.size.h).into();
+        let src = Rectangle::from_size(in_use.to_logical(1, Transform::Normal).to_f64());
         Some(PilaRenderElement::Texture(
             TextureRenderElement::from_texture_render_buffer(
                 location,

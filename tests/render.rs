@@ -14,7 +14,8 @@ use wayland_protocols::ext::background_effect::v1::client::{
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
+    zwlr_layer_shell_v1::Layer,
+    zwlr_layer_surface_v1::{Anchor, ZwlrLayerSurfaceV1},
 };
 
 const BAR: i64 = 28;
@@ -408,6 +409,165 @@ fn blurs_on_two_outputs_keep_their_backdrops() {
     }
     let state = pila.settle();
     assert_eq!(state["blur"]["allocated"], 2, "backdrops allocated");
+}
+
+/// Red on the left half, green on the right and blue across the bottom half,
+/// and a glass blurred by rule over the center, 200x200: the corners of a
+/// glass of any size up to 290 have a color of their own behind them, far
+/// enough from the others not to blur with them.
+fn three_colors_and_a_glass(pila: &mut TestPila, client: &Client) -> (Surf, ZwlrLayerSurfaceV1) {
+    two_halves(client);
+    let (blue, _) = client.layer_surface(
+        "blue",
+        &LayerSpec {
+            layer: Layer::Bottom,
+            anchor: Anchor::Bottom | Anchor::Left | Anchor::Right,
+            size: (0, 400),
+            ..LayerSpec::default()
+        },
+        BLUE,
+    );
+    client.wait_surface_configured(blue);
+    let (glass, layer) = client.layer_surface(
+        "glass",
+        &LayerSpec {
+            layer: Layer::Top,
+            size: (200, 200),
+            ..LayerSpec::default()
+        },
+        [0, 0, 0, 0],
+    );
+    client.wait_surface_configured(glass);
+    pila.settle();
+    (glass, layer)
+}
+
+/// Make the centered glass of `three_colors_and_a_glass` `size` square.
+fn resize_glass(
+    pila: &mut TestPila,
+    client: &Client,
+    (glass, layer): &(Surf, ZwlrLayerSurfaceV1),
+    size: i32,
+) {
+    layer.set_size(size as u32, size as u32);
+    client.wl_surface_of(*glass).commit();
+    client.flush();
+    client.wait("the glass's new size", |s| {
+        s.surfaces[glass.0]
+            .configures
+            .last()
+            .is_some_and(|c| (c.2, c.3) == (size, size))
+    });
+    client.roundtrip();
+    pila.settle();
+}
+
+/// The corners of the centered glass, `size` square, show what's behind them:
+/// none is cut, flipped or mixed with what's past the glass.
+#[track_caller]
+fn glass_corners_show_their_colors(pila: &mut TestPila, size: i32) {
+    let (x0, y0) = ((1280 - size) / 2, (800 - size) / 2);
+    let (x1, y1) = (x0 + size - 3, y0 + size - 3);
+    let (x0, y0) = (x0 + 2, y0 + 2);
+    for (x, y, color, corner) in [
+        (x0, y0, [255, 0, 0, 255], "top left"),
+        (x1, y0, [0, 255, 0, 255], "top right"),
+        (x0, y1, [0, 0, 255, 255], "bottom left"),
+        (x1, y1, [0, 0, 255, 255], "bottom right"),
+    ] {
+        wait_near(pila, x as f64, y as f64, color);
+        let px = pila.pixel(x as f64, y as f64);
+        assert!(near(px, color, 3), "{corner} of {size}: {px:?}");
+    }
+}
+
+#[test]
+fn a_growing_blur_keeps_its_backdrop() {
+    // A panel animating its size: one allocation, not one per frame.
+    let mut pila = TestPila::with_config(GLASS_RULE);
+    let client = pila.client();
+    let glass = three_colors_and_a_glass(&mut pila, &client);
+    glass_corners_show_their_colors(&mut pila, 200);
+    for size in (202..=240).step_by(2) {
+        resize_glass(&mut pila, &client, &glass, size);
+    }
+    glass_corners_show_their_colors(&mut pila, 240);
+    let state = pila.settle();
+    let allocated = state["blur"]["allocated"].as_u64().unwrap_or(0);
+    assert!(allocated <= 2, "backdrops allocated: {allocated}");
+    // Smaller again, in the same textures: what's past it now isn't shown.
+    resize_glass(&mut pila, &client, &glass, 170);
+    glass_corners_show_their_colors(&mut pila, 170);
+    assert_eq!(pila.settle()["blur"]["allocated"], allocated);
+}
+
+#[test]
+fn a_fast_growing_blur_gets_room_to_grow() {
+    // Noctalia's control center opening, more than `BLUR_ALLOC_STEP` a frame:
+    // each time it outgrows its backdrop, the next one has room for more.
+    let mut pila = TestPila::with_config(GLASS_RULE);
+    let client = pila.client();
+    let glass = three_colors_and_a_glass(&mut pila, &client);
+    resize_glass(&mut pila, &client, &glass, 50);
+    let before = pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0);
+    for size in [210, 320, 410, 530] {
+        resize_glass(&mut pila, &client, &glass, size);
+    }
+    let allocated = pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0) - before;
+    assert!(
+        allocated <= 2,
+        "backdrops allocated while growing: {allocated}"
+    );
+}
+
+#[test]
+fn a_blur_that_shrinks_a_lot_lets_its_backdrop_go() {
+    let mut pila = TestPila::with_config(GLASS_RULE);
+    let client = pila.client();
+    let glass = three_colors_and_a_glass(&mut pila, &client);
+    resize_glass(&mut pila, &client, &glass, 700);
+    let allocated = pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0);
+    resize_glass(&mut pila, &client, &glass, 100);
+    glass_corners_show_their_colors(&mut pila, 100);
+    // At least once: under load a frame can show the glass already moved for
+    // its new size with its old buffer, cut off by the output.
+    let after = pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0);
+    assert!(
+        after > allocated,
+        "a backdrop seven times too big is let go"
+    );
+}
+
+#[test]
+fn a_resized_windows_backdrop_keeps_its_rounded_corners() {
+    // The window's left edge is just left of the red/green edge: its left
+    // corners are cut over red, and stay where they are as it grows.
+    let radius = "corner-radius = 20\nblur = true";
+    let mut pila = TestPila::with_config(&glass_window_rule(638, 300, radius));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.move_to(828.0, 490.0);
+    pila.key_press("Super");
+    pila.press("right");
+    pila.wait("a resize grab", |s| s["pointer"]["grab"] == "resize");
+    for _ in 0..10 {
+        pila.move_by(2.0, 2.0);
+        pila.settle();
+        client.roundtrip();
+    }
+    pila.release("right");
+    pila.key_release("Super");
+    client.wait_configure(window, "the resize's end", |c| c.size == (220, 220));
+    client.roundtrip();
+    pila.settle();
+    wait_mixed(&mut pila, 639.0, 400.0);
+    assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
+    assert_eq!(pila.pixel(639.0, 518.0), CLEAR, "bottom left");
+    assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
+    assert!(mixed(pila.pixel(639.0, 490.0)), "above the corner");
+    let allocated = pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0);
+    assert!(allocated <= 2, "backdrops allocated: {allocated}");
 }
 
 /// Ask for blur behind `rects` of a surface, in this order: its background
