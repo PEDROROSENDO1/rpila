@@ -469,7 +469,9 @@ Key flows and invariants:
   ends the resize goes regardless. Client-requested move/resize goes through
   `check_grab` (`handlers/xdg_shell.rs`), which requires a live implicit grab on that
   client's surface. Popup grabs (menus, `XdgShellHandler::grab`) use Smithay's
-  `PopupKeyboardGrab`/`PopupPointerGrab`; they are the only keyboard grabs Pila takes, but
+  `PopupKeyboardGrab` and, for the pointer, `MenuPointerGrab` (`grabs/menu_grab.rs`): Smithay's
+  `PopupPointerGrab` but over an input method's candidate window, which gets the pointer and
+  its clicks without dismissing the menu (a text field in a popover types through it); they are the only keyboard grabs Pila takes, but
   not the only ones there are: an input method's holds the keyboard while it's active (see
   "Input methods"), so a menu's is told apart by its type (`Pila::keyboard_popup_grab`,
   `Pila::pointer_popup_grab`), and Pila only ends a menu's. A menu opened while an input

@@ -771,7 +771,6 @@ fn a_text_field_in_a_popup_gets_its_candidate_window_below_its_cursor() {
 }
 
 #[test]
-#[ignore = "bug: Smithay's popup grab gives no pointer to another client's surface and a click there dismisses the popover"]
 fn a_click_on_the_candidate_window_of_a_text_field_in_a_popover_leaves_it_open() {
     let mut pila = TestPila::start();
     let app = pila.client();
@@ -810,8 +809,16 @@ fn a_click_on_the_candidate_window_of_a_text_field_in_a_popover_leaves_it_open()
     let state = pila.wait("the candidate window", |s| !popups(s).is_empty());
     let geometry = &popups(&state)[0]["geometry"];
     let (px, py) = (geometry[0].as_i64().unwrap(), geometry[1].as_i64().unwrap());
-    // A click on a candidate picks it: the popover stays, its text field
-    // keeps the input method.
+    // The pointer over a candidate is the input method's (hover), and a click
+    // there picks it: the popover stays, its text field keeps the input method.
+    pila.move_to((px + 10) as f64, (py + 10) as f64);
+    ime.wait("the pointer on the candidates", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::PointerEnter { .. }))
+    });
+    assert_eq!(pila.state()["pointer"]["grab"], "popup");
+    let deactivated = count(&ime, "input_method", "Deactivate");
     pila.click_at((px + 10) as f64, (py + 10) as f64);
     ime.wait("the click", |s| {
         s.events
@@ -820,7 +827,7 @@ fn a_click_on_the_candidate_window_of_a_text_field_in_a_popover_leaves_it_open()
     });
     let state = pila.settle();
     assert_eq!(state["pointer"]["grab"], "popup", "the popover closed");
-    assert_eq!(count(&ime, "input_method", "Deactivate"), 0);
+    assert_eq!(count(&ime, "input_method", "Deactivate"), deactivated);
     let _ = text_input;
 }
 

@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use smithay::{
     desktop::{
         layer_map_for_output, utils::bbox_from_surface_tree, PopupKeyboardGrab, PopupManager,
-        PopupPointerGrab, Window,
+        Window,
     },
     input::pointer::CursorImageStatus,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -309,7 +309,7 @@ impl Pila {
                             "move"
                         } else if grab.downcast_ref::<crate::grabs::ResizeSurfaceGrab>().is_some() {
                             "resize"
-                        } else if grab.downcast_ref::<PopupPointerGrab<Pila>>().is_some() {
+                        } else if grab.downcast_ref::<crate::grabs::MenuPointerGrab>().is_some() {
                             "popup"
                         } else {
                             "click"

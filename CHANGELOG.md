@@ -12,8 +12,9 @@
 - **Apps can move the pointer within their own window** (wp-pointer-warp), as games and SDL 3
   do to recenter it: only the app the pointer is on, only onto its own surface, never while the
   screen is locked.
-- **Known bug, documented:** in a text field inside a popover (a GTK search field), clicking a
-  candidate of an input method closes the popover; pick candidates with the keyboard there.
+- **Input methods: candidates can be clicked in a popover's text field** (a GTK search field):
+  the candidate window got no pointer while the popover was open, and a click on it closed the
+  popover. It dates from 0.5.8, when input methods came.
 
 ## 0.5.9 (2026-11-15)
 

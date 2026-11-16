@@ -338,10 +338,6 @@ Pila's keybindings come first: a key Pila uses never reaches the input method. T
 shows below the text cursor, or above it when there's no room below, clear of your panels. The lock
 screen never uses the input method: what's typed there doesn't reach it.
 
-One known limit: in a text field inside a popover or menu (a search field in a GTK popover), pick
-candidates with the keyboard (space, numbers, arrows). The candidate window doesn't react to the
-pointer while the popover is open, and a click on it closes the popover.
-
 ## The configuration file
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). The first time

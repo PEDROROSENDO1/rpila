@@ -1289,7 +1289,7 @@ impl Pila {
         self.seat.get_pointer().is_some_and(|pointer| {
             pointer
                 .with_grab(|_, grab| {
-                    grab.downcast_ref::<smithay::desktop::PopupPointerGrab<Pila>>()
+                    grab.downcast_ref::<crate::grabs::MenuPointerGrab>()
                         .is_some()
                 })
                 .unwrap_or(false)

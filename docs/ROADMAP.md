@@ -14,10 +14,7 @@ doesn't speak yet.
 
 Small, testable in CI, no new hardware needed.
 
-1. **An input method's candidate window takes the pointer inside a popover:** in a text field
-   in a popover (a GTK search field), the candidate window doesn't react to the pointer, and a
-   click on it closes the popover (a known bug, its test ignored: `tests/FEATURES.md`). A grab
-   of Pila's around Smithay's popup grab lets the candidate window have it.
+Nothing open: what was here is in the changelog's Unreleased section.
 
 ## Next
 

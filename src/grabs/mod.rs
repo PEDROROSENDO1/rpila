@@ -1,3 +1,6 @@
+pub mod menu_grab;
+pub use menu_grab::MenuPointerGrab;
+
 pub mod move_grab;
 pub use move_grab::MoveSurfaceGrab;
 

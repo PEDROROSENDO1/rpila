@@ -294,7 +294,8 @@ impl XdgShellHandler for Pila {
             None => self.input.pointer_only_menu = Some(grab.clone()),
         }
         if let Some(pointer) = pointer {
-            pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+            let grab = crate::grabs::MenuPointerGrab::new(PopupPointerGrab::new(&grab));
+            pointer.set_grab(self, grab, serial, Focus::Keep);
         }
     }
 }
