@@ -2167,13 +2167,20 @@ mod tests {
         assert!(!config.repeats(Keysym::XF86_AudioLowerVolume, &none));
         assert!(!config.repeats(Keysym::XF86_AudioMute, &none));
 
-        // "none" removes the repeat with the binding.
+        // "none" removes a default binding, and with it any repeat.
+        let alt = mods(false, true, false, false);
+        let defaults = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(
+            defaults.action_for(Keysym::Tab, &alt),
+            Some(Action::CycleFocus)
+        );
         let removed = Config::from_toml(
-            "[bindings]\n\"XF86AudioMute\" = { action = \"none\", repeat = true }\n",
+            "[bindings]\n\"Alt+Tab\" = { action = \"none\", repeat = true }\n",
             &no_env,
         )
         .unwrap();
-        assert!(removed.bindings.iter().all(|b| !b.repeat));
+        assert_eq!(removed.action_for(Keysym::Tab, &alt), None);
+        assert!(!removed.repeats(Keysym::Tab, &alt));
 
         // A wheel's notch or a tap has no held key to repeat.
         for combo in ["Mod+WheelScrollUp", "Mod"] {

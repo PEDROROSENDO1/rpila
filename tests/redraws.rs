@@ -404,8 +404,10 @@ fn an_animating_window_isnt_drawn_for_an_output_it_isnt_on() {
 
 /// At a scale where an output's logical width isn't whole (1280 / 1.5 =
 /// 853.33), a window and the pointer in its last, partial column change
-/// with redraws asked for them: the harness's redraw check takes the
-/// output's place from the `Space`, as drawing does.
+/// with their redraws asked for, and the harness's redraw check finds
+/// nothing amiss there. (A smoke test: the check taking the output's place
+/// from the `Space` rather than rounding it is what makes it see that
+/// column, which only a change with no redraw asked could show.)
 #[test]
 fn the_last_partial_column_of_a_scaled_output_is_checked_as_drawn() {
     let mut pila = TestPila::with_config(
