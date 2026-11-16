@@ -1043,7 +1043,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pila"
-version = "0.5.9"
+version = "0.6.0"
 dependencies = [
  "bitflags",
  "calloop",
@@ -1058,6 +1058,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wayland-scanner",
+ "x11rb",
  "xcursor",
 ]
 
@@ -1510,7 +1511,7 @@ checksum = "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46"
 [[package]]
 name = "smithay"
 version = "0.7.0"
-source = "git+https://github.com/igalmarino/smithay.git?rev=b8f524b3e3c27ba9e6e9565aebc7fb8838609385#b8f524b3e3c27ba9e6e9565aebc7fb8838609385"
+source = "git+https://github.com/igalmarino/smithay.git?rev=12a26c10f2df789cd2d18c20af1386da65ba51da#12a26c10f2df789cd2d18c20af1386da65ba51da"
 dependencies = [
  "aliasable",
  "appendlist",

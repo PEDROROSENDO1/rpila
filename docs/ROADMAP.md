@@ -4,7 +4,7 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated 2026-11-16, after **0.5.9**. Pila is alpha and a daily driver on its author's
+Last updated for **0.6.0** (2026-11-16). Pila is alpha and a daily driver on its author's
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells (Noctalia, Dux Shell, waybar and friends), bare metal with direct scanout, all covered by
 925 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
@@ -14,11 +14,7 @@ doesn't speak yet.
 
 Small, testable in CI, no new hardware needed.
 
-**0.6.0** is ready and waits for its author's own check on bare metal: tearing for games,
-Xwayland started on demand (and stopped when idle, or turned off), X11 keyboard grabs, faded
-surfaces, pointer warps, blur behind popups (an input method's candidate window too), snapping to
-the top and bottom halves, and the manual's list of the desktop tools that work. The changelog's
-Unreleased section has all of it.
+Nothing open: 0.6.0 took what was here.
 
 ## Next
 

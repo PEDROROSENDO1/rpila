@@ -1,18 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-16)
 
-- **The manual says which desktop tools work on Pila** ("Building your desktop"): those tried on it,
-  those that work in part (ironbar, nwg-panel: no workspaces), those that can't work and why (bars
-  that talk to another compositor's own IPC, X11 bars), and a waybar setup with Pila's workspaces (`ext/workspaces`) and taskbar (`wlr/taskbar`).
-- **Snapping to the top and bottom halves:** the actions `snap-top` and `snap-bottom` (no default
-  binding: `Mod+Up` still maximizes and `Mod+Down` restores; bind them to the arrows in
-  `[bindings]` if you'd rather have halves). Snapping the same side again restores the window, as
-  with the other snaps.
-- **Blur behind popups:** a menu or an input method's candidate window that asks for blur
-  (ext-background-effect, as fcitx5's does when its theme has blur) gets it, over windows and
-  panels alike; only windows and panels got it before. A rule's `blur = false` refuses it to their
-  popups too.
+- **Tearing for games** (wp-tearing-control): a fullscreen game with vsync off (Vulkan's
+  immediate present mode, which Mesa turns into the request) has its frames shown at once with an
+  asynchronous page flip, on a TTY, when the driver takes it. `tearing = false` in the
+  configuration turns it off. The frame statistics count those frames apart (`torn`), and
+  `pila-check` runs `vkcube` that way where it's installed.
 - **Xwayland starts when an X11 app needs it, and can stop when none is left:** Pila reserves the X
   display at startup (`DISPLAY` is set for the session at once, and the startup programs no longer
   wait for X) and starts Xwayland when the first X11 app connects, so a session with no X11 app runs
@@ -24,40 +18,47 @@
 - **X11 apps can be turned off, and Xwayland is optional:** `[xwayland] enabled = false` reserves no
   X display and sets no `DISPLAY`, for a session with no X11 at all; turned off while X11 apps run,
   Xwayland stays for them until it stops. Applies on save, like the rest.
+- **X11 apps that grab the keyboard get Pila's shortcuts too** (xwayland-keyboard-grab): a
+  virtual machine or remote desktop running through Xwayland gets every key while it has the
+  focus, as Wayland ones already did (keyboard-shortcuts-inhibit); clicking another window gets
+  out, and the binding that quits Pila still works.
+- **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
+  overlays set its transparency, and Pila applies it on screen, in screenshots and screen
+  sharing, and behind blur (a window faded that way gets its backdrop).
+- **Apps can move the pointer within their own window** (wp-pointer-warp), as games and SDL 3
+  do to recenter it: only the app the pointer is on, only onto its own surface, never while the
+  screen is locked.
+- **Blur behind popups:** a menu or an input method's candidate window that asks for blur
+  (ext-background-effect, as fcitx5's does when its theme has blur) gets it, over windows and
+  panels alike; only windows and panels got it before. A rule's `blur = false` refuses it to their
+  popups too.
+- **Snapping to the top and bottom halves:** the actions `snap-top` and `snap-bottom` (no default
+  binding: `Mod+Up` still maximizes and `Mod+Down` restores; bind them to the arrows in
+  `[bindings]` if you'd rather have halves). Snapping the same side again restores the window, as
+  with the other snaps.
+- **The manual says which desktop tools work on Pila** ("Building your desktop"): those tried on it,
+  those that work in part (ironbar, nwg-panel: no workspaces), those that can't work and why (bars
+  that talk to another compositor's own IPC, X11 bars), and a waybar setup with Pila's workspaces
+  (`ext/workspaces`) and taskbar (`wlr/taskbar`).
+- **Resizing a window with the pointer keeps up with the app:** Pila sent a new size for every
+  pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
+  sends the next one once the app has acknowledged the last, so a slow app (a browser, an
+  Electron app) gets the latest size instead of a backlog of old ones.
+- **An app that destroys its xdg-decoration object draws its own decorations for good:** Pila's
+  title bar went, but came back when the window was mapped again.
+- **Input methods: candidates can be clicked in a popover's text field** (a GTK search field):
+  the candidate window got no pointer while the popover was open, and a click on it closed the
+  popover. It dates from 0.5.8, when input methods came.
 - **For packagers: Xwayland is now an optional dependency** (`optdepends` in `pila-git`, a
   recommendation in the `.deb` and `.rpm`, and `withXwayland ? true` in the Nix package): Pila
   runs without it, with no X11 apps.
 - **For packagers: Pila's Smithay fork also carries Smithay's X display reservation** (its pull
   request #2269, not merged yet), with which Xwayland starts on demand and its window manager
   leaves no event source behind.
-- **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
-  overlays set its transparency, and Pila applies it on screen, in screenshots and screen
-  sharing, and behind blur (a window faded that way gets its backdrop).
-- **Tearing for games** (wp-tearing-control): a fullscreen game with vsync off (Vulkan's
-  immediate present mode, which Mesa turns into the request) has its frames shown at once with an
-  asynchronous page flip, on a TTY, when the driver takes it. `tearing = false` in the
-  configuration turns it off. The frame statistics count those frames apart (`torn`), and
-  `pila-check` runs `vkcube` that way where it's installed.
 - **For packagers: Pila's Smithay fork also carries Smithay's asynchronous page flips** (its pull
   request #1948, not merged yet), still at `github.com/igalmarino/smithay`, branch `pila`, now on
   Smithay's main of 2026-11-14 (xdg-decoration version 2). The revisions earlier releases pin
   are kept by tags (`rev-b8f524b3`, `rev-64a43022`).
-- **An app that destroys its xdg-decoration object draws its own decorations for good:** Pila's
-  title bar went, but came back when the window was mapped again.
-- **Resizing a window with the pointer keeps up with the app:** Pila sent a new size for every
-  pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
-  sends the next one once the app has acknowledged the last, so a slow app (a browser, an
-  Electron app) gets the latest size instead of a backlog of old ones.
-- **X11 apps that grab the keyboard get Pila's shortcuts too** (xwayland-keyboard-grab): a
-  virtual machine or remote desktop running through Xwayland gets every key while it has the
-  focus, as Wayland ones already did (keyboard-shortcuts-inhibit); clicking another window gets
-  out, and the binding that quits Pila still works.
-- **Apps can move the pointer within their own window** (wp-pointer-warp), as games and SDL 3
-  do to recenter it: only the app the pointer is on, only onto its own surface, never while the
-  screen is locked.
-- **Input methods: candidates can be clicked in a popover's text field** (a GTK search field):
-  the candidate window got no pointer while the popover was open, and a click on it closed the
-  popover. It dates from 0.5.8, when input methods came.
 
 ## 0.5.9 (2026-11-15)
 
