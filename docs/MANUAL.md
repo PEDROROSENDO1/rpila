@@ -478,12 +478,50 @@ autostart = [
 ]
 ```
 
-Clipboard managers that use ext-data-control, night light (`wlsunset`, through gamma control) and
-screen recorders that use screencopy (`wf-recorder`) work too.
+**Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
+fuzzel, swaybg, mako, swaylock, wlsunset (night light), grim and slurp (screenshots),
+wl-clipboard (`wl-copy`, `wl-paste`), wtype, wlr-randr and wlopm (monitors), fcitx5 (input
+methods), and the shells Noctalia and Dux Shell; Pila's tests and scripts check most of them.
+Tools that use the same protocols should work too, though nobody has tried them yet:
+idle daemons (`swayidle`, ext-idle-notify), clipboard managers (ext-data-control) and screen
+recorders (`wf-recorder`, screencopy).
 
-Bars and taskbars can list, focus, minimize and close windows (waybar's taskbar module, for
-instance) and switch workspaces. What no protocol tells, a bar gets from `pila msg`; a waybar
-module that shows the keyboard layout as it changes and switches it on a click:
+**What can't work:** bars and modules that talk to another compositor's own IPC rather than a
+Wayland protocol, such as dwlb (dwl's), HyprPanel (Hyprland's) and waybar's `sway/*`,
+`hyprland/*` and `niri/*` modules; and X11 bars such as polybar, which can't see Wayland windows.
+A bar that uses standard protocols and fails on Pila is a bug: please
+[report it](https://github.com/igalmarino/pila/issues).
+
+**Waybar** shows Pila's workspaces with its `ext/workspaces` module (the active one marked, a
+click switches) and the windows with `wlr/taskbar` (a click focuses one, a middle click closes
+it). In `~/.config/waybar/config.jsonc`:
+
+```jsonc
+{
+    "layer": "top",
+    "modules-left": ["ext/workspaces", "wlr/taskbar"],
+    "modules-right": ["clock"],
+    "ext/workspaces": {
+        "format": "{name}",
+        "on-click": "activate",
+        "sort-by-id": true
+    },
+    "wlr/taskbar": {
+        "format": "{icon} {title}",
+        "on-click": "activate",
+        "on-click-middle": "close"
+    }
+}
+```
+
+and, to see the active workspace, in `~/.config/waybar/style.css`:
+
+```css
+#workspaces button.active { background: #4a7bd0; }
+```
+
+What no protocol tells, a bar gets from `pila msg`; a waybar module that shows the keyboard
+layout as it changes and switches it on a click:
 
 ```json
 "custom/layout": {

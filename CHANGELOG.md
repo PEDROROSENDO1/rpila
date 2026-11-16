@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **The manual says which desktop tools work on Pila** ("Building your desktop"): those tried on it,
+  those that can't work and why (bars that talk to another compositor's own IPC, X11 bars), and a
+  waybar setup with Pila's workspaces (`ext/workspaces`) and taskbar (`wlr/taskbar`).
 - **Snapping to the top and bottom halves:** the actions `snap-top` and `snap-bottom` (no default
   binding: `Mod+Up` still maximizes and `Mod+Down` restores; bind them to the arrows in
   `[bindings]` if you'd rather have halves). Snapping the same side again restores the window, as

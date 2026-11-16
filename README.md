@@ -12,7 +12,7 @@
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
 Windows float and overlap, with server-side title bars, like a classic desktop; panels,
 launchers, wallpapers and lock screens come from the usual Wayland tools (waybar, fuzzel,
-swaybg, swaylock, ...).
+swaybg, swaylock, ...; [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: Noctalia and Dux Shell usually run on tiling compositors such as niri or Hyprland;
 Pila gives them a classic desktop of overlapping windows, with subtle animations, blur and a
