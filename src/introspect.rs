@@ -393,7 +393,8 @@ impl Pila {
                 "iterations": self.loop_stats.total.0,
                 "housekeeping": self.loop_stats.total.1,
             },
-            "xwayland": self.xwayland.display,
+            "xwayland": self.xwayland.display(),
+            "xwayland_running": self.xwayland.running(),
             "children": self.children.len(),
         })
     }

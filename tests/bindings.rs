@@ -496,7 +496,7 @@ fn spawned_commands_get_the_session_environment() {
     assert_eq!(var("XDG_CURRENT_DESKTOP").as_deref(), Some("pila"));
     assert_eq!(var("XDG_SESSION_TYPE").as_deref(), Some("wayland"));
     assert_eq!(var("PILA_OUTPUT").as_deref(), Some("B"));
-    // Xwayland's display, once it's up.
+    // The display reserved for Xwayland, from the start.
     let state = pila.state();
     if let Some(display) = state["xwayland"].as_u64() {
         assert_eq!(var("DISPLAY"), Some(format!(":{display}")));

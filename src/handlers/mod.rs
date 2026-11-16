@@ -150,11 +150,7 @@ impl SelectionHandler for Pila {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
-        if let Some(xwm) = self.xwayland.wm.as_mut() {
-            if let Err(err) = xwm.new_selection(ty, source.map(|s| s.mime_types())) {
-                warn!(?err, ?ty, "failed to offer the selection to X11 apps");
-            }
-        }
+        self.wayland_selection_changed(ty, source.map(|s| s.mime_types()));
     }
 
     // A Wayland client pastes a selection owned by an X11 app.

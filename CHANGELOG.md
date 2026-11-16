@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Xwayland starts when an X11 app needs it:** Pila reserves the X display at startup (`DISPLAY`
+  is set for the session at once, and the startup programs no longer wait for X) and starts
+  Xwayland when the first X11 app connects, so a session with no X11 app runs no X server. With
+  `[xwayland] idle-timeout = <seconds>` it also stops once no X client is left (a background X
+  program keeps it running), and the next X11 app starts it again. Xwayland that dies or keeps
+  failing is started again by the next app rather than right away. It now gets Pila's whole
+  environment (Smithay's `spawn_with_inherited_env`), so variables such as `MESA_*` or
+  `__GLX_VENDOR_LIBRARY_NAME` reach it.
+- **For packagers: Pila's Smithay fork also carries Smithay's X display reservation** (its pull
+  request #2269, not merged yet), with which Xwayland starts on demand and its window manager
+  leaves no event source behind.
+
 - **Apps can fade a surface without drawing it again** (wp-alpha-modifier): video players and
   overlays set its transparency, and Pila applies it on screen, in screenshots and screen
   sharing, and behind blur (a window faded that way gets its backdrop).

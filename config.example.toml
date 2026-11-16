@@ -27,7 +27,7 @@
 # launcher = "fuzzel"              # e.g.
 
 # Commands run at startup instead of the terminal (`pila -c` overrides them).
-# They start once Xwayland is ready, so X11 apps work too. Unset, the terminal.
+# X11 apps among them start Xwayland as they connect. Unset, the terminal.
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
 #     "waybar",
@@ -110,6 +110,14 @@
 [cursor]
 # shake-to-find = true             # (default) false: never grow it
 # shake-magnification = 3.0        # (default) how much bigger at most: 1.5 to 5
+
+# X11 apps run through Xwayland, which Pila starts when the first one
+# connects. Unset, it then runs until Pila exits; with idle-timeout, it stops
+# that many seconds (1 to 3600) after its last X11 client leaves, and starts
+# again with the next one. Stopping it loses what was set in X (xrdb,
+# setxkbmap, xmodmap). Read as soon as the file is saved.
+[xwayland]
+# idle-timeout = 10                # e.g.
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and

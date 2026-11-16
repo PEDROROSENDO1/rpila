@@ -144,16 +144,8 @@ fn nothing_is_drawn_while_nothing_changes() {
     pila.wait_focus("a");
     // Its frame for the configure that activates it, in before counting.
     client.roundtrip();
-    // Xwayland starts (the fonts are loaded already: `TestPila::start`).
-    let started = std::time::Instant::now();
-    while !pila.log().contains("Xwayland ready") && !pila.log().contains("X11 apps won't run") {
-        assert!(
-            started.elapsed() < TIMEOUT,
-            "Xwayland never started nor failed"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    std::thread::sleep(Duration::from_millis(100));
+    // (The fonts are loaded already, `TestPila::start`, and Xwayland waits
+    // for an X11 app.)
     let before = frames(&pila.settle());
     std::thread::sleep(Duration::from_millis(300));
     let state = pila.state();

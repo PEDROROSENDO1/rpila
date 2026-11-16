@@ -49,6 +49,9 @@ workspace = 250
 shake-to-find = true
 shake-magnification = 2.5
 
+[xwayland]
+idle-timeout = 30
+
 [keyboard]
 layout = "us,de"
 variant = ",nodeadkeys"

@@ -56,7 +56,6 @@ fn locking_shows_only_the_lock_surface_and_gives_it_the_keyboard() {
 fn shaking_the_pointer_grows_the_cursor_on_the_lock_screen_too() {
     let (mut pila, _apps, _locker, _lock) =
         locked_with("[cursor]\nshake-to-find = true\n[animations]\nenabled = false\nspeed = 4\n");
-    pila.wait_log("Xwayland ready");
     pila.move_to(640.0, 400.0);
     pila.wait_pixel(650.0, 431.0, LOCK_RGBA);
     pila.shake_pointer(640.0, 400.0);

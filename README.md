@@ -99,7 +99,7 @@ A short report helps even if everything works:
   them (direct scanout, `direct-scanout`).
 - **Apps get their windows back:** place, size, maximized or fullscreen, for apps that ask
   (xdg-session-management), even after Pila restarts.
-- **X11 apps** through Xwayland, with the clipboard shared both ways.
+- **X11 apps** through Xwayland, started when the first one opens, with the clipboard shared both ways.
 - **Desktop tools:** layer shell (waybar, fuzzel, mako, swaybg), session lock (swaylock),
   idle notification and inhibition (swayidle, video players), clipboard managers
   (ext-data-control), screenshots (grim; ext-image-copy-capture and wlr-screencopy) and screen sharing

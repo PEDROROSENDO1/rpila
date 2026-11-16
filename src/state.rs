@@ -114,7 +114,8 @@ pub struct Pila {
 
     /// Xwayland and its window manager (`xwayland.rs`).
     pub xwayland: crate::xwayland::XwaylandState,
-    /// The startup commands, held back until Xwayland is ready.
+    /// The startup commands, held back until the session bus has pila's
+    /// environment (`export_environment`).
     pub pending_startup: Vec<String>,
     /// Programs pila started, reaped on SIGCHLD (`reap_children`).
     pub children: Vec<std::process::Child>,
@@ -539,13 +540,7 @@ impl Pila {
             input: InputState::default(),
             capture: Default::default(),
             outputs: Default::default(),
-            xwayland: crate::xwayland::XwaylandState {
-                wm: None,
-                display: None,
-                shell_state: xwayland_shell_state,
-                token: None,
-                restarts: Vec::new(),
-            },
+            xwayland: crate::xwayland::XwaylandState::new(xwayland_shell_state),
             pending_startup: Vec::new(),
             children: Vec::new(),
             snap_preview: None,
@@ -1895,9 +1890,9 @@ impl Pila {
         }
     }
 
-    /// The startup programs: once Xwayland is ready (or failed), so they
-    /// get its `DISPLAY`, and after the session bus knows pila's
-    /// environment (for portals), or `EXPORT_TIMEOUT` if that hangs.
+    /// The startup programs, after the session bus knows pila's environment
+    /// (for portals), or `EXPORT_TIMEOUT` if that hangs. The X display is
+    /// reserved already (`reserve_xwayland`), so X11 apps among them work.
     pub fn start_session(&mut self, commands: Vec<String>) {
         self.pending_startup = commands;
         if !self.export_environment() {
@@ -2030,7 +2025,7 @@ impl Pila {
             None => cmd.env_remove("PILA_SOCKET"),
         };
         // X11 apps go to pila's Xwayland, never the host's X server.
-        match self.xwayland.display {
+        match self.xwayland.display() {
             Some(display) => cmd.env("DISPLAY", format!(":{display}")),
             None => cmd.env_remove("DISPLAY"),
         };

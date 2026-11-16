@@ -353,8 +353,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // `-c`, else the config's autostart, else a terminal. They run once
-    // Xwayland is up, so they can be X11 apps.
+    // `-c`, else the config's autostart, else a terminal. They get the
+    // reserved X display, so they can be X11 apps: the first to connect
+    // starts Xwayland.
     let startup = match startup_command {
         Some(command) => vec![command],
         None if !state.config.autostart.is_empty() => state.config.autostart.clone(),
@@ -362,7 +363,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None if backend == BackendKind::Headless => Vec::new(),
         None => state.config.terminal_command().into_iter().collect(),
     };
-    state.start_xwayland(startup);
+    state.reserve_xwayland();
+    state.start_session(startup);
 
     // Once per iteration, after any redraws (idle callbacks run last): the
     // post-frame housekeeping, then a flush, which events queued outside a

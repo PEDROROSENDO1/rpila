@@ -932,7 +932,8 @@ Key flows and invariants:
   an opaque one (`SceneWindow::covers`) isn't prepared, but keeps its entry. Shaders are
   compiled by `render::warm_up`, kept in the EGL context; a failure disables blur.
 - **Session environment** (`Pila::spawn`, `start_session`): children get `WAYLAND_DISPLAY`,
-  Pila's Xwayland `DISPLAY`, `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
+  the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet
+  or not), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
   and `PILA_SOCKET` (`ipc.rs`); `spawn` adds `PILA_OUTPUT`, the output under the pointer.
   Other compositors' IPC sockets and markers (`OTHER_COMPOSITORS_ENV`: `NIRI_SOCKET`,
   `SWAYSOCK`, `HYPRLAND_INSTANCE_SIGNATURE`, …) are removed, for a Pila started from inside
@@ -1032,13 +1033,32 @@ Key flows and invariants:
   for is on that tree too (`surface_under`: never onto another client's surface or nothing).
   The move is `Pila::warp_pointer`'s (a binding's too): a constraint holding the pointer keeps
   it, clients get it as motion, and it isn't activity.
-- **X11** (`xwayland.rs`, `focus.rs`): Pila starts Xwayland at launch and runs Smithay's
-  `X11Wm`; spawned clients get its `DISPLAY` (never the host's) and the startup command
-  waits for X (`pending_startup`), or for it to fail: dying before it's ready, which Smithay's
-  event source misses (it takes the closed display pipe for "not yet"), is caught by
-  `XWaylandSource`, and isn't retried. If it dies later (`XwmHandler::disconnected`, `xwayland_gone`) its
-  windows go, nothing else gets its `DISPLAY` and it's started again, at most `MAX_RESTARTS`
-  times in `RESTART_WINDOW`. X11 windows are `Window::new_x11_window` in the same
+- **X11** (`xwayland.rs`, `focus.rs`): Xwayland on demand. At launch Pila only reserves an
+  X display (`reserve_xwayland`: Smithay's `XWaylandDisplay`, its number, lock file and
+  listening sockets, held until exit), unless Xwayland isn't installed; spawned clients get
+  its `DISPLAY` from the start (never the host's), and the startup programs don't wait for X.
+  While Xwayland doesn't run, Pila watches the sockets (`listen_for_x11`) without accepting:
+  the first X11 app to connect makes one readable, and Pila stops watching (from an idle
+  callback, `x11_app_connecting`: a calloop source removed from its own callback stays in the
+  poll) and starts Xwayland on the display (`spawn_xwayland`, inheriting Pila's environment),
+  which takes the connection waiting in the queue. Once it's ready its `X11Wm` starts and gets
+  the Wayland selections set meanwhile (`XwaylandState::clipboard`/`primary`, kept by
+  `wayland_selection_changed`). Dying before it's ready, which Smithay's event source misses
+  (it takes the closed display pipe for "not yet"), is caught by `XWaylandSource`
+  (`xwayland_failed`). When it dies later (`XwmHandler::disconnected`, `xwayland_gone`) its
+  windows and selections go and Pila watches the sockets again, so the next app starts it on
+  the same display; a failure of either kind counts against `MAX_RESTARTS` in `RESTART_WINDOW`
+  (`may_restart`: a queued app would start a broken Xwayland forever), past which Pila lets the
+  display go (`stop_xwayland`) and apps are refused. With `[xwayland] idle-timeout`, the last
+  X11 window going (`unmapped_window`; or Xwayland ready with none) arms a timer
+  (`arm_xwayland_idle_check`); when it fires with still no X11 window, a thread asks X through
+  XRes for its clients' processes (`only_pilas_x11_clients`): if all are Pila's (its window
+  manager, the asking connection) or Xwayland's own, Pila stops the server alone
+  (`stopped_idle`, the event source dropped and a SIGTERM, since a dropped Wayland client is
+  only cleaned up at the next dispatch) and lets the window manager go when its connection
+  closes, through `xwayland_gone`, as X may still send it events; otherwise (a settings
+  daemon, an app with no window yet) it checks again a timeout later. Smithay's `X11Wm`
+  removes its own event sources when dropped (Pila's fork), so cycles leak nothing. X11 windows are `Window::new_x11_window` in the same
   `Space`, so code that handles windows must not assume `window.toplevel()` is `Some`: use
   `wl_surface()`, `fill_state`, `close_window`, `focus_target`, and branch on
   `x11_surface()` where X11 differs. A window may get its `wl_surface` after it's mapped,
@@ -1053,7 +1073,9 @@ Key flows and invariants:
   `place_new_window_with`. Override-redirect windows (menus, tooltips) go where X puts them. X11 maximize/fullscreen go through `set_fill_state`
   (`_NET_WM_STATE` + a direct configure); resize grabs configure X11 windows per motion.
   Selections are bridged both ways (`SelectionHandler` in `handlers/mod.rs`, XwmHandler
-  selection methods); only a focused X11 app may read.
+  selection methods); only a focused X11 app may read. The idle check's timer and the wait
+  for it are housekeeping, not frame pacing: they exist only with `idle-timeout` set, and
+  wake Pila once per timeout while Xwayland runs with no window.
 - **Snapping and keyboard moves** (`snap.rs`): a snapped window fills half of its output's
   usable area, gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
   Snapping is floating geometry, not a fill state: maximizing a snapped window

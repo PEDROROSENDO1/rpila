@@ -391,7 +391,8 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 
 ## Building your desktop
 
-Pila starts the programs listed in `autostart` once it's ready (X11 support included). Everything
+Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
+Xwayland). Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
 
@@ -543,8 +544,23 @@ you the session back.
 
 ## Games and X11 apps
 
-X11 apps (older programs, many games, Steam) run through Xwayland, which Pila starts by itself;
-the clipboard works between X11 and Wayland apps. Games can lock and confine the pointer.
+X11 apps (older programs, many games, Steam) run through Xwayland, which Pila starts by itself
+when the first X11 app opens: `DISPLAY` is set from the start, but a session with no X11 app
+runs no X server. The clipboard works between X11 and Wayland apps. Games can lock and confine
+the pointer.
+
+Once started, Xwayland runs until Pila exits. To have it stop when no X11 app is left, set a
+timeout in seconds; the next X11 app starts it again:
+
+```toml
+[xwayland]
+idle-timeout = 10
+```
+
+Pila stops it only when no X client is connected at all, so a background X program (a settings
+daemon, an input method's X part) keeps it running. Stopping it loses whatever was set in the X
+server itself (`xrdb`, `setxkbmap`, `xmodmap`): leave the timeout unset if your autostart sets
+any of those.
 
 Apps that ask for every key while they have the focus (virtual machines, remote desktops:
 keyboard-shortcuts-inhibit, or an X11 app that grabs the keyboard) get Pila's bindings and

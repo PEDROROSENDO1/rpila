@@ -1,6 +1,7 @@
 //! X11 windows through pila's Xwayland: mapping and WM_CLASS, focus,
 //! closing (WM_DELETE_WINDOW), _NET_WM_STATE requests, minimizing,
-//! override-redirect windows, rules, the clipboard between X11 and Wayland.
+//! override-redirect windows, rules, the clipboard between X11 and Wayland;
+//! Xwayland starting when an app connects, and stopping when none is left.
 //! Skipped when Xwayland isn't installed.
 
 mod common;
@@ -28,16 +29,23 @@ struct X11 {
     events: std::cell::RefCell<Vec<Event>>,
 }
 
+/// Whether Xwayland is installed (else the test is skipped).
+fn xwayland_installed() -> bool {
+    let installed = std::process::Command::new("sh")
+        .args(["-c", "command -v Xwayland"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !installed {
+        eprintln!("Xwayland not installed: skipped");
+    }
+    installed
+}
+
 impl X11 {
-    /// Connect once Xwayland is up; `None` if it isn't installed.
+    /// Connect to the display pila reserved, which starts Xwayland; `None`
+    /// if it isn't installed.
     fn connect(pila: &mut TestPila) -> Option<X11> {
-        if std::process::Command::new("sh")
-            .args(["-c", "command -v Xwayland"])
-            .output()
-            .map(|o| !o.status.success())
-            .unwrap_or(true)
-        {
-            eprintln!("Xwayland not installed: skipped");
+        if !xwayland_installed() {
             return None;
         }
         let started = Instant::now();
@@ -238,8 +246,8 @@ impl X11 {
     }
 }
 
-/// The Xwayland that `pila` started.
-fn xwayland_pid(pila: &TestPila) -> u32 {
+/// The Xwayland that `pila` started, if one runs.
+fn find_xwayland(pila: &TestPila) -> Option<u32> {
     let wanted = format!("PPid:\t{}\n", pila.pid());
     std::fs::read_dir("/proc")
         .unwrap()
@@ -247,9 +255,29 @@ fn xwayland_pid(pila: &TestPila) -> u32 {
         .filter_map(|entry| entry.file_name().to_str()?.parse::<u32>().ok())
         .find(|pid| {
             let status = std::fs::read_to_string(format!("/proc/{pid}/status"));
-            status.is_ok_and(|s| s.starts_with("Name:\tXwayland\n") && s.contains(&wanted))
+            status.is_ok_and(|s| {
+                s.starts_with("Name:\tXwayland\n")
+                    && s.contains(&wanted)
+                    && !s.contains("State:\tZ")
+            })
         })
-        .expect("pila's Xwayland")
+}
+
+fn xwayland_pid(pila: &TestPila) -> u32 {
+    find_xwayland(pila).expect("pila's Xwayland")
+}
+
+/// The display pila reserved for X11 apps, as `DISPLAY` names it.
+fn reserved_display(pila: &mut TestPila) -> String {
+    let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
+    format!(":{}", state["xwayland"].as_u64().unwrap())
+}
+
+/// How many files pila has open.
+fn open_files(pila: &TestPila) -> usize {
+    std::fs::read_dir(format!("/proc/{}/fd", pila.pid()))
+        .unwrap()
+        .count()
 }
 
 #[test]
@@ -300,9 +328,108 @@ fn xwayland_starts_with_no_signals_blocked() {
     if X11::connect(&mut pila).is_none() {
         return;
     }
-    let status = std::fs::read_to_string(format!("/proc/{}/status", xwayland_pid(&pila))).unwrap();
-    let blocked = status.lines().find(|l| l.starts_with("SigBlk:")).unwrap();
-    assert!(blocked.ends_with("0000000000000000"), "{blocked}");
+    // Xwayland blocks signals for a moment of its own while it starts; a
+    // mask inherited from pila stays.
+    let pid = xwayland_pid(&pila);
+    let started = Instant::now();
+    loop {
+        let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap();
+        let blocked = status.lines().find(|l| l.starts_with("SigBlk:")).unwrap();
+        if blocked.ends_with("0000000000000000") {
+            break;
+        }
+        assert!(started.elapsed() < TIMEOUT, "{blocked}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Pila holds an X display from startup and starts Xwayland only when an
+/// X11 app connects to it; the session doesn't wait for X.
+#[test]
+fn xwayland_starts_when_an_x11_app_connects() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start_with(Options {
+        command: Some("echo $DISPLAY > $XDG_RUNTIME_DIR/ran".into()),
+        ..Options::default()
+    });
+    let display = reserved_display(&mut pila);
+    assert_eq!(pila.wait_file("ran").trim(), display);
+    pila.stays(
+        "no Xwayland until an X11 app comes",
+        Duration::from_millis(500),
+        |s| s["xwayland_running"] == false,
+    );
+    assert_eq!(find_xwayland(&pila), None);
+    let x11 = X11::connect(&mut pila).unwrap();
+    x11.window("first", (200, 200), 0xff0000);
+    pila.wait("its window", |s| x11_window(s, "first").is_some());
+    assert!(pila.state()["xwayland_running"] == true);
+    xwayland_pid(&pila);
+}
+
+/// With `idle-timeout`, Xwayland stops once its last X11 client leaves, and
+/// the next one starts it again on the same display, time after time.
+#[test]
+fn xwayland_stops_when_idle_if_asked() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start_with(Options {
+        config: "[xwayland]\nidle-timeout = 1\n".into(),
+        ..Options::default()
+    });
+    let display = reserved_display(&mut pila);
+    let mut files = Vec::new();
+    for round in 0..3 {
+        let x11 = X11::connect(&mut pila).unwrap();
+        let class = format!("round{round}");
+        x11.window(&class, (200, 200), 0xff0000);
+        pila.wait("the window", |s| x11_window(s, &class).is_some());
+        // A window open: it keeps running past the timeout.
+        pila.stays(
+            "Xwayland running with a window",
+            Duration::from_millis(1500),
+            |s| s["xwayland_running"] == true,
+        );
+        drop(x11);
+        pila.wait("Xwayland stopped", |s| {
+            s["xwayland_running"] == false && x11_window(s, &class).is_none()
+        });
+        let started = Instant::now();
+        while find_xwayland(&pila).is_some() {
+            assert!(started.elapsed() < TIMEOUT, "Xwayland's process stays");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(reserved_display(&mut pila), display);
+        let socket = format!("/tmp/.X11-unix/X{}", &display[1..]);
+        assert!(std::path::Path::new(&socket).exists(), "{socket} gone");
+        files.push(open_files(&pila));
+    }
+    // Nothing left behind by each Xwayland (its sockets, the idle checks').
+    assert_eq!(files[1], files[2], "{files:?}");
+}
+
+/// An X11 client with no window (a settings daemon) keeps Xwayland running.
+#[test]
+fn an_x11_client_without_windows_keeps_xwayland_running() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start_with(Options {
+        config: "[xwayland]\nidle-timeout = 1\n".into(),
+        ..Options::default()
+    });
+    let x11 = X11::connect(&mut pila).unwrap();
+    pila.wait("Xwayland up", |s| s["xwayland_running"] == true);
+    pila.stays(
+        "Xwayland running for a client",
+        Duration::from_millis(2500),
+        |s| s["xwayland_running"] == true,
+    );
+    drop(x11);
+    pila.wait("Xwayland stopped", |s| s["xwayland_running"] == false);
 }
 
 #[test]
@@ -316,9 +443,11 @@ fn xwayland_comes_back_after_a_crash() {
     let pid = xwayland_pid(&pila);
     // SAFETY: only a signal, to a process of this test's.
     assert_eq!(unsafe { libc::kill(pid as i32, libc::SIGKILL) }, 0);
-    pila.wait("its windows gone and a new Xwayland", |s| {
-        x11_window(s, "old").is_none() && s["xwayland"].is_number()
+    pila.wait("its windows gone", |s| {
+        x11_window(s, "old").is_none() && s["xwayland_running"] == false
     });
+    // Started again by the next X11 app, on the same display.
+    assert_eq!(find_xwayland(&pila), None);
     let x11 = X11::connect(&mut pila).unwrap();
     x11.window("new", (200, 200), 0xff0000);
     pila.wait("a window on the new one", |s| {
@@ -833,10 +962,21 @@ fn a_moved_x11_window_is_told_where_it_is() {
 
 #[test]
 fn the_clipboard_goes_from_wayland_to_a_focused_x11_app() {
-    let mut pila = TestPila::start();
-    let Some(x) = X11::connect(&mut pila) else {
+    clipboard_from_wayland_to_x11(true);
+}
+
+/// Xwayland starts after a Wayland client set the clipboard: X gets it too.
+#[test]
+fn the_clipboard_set_before_xwayland_starts_reaches_x11_apps() {
+    clipboard_from_wayland_to_x11(false);
+}
+
+fn clipboard_from_wayland_to_x11(x11_first: bool) {
+    if !xwayland_installed() {
         return;
-    };
+    }
+    let mut pila = TestPila::start();
+    let x11 = x11_first.then(|| X11::connect(&mut pila).unwrap());
     let source_client = pila.client();
     source_client.window("source").create();
     pila.wait_focus("source");
@@ -849,6 +989,10 @@ fn the_clipboard_goes_from_wayland_to_a_focused_x11_app() {
     device.set_selection(Some(&source), source_client.last_serial());
     source_client.flush();
     source_client.roundtrip();
+    let x = x11.unwrap_or_else(|| {
+        assert!(pila.state()["xwayland_running"] == false);
+        X11::connect(&mut pila).unwrap()
+    });
     let id = x.window("XApp", (300, 200), 0xff0000);
     pila.wait_focus("XApp");
     x.wait_event("focus in", |e| matches!(e, Event::FocusIn(_)));
@@ -998,9 +1142,10 @@ fn an_unfocused_x11_app_cant_read_the_clipboard() {
 }
 
 /// An Xwayland that dies before it's ready (a broken install, a crash)
-/// leaves X11 apps out, not the session: the startup command still runs.
+/// leaves X11 apps out, not the session: the startup command runs, apps
+/// fail rather than hang, and after a few tries pila stops starting it.
 #[test]
-fn the_session_starts_when_xwayland_dies_at_startup() {
+fn a_broken_xwayland_stops_being_started() {
     let bin = std::env::temp_dir().join(format!("pila-xwayland-dies-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
     let xwayland = bin.join("Xwayland");
@@ -1021,7 +1166,15 @@ fn the_session_starts_when_xwayland_dies_at_startup() {
         ..Options::default()
     });
     assert_eq!(pila.wait_file("ran"), "started\n");
-    pila.wait_log("Xwayland failed to start");
+    let display = reserved_display(&mut pila);
+    // Each try fails the app waiting; after the last one it's refused.
+    let started = Instant::now();
+    while !pila.log().contains("Xwayland keeps failing") {
+        assert!(started.elapsed() < TIMEOUT, "Xwayland never given up on");
+        assert!(x11rb::connect(Some(&display)).is_err());
+    }
+    pila.wait("no display left", |s| s["xwayland"].is_null());
+    assert!(pila.log().contains("Xwayland failed to start"));
     let _ = std::fs::remove_dir_all(&bin);
 }
 

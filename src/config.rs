@@ -1237,6 +1237,7 @@ struct ConfigFile {
     colors: ColorsFile,
     animations: AnimationsFile,
     cursor: CursorFile,
+    xwayland: XwaylandConfig,
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
     #[serde(rename = "layer-rule")]
@@ -1417,6 +1418,32 @@ impl CursorFile {
     }
 }
 
+/// The `[xwayland]` `idle-timeout`s Pila takes, in seconds.
+pub const XWAYLAND_IDLE_TIMEOUTS: std::ops::RangeInclusive<u32> = 1..=3600;
+
+/// `[xwayland]`: how Pila runs Xwayland (`xwayland.rs`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct XwaylandConfig {
+    /// Stop Xwayland this long after its last X11 client leaves (it starts
+    /// again with the next one). Unset, it runs until Pila exits once
+    /// started.
+    pub idle_timeout: Option<u32>,
+}
+
+impl XwaylandConfig {
+    fn validate(self) -> Result<Self, String> {
+        match self.idle_timeout {
+            Some(seconds) if !XWAYLAND_IDLE_TIMEOUTS.contains(&seconds) => Err(format!(
+                "xwayland.idle-timeout = {seconds}: must be {} to {} seconds",
+                XWAYLAND_IDLE_TIMEOUTS.start(),
+                XWAYLAND_IDLE_TIMEOUTS.end()
+            )),
+            _ => Ok(self),
+        }
+    }
+}
+
 /// The largest `[shadow]` `size` and, either way, `offset` (logical pixels).
 const MAX_SHADOW: i32 = 64;
 
@@ -1537,6 +1564,8 @@ pub struct Config {
     pub animations: AnimationsConfig,
     /// `[cursor]`: shake to find it.
     pub cursor: CursorConfig,
+    /// `[xwayland]`: stopping it when unused.
+    pub xwayland: XwaylandConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -1559,7 +1588,7 @@ pub const TERMINALS: &[&str] = &[
 ];
 
 /// Whether `program` is an executable file in a `PATH` directory.
-fn in_path(program: &str) -> bool {
+pub(crate) fn in_path(program: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
     let Some(path) = std::env::var_os("PATH") else {
         return false;
@@ -1697,6 +1726,7 @@ impl Config {
         let colors = file.colors.validate()?;
         let animations = file.animations.validate()?;
         let cursor = file.cursor.validate()?;
+        let xwayland = file.xwayland.validate()?;
         let window_rules = file
             .window_rules
             .into_iter()
@@ -1825,6 +1855,7 @@ impl Config {
             colors,
             animations,
             cursor,
+            xwayland,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -2517,6 +2548,19 @@ mod tests {
             assert!(error.contains("cursor.shake-magnification"), "{error}");
         }
         assert!(Config::from_toml("[cursor]\nshake-to-find = 1", &no_env).is_err());
+    }
+
+    #[test]
+    fn xwayland_idle_timeout_is_unset_by_default_and_bounded() {
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.xwayland.idle_timeout, None);
+        let config = Config::from_toml("[xwayland]\nidle-timeout = 10", &no_env).unwrap();
+        assert_eq!(config.xwayland.idle_timeout, Some(10));
+        for text in ["idle-timeout = 0", "idle-timeout = 3601"] {
+            let error = Config::from_toml(&format!("[xwayland]\n{text}"), &no_env).unwrap_err();
+            assert!(error.contains("xwayland.idle-timeout"), "{error}");
+        }
+        assert!(Config::from_toml("[xwayland]\nidle-timeout = -1", &no_env).is_err());
     }
 
     #[test]

@@ -38,6 +38,11 @@ smithay-drm-extras = { version = "0.1", default-features = false }
 # Named cursors on bare metal (the nested host draws its own).
 xcursor = "0.3"
 tracing = "0.1"
+# An X client of Pila's own, asking Xwayland which clients are left before
+# stopping it (`xwayland.rs`, `[xwayland] idle-timeout`); the X11 test
+# clients (`tests/x11.rs`) use it too. Smithay's version, with the same
+# features, so it adds nothing to the build.
+x11rb = { version = "0.14", features = ["res"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Smithay's main branch, as niri and cosmic-comp use it: fixes reach pila
@@ -89,7 +94,5 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
-# X11 test clients (`tests/x11.rs`), through pila's Xwayland.
-x11rb = "0.13"
 
 

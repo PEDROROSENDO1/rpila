@@ -1,5 +1,9 @@
-//! X11 apps through Xwayland. pila starts Xwayland at launch and runs Smithay's
-//! X11 window manager (`X11Wm`) on it; spawned clients get its `DISPLAY`.
+//! X11 apps through Xwayland. pila reserves an X display at launch (its
+//! number, lock file and sockets: `XWaylandDisplay`), which spawned clients get
+//! as `DISPLAY`, and starts Xwayland when an X11 app first connects to it
+//! (`listen_for_x11`), running Smithay's X11 window manager (`X11Wm`) on it.
+//! With `[xwayland] idle-timeout` it stops again once no X11 client is left
+//! (`check_xwayland_idle`), and the next one starts it.
 //!
 //! X11 windows live in the same `Space` as Wayland ones (`Window::new_x11_window`).
 //! Managed windows are placed and focused like Wayland toplevels; override-
@@ -7,11 +11,12 @@
 //! without focus. pila tells X where a managed window is (`X11Surface::configure`)
 //! whenever it moves it (`Pila::x11_window_moved`).
 //!
-//! The startup command waits until X is ready (or failed), so `pila -c xterm`
-//! works. Xwayland dying before it's ready counts as failed (`XWaylandSource`).
+//! The app waits in the socket's queue while Xwayland starts, so `pila -c
+//! xterm` works. Xwayland dying before it's ready counts as failed
+//! (`XWaylandSource`).
 
 use std::{
-    os::fd::{AsRawFd, BorrowedFd, OwnedFd},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd},
     process::Stdio,
     time::{Duration, Instant},
 };
@@ -20,7 +25,10 @@ use smithay::{
     desktop::Window,
     input::{pointer::GrabStartData as PointerGrabStartData, Seat},
     reexports::calloop::{
-        EventSource, Poll, PostAction, Readiness, RegistrationToken, Token, TokenFactory,
+        generic::Generic,
+        timer::{TimeoutAction, Timer},
+        EventSource, Interest, Mode, Poll, PostAction, Readiness, RegistrationToken, Token,
+        TokenFactory,
     },
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::{Logical, Rectangle, SERIAL_COUNTER},
@@ -42,7 +50,7 @@ use smithay::{
     },
     xwayland::{
         xwm::{Reorder, ResizeEdge as X11ResizeEdge, WmWindowProperty, XwmId},
-        X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler,
+        X11Surface, X11Wm, XWayland, XWaylandDisplay, XWaylandEvent, XwmHandler,
     },
 };
 use tracing::{debug, info, warn};
@@ -90,19 +98,85 @@ fn ensure_x11_socket_dir() {
     }
 }
 
-/// How many times Xwayland is started again within `RESTART_WINDOW`: one that
-/// can't stay up mustn't be started forever.
+/// How many times Xwayland may fail (die, or not start) within
+/// `RESTART_WINDOW` and still be started again: an app waiting in the socket's
+/// queue would start a broken one forever.
 const MAX_RESTARTS: usize = 3;
 const RESTART_WINDOW: Duration = Duration::from_secs(60);
 
-/// Whether Xwayland may be started again `now`, given when it was lately.
-fn may_restart(restarts: &mut Vec<Instant>, now: Instant) -> bool {
-    restarts.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
-    if restarts.len() >= MAX_RESTARTS {
+/// Whether Xwayland may be started again after failing `now`, given when it
+/// failed lately.
+fn may_restart(failures: &mut Vec<Instant>, now: Instant) -> bool {
+    failures.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
+    if failures.len() >= MAX_RESTARTS {
         return false;
     }
-    restarts.push(now);
+    failures.push(now);
     true
+}
+
+/// One of the reserved display's listening sockets, watched while Xwayland
+/// doesn't run (`Pila::listen_for_x11`). Holding the reservation keeps the
+/// socket open while it's watched.
+struct ListenSocket(XWaylandDisplay, usize);
+
+impl AsFd for ListenSocket {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.listen_sockets()[self.1].as_fd()
+    }
+}
+
+/// Whether the X clients on `display` are all pila's own (its window manager
+/// and the connection asking) or Xwayland's (`xwayland`: it has one of its
+/// own). X knows a local client's process from its socket (XRes
+/// `LocalClientPID`); one X can't name counts as someone else's. Blocks: run
+/// off the event loop.
+fn only_pilas_x11_clients(display: u32, xwayland: u32) -> Result<bool, String> {
+    use x11rb::{
+        connection::RequestConnection,
+        protocol::res::{ClientIdMask, ClientIdSpec, ConnectionExt as _},
+    };
+    let error = |err: &dyn std::fmt::Display| err.to_string();
+    let (conn, _) = x11rb::connect(Some(&format!(":{display}"))).map_err(|e| error(&e))?;
+    conn.extension_information(x11rb::protocol::res::X11_EXTENSION_NAME)
+        .map_err(|e| error(&e))?
+        .ok_or("Xwayland has no X-Resource extension")?;
+    conn.res_query_version(1, 2)
+        .map_err(|e| error(&e))?
+        .reply()
+        .map_err(|e| error(&e))?;
+    let clients = conn
+        .res_query_clients()
+        .map_err(|e| error(&e))?
+        .reply()
+        .map_err(|e| error(&e))?
+        .clients;
+    let all = ClientIdSpec {
+        client: 0,
+        mask: ClientIdMask::LOCAL_CLIENT_PID,
+    };
+    let ids = conn
+        .res_query_client_ids(&[all])
+        .map_err(|e| error(&e))?
+        .reply()
+        .map_err(|e| error(&e))?
+        .ids;
+    let pids: Vec<u32> = ids
+        .iter()
+        .filter_map(|id| id.value.first().copied())
+        .collect();
+    debug!(clients = clients.len(), ?pids, "X11 clients");
+    Ok(all_ours(
+        clients.len(),
+        &pids,
+        &[std::process::id(), xwayland],
+    ))
+}
+
+/// Whether each of `clients` X clients is of one of the processes `ours`,
+/// given the process IDs X knows (`only_pilas_x11_clients`).
+fn all_ours(clients: usize, pids: &[u32], ours: &[u32]) -> bool {
+    pids.len() == clients && pids.iter().all(|pid| ours.contains(pid))
 }
 
 /// `f` with the signals of pila's signal source unblocked, for what starts a
@@ -126,24 +200,77 @@ fn with_signals_unblocked<T>(f: impl FnOnce() -> T) -> T {
     }
 }
 
-/// Xwayland while pila runs it (`Pila::xwayland`).
+/// Xwayland and the display it serves (`Pila::xwayland`).
 pub struct XwaylandState {
-    /// Its window manager and display number, once it's ready.
+    /// The X display pila holds from startup, whether Xwayland runs or not:
+    /// its number, lock file and listening sockets. `None` when X11 apps
+    /// can't run (no Xwayland installed, or it keeps failing).
+    pub reservation: Option<XWaylandDisplay>,
+    /// Watching the reservation's sockets while Xwayland doesn't run
+    /// (`listen_for_x11`).
+    pub listening: Vec<RegistrationToken>,
+    /// Its window manager, once it's ready.
     pub wm: Option<X11Wm>,
-    pub display: Option<u32>,
     pub shell_state: XWaylandShellState,
-    /// Its event source, removed on exit (`stop_xwayland`).
+    /// Its event source while it runs, removed to stop it (`kill_xwayland`),
+    /// and its process.
     pub token: Option<RegistrationToken>,
-    /// When it was started again lately (`may_restart`).
-    pub restarts: Vec<Instant>,
+    pub pid: Option<u32>,
+    /// When it failed lately (`may_restart`).
+    pub failures: Vec<Instant>,
+    /// The Wayland clipboard's and primary selection's MIME types, offered to
+    /// a window manager that starts after they were set.
+    pub clipboard: Option<Vec<String>>,
+    pub primary: Option<Vec<String>>,
+    /// The idle check's timer (`[xwayland] idle-timeout`), while one's due.
+    pub idle_check: Option<RegistrationToken>,
+    /// Xwayland was stopped for being idle: its window manager's connection
+    /// closing isn't a crash (`xwayland_gone`).
+    pub stopped_idle: bool,
+}
+
+impl XwaylandState {
+    pub fn new(shell_state: XWaylandShellState) -> Self {
+        Self {
+            reservation: None,
+            listening: Vec::new(),
+            wm: None,
+            shell_state,
+            token: None,
+            pid: None,
+            failures: Vec::new(),
+            clipboard: None,
+            primary: None,
+            idle_check: None,
+            stopped_idle: false,
+        }
+    }
+
+    /// The display X11 apps get (`DISPLAY=:n`), from startup on.
+    pub fn display(&self) -> Option<u32> {
+        self.reservation
+            .as_ref()
+            .map(XWaylandDisplay::display_number)
+    }
+
+    /// Whether Xwayland is up, with its window manager.
+    pub fn running(&self) -> bool {
+        self.wm.is_some()
+    }
 }
 
 /// Smithay's Xwayland event source, plus the one failure it misses: Xwayland
 /// dying before it's ready (a crash, a broken install) closes the pipe it
 /// writes its display number to, and Smithay takes that end of file for "not
 /// yet". Watched level-triggered, the pipe then wakes the event loop forever
-/// and the startup commands, waiting for X, never run.
-struct XWaylandSource(XWayland);
+/// and the app waiting for X never hears back.
+///
+/// It also unregisters once: Smithay's disables itself once Xwayland is ready
+/// (calloop unregisters it then), and removing it later must not try again.
+struct XWaylandSource {
+    xwayland: XWayland,
+    registered: bool,
+}
 
 impl EventSource for XWaylandSource {
     type Event = XWaylandEvent;
@@ -160,11 +287,11 @@ impl EventSource for XWaylandSource {
     where
         F: FnMut(XWaylandEvent, &mut ()),
     {
-        if readiness.readable && closed_unwritten(self.0.poll_fd()) {
+        if readiness.readable && closed_unwritten(self.xwayland.poll_fd()) {
             callback(XWaylandEvent::Error, &mut ());
             return Ok(PostAction::Disable);
         }
-        self.0.process_events(readiness, token, callback)
+        self.xwayland.process_events(readiness, token, callback)
     }
 
     fn register(
@@ -172,7 +299,9 @@ impl EventSource for XWaylandSource {
         poll: &mut Poll,
         factory: &mut TokenFactory,
     ) -> smithay::reexports::calloop::Result<()> {
-        self.0.register(poll, factory)
+        self.xwayland.register(poll, factory)?;
+        self.registered = true;
+        Ok(())
     }
 
     fn reregister(
@@ -180,11 +309,14 @@ impl EventSource for XWaylandSource {
         poll: &mut Poll,
         factory: &mut TokenFactory,
     ) -> smithay::reexports::calloop::Result<()> {
-        self.0.reregister(poll, factory)
+        self.xwayland.reregister(poll, factory)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> smithay::reexports::calloop::Result<()> {
-        self.0.unregister(poll)
+        if !std::mem::replace(&mut self.registered, false) {
+            return Ok(());
+        }
+        self.xwayland.unregister(poll)
     }
 }
 
@@ -206,17 +338,84 @@ fn closed_unwritten(fd: BorrowedFd<'_>) -> bool {
 }
 
 impl Pila {
-    /// Start Xwayland; the `startup` commands run once X is ready (or failed
-    /// to start).
-    pub fn start_xwayland(&mut self, startup: Vec<String>) {
+    /// Hold an X display for X11 apps from startup: they get its `DISPLAY` at
+    /// once, and the first to connect starts Xwayland (`listen_for_x11`).
+    pub fn reserve_xwayland(&mut self) {
+        if !crate::config::in_path("Xwayland") {
+            info!("Xwayland isn't installed; X11 apps won't run");
+            return;
+        }
         ensure_x11_socket_dir();
+        match XWaylandDisplay::new(None, true) {
+            Ok(reservation) => {
+                info!(
+                    display = reservation.display_number(),
+                    "X11 display reserved; Xwayland starts when an X11 app connects"
+                );
+                self.xwayland.reservation = Some(reservation);
+                self.listen_for_x11();
+            }
+            Err(err) => warn!(?err, "can't reserve an X11 display; X11 apps won't run"),
+        }
+    }
+
+    /// Watch the reserved display's sockets, while Xwayland doesn't run: an
+    /// app connecting makes one readable. The connection waits in the
+    /// socket's queue for Xwayland to take it (`x11_app_connecting`).
+    fn listen_for_x11(&mut self) {
+        let Some(reservation) = self.xwayland.reservation.clone() else {
+            return;
+        };
+        if !self.xwayland.listening.is_empty() {
+            return;
+        }
+        for index in 0..reservation.listen_sockets().len() {
+            let socket = ListenSocket(reservation.clone(), index);
+            let source = Generic::new(socket, Interest::READ, Mode::Level);
+            let inserted = self.loop_handle.insert_source(source, |_, _, state| {
+                // Not from here: a source removed from its own callback
+                // stays in the poll. The idle callback runs before the next
+                // poll, and inside a source it needs no wake.
+                state
+                    .loop_handle
+                    .insert_idle(|state| state.x11_app_connecting());
+                Ok(PostAction::Continue)
+            });
+            match inserted {
+                Ok(token) => self.xwayland.listening.push(token),
+                Err(err) => warn!(error = ?err.error, "can't watch the X11 display's socket"),
+            }
+        }
+    }
+
+    fn stop_listening(&mut self) {
+        for token in self.xwayland.listening.drain(..) {
+            self.loop_handle.remove(token);
+        }
+    }
+
+    /// An X11 app is connecting to the reserved display: start Xwayland,
+    /// which takes the connection waiting in the socket.
+    fn x11_app_connecting(&mut self) {
+        self.stop_listening();
+        if self.xwayland.token.is_none() {
+            self.spawn_xwayland();
+        }
+    }
+
+    /// Start Xwayland on the reserved display. Once it's ready its window
+    /// manager starts, with the selections Wayland clients set meanwhile.
+    fn spawn_xwayland(&mut self) {
+        let Some(reservation) = self.xwayland.reservation.clone() else {
+            return;
+        };
+        let number = reservation.display_number();
         let spawned = with_signals_unblocked(|| {
-            XWayland::spawn(
+            XWayland::spawn_with_inherited_env_on_display(
                 &self.display_handle,
-                None,
+                reservation,
                 std::iter::empty::<(String, String)>(),
                 std::iter::empty::<String>(),
-                true,
                 Stdio::null(),
                 Stdio::null(),
                 |_| (),
@@ -225,68 +424,119 @@ impl Pila {
         let (xwayland, client) = match spawned {
             Ok(spawned) => spawned,
             Err(err) => {
-                warn!(?err, "failed to start Xwayland; X11 apps won't run");
-                self.start_session(startup);
+                warn!(?err, "failed to start Xwayland");
+                self.xwayland_failed();
                 return;
             }
         };
-        let inserted =
-            self.loop_handle
-                .insert_source(XWaylandSource(xwayland), move |event, _, state| {
-                    match event {
-                        XWaylandEvent::Ready {
+        info!(display = number, "starting Xwayland for an X11 app");
+        self.xwayland.pid = xwayland.pid();
+        let inserted = self.loop_handle.insert_source(
+            XWaylandSource {
+                xwayland,
+                registered: false,
+            },
+            move |event, _, state| {
+                match event {
+                    XWaylandEvent::Ready { x11_socket, .. } => {
+                        // Nested and on a TTY alike, Xwayland runs at scale 1.
+                        state.client_compositor_state(&client).set_client_scale(1.0);
+                        match X11Wm::start_wm(
+                            state.loop_handle.clone(),
+                            &state.display_handle,
                             x11_socket,
-                            display_number,
-                        } => {
-                            // Nested and on a TTY alike, Xwayland runs at scale 1.
-                            state.client_compositor_state(&client).set_client_scale(1.0);
-                            match X11Wm::start_wm(
-                                state.loop_handle.clone(),
-                                &state.display_handle,
-                                x11_socket,
-                                client.clone(),
-                            ) {
-                                Ok(wm) => {
-                                    info!(display = display_number, "Xwayland ready");
-                                    state.xwayland.wm = Some(wm);
-                                    state.xwayland.display = Some(display_number);
-                                }
-                                Err(err) => warn!(?err, "failed to start the X11 window manager"),
+                            client.clone(),
+                        ) {
+                            Ok(wm) => {
+                                info!(display = number, "Xwayland ready");
+                                state.xwayland.wm = Some(wm);
+                                state.offer_selections_to_x11();
+                                state.arm_xwayland_idle_check();
+                            }
+                            Err(err) => {
+                                warn!(?err, "failed to start the X11 window manager");
+                                // Not from its own source's callback.
+                                state.loop_handle.insert_idle(Pila::xwayland_failed);
                             }
                         }
-                        XWaylandEvent::Error => {
-                            warn!("Xwayland failed to start; X11 apps won't run")
-                        }
                     }
-                    let startup = std::mem::take(&mut state.pending_startup);
-                    state.start_session(startup);
-                });
+                    XWaylandEvent::Error => {
+                        warn!("Xwayland failed to start");
+                        state.loop_handle.insert_idle(Pila::xwayland_failed);
+                    }
+                }
+            },
+        );
         match inserted {
-            Ok(token) => {
-                self.xwayland.token = Some(token);
-                self.pending_startup = startup;
-            }
+            Ok(token) => self.xwayland.token = Some(token),
             Err(err) => {
-                warn!(?err, "failed to watch Xwayland");
-                self.start_session(startup);
+                warn!(error = ?err.error, "failed to watch Xwayland");
+                self.xwayland_failed();
             }
         }
     }
 
-    /// Stop Xwayland on exit: dropping its event source kills the X server
-    /// and removes its lock and socket files. (Left to the event loop's own
-    /// drop, it doesn't happen.)
-    pub fn stop_xwayland(&mut self) {
+    /// Xwayland didn't get as far as its window manager: stop what's left
+    /// of it, and wait for the next app unless it keeps failing.
+    fn xwayland_failed(&mut self) {
+        self.kill_xwayland();
+        self.listen_again_unless_failing();
+    }
+
+    /// Wait for the next X11 app after Xwayland failed, unless it failed too
+    /// often lately (`may_restart`): then let the display go, so apps get
+    /// refused rather than start it forever.
+    fn listen_again_unless_failing(&mut self) {
+        if may_restart(&mut self.xwayland.failures, Instant::now()) {
+            self.listen_for_x11();
+        } else {
+            warn!("Xwayland keeps failing; X11 apps won't run until pila restarts");
+            self.stop_xwayland();
+        }
+    }
+
+    /// Stop the X server: dropping its event source kills it. Its window
+    /// manager goes first, so the connection closing isn't taken for a crash
+    /// (`XwmHandler::disconnected` compares ids).
+    fn kill_xwayland(&mut self) {
         self.xwayland.wm = None;
+        self.xwayland.pid = None;
+        self.xwayland.stopped_idle = false;
         if let Some(token) = self.xwayland.token.take() {
+            self.loop_handle.remove(token);
+        }
+        if let Some(token) = self.xwayland.idle_check.take() {
             self.loop_handle.remove(token);
         }
     }
 
-    /// The window manager's connection to X closed: Xwayland died. Its windows
-    /// are gone, and what's started from now on mustn't get its `DISPLAY`. It
-    /// starts again, unless it keeps dying.
+    /// Stop Xwayland on exit, and give the display back: the reservation's
+    /// last holder removes its lock and socket files. (Left to the event
+    /// loop's own drop, it doesn't happen.)
+    pub fn stop_xwayland(&mut self) {
+        self.kill_xwayland();
+        self.stop_listening();
+        self.xwayland.reservation = None;
+    }
+
+    /// The window manager's connection to X closed: Xwayland stopped for
+    /// being idle, or died. The next X11 app starts it again, on the same
+    /// display, unless it keeps dying.
     fn xwayland_gone(&mut self) {
+        if self.xwayland.stopped_idle {
+            info!("Xwayland stopped; it starts again when an X11 app connects");
+            self.forget_xwayland();
+            self.listen_for_x11();
+        } else {
+            warn!("Xwayland died; it starts again when an X11 app connects");
+            self.forget_xwayland();
+            self.listen_again_unless_failing();
+        }
+    }
+
+    /// Stop Xwayland and forget what went with it: its windows, its
+    /// selections, the focus on one of them.
+    fn forget_xwayland(&mut self) {
         let was_focused = matches!(
             self.seat.get_keyboard().and_then(|k| k.current_focus()),
             Some(KeyboardFocus::X11(_))
@@ -305,21 +555,160 @@ impl Pila {
         }
         self.x11_cleared_selection(SelectionTarget::Clipboard);
         self.x11_cleared_selection(SelectionTarget::Primary);
-        self.stop_xwayland();
-        self.xwayland.display = None;
+        self.kill_xwayland();
         if was_focused {
             self.focus_recent_window();
         }
         self.refresh_pointer_focus();
         self.queue_redraw();
+    }
 
-        if may_restart(&mut self.xwayland.restarts, Instant::now()) {
-            warn!("Xwayland died; starting it again");
-            self.loop_handle
-                .insert_idle(|state| state.start_xwayland(Vec::new()));
-            self.wake.ping();
-        } else {
-            warn!("Xwayland keeps dying; X11 apps won't run until pila restarts");
+    /// Whether any X11 window is managed or shown, minimized ones and
+    /// menus included.
+    fn has_x11_windows(&self) -> bool {
+        self.space
+            .elements()
+            .chain(self.off_space_windows())
+            .any(|w| w.x11_surface().is_some())
+    }
+
+    /// With `[xwayland] idle-timeout`, while Xwayland runs with no X11
+    /// window: check whether any X11 client is left once the timeout is over
+    /// (`check_xwayland_idle`). Read when the last X11 window goes (and on a
+    /// config change).
+    pub fn arm_xwayland_idle_check(&mut self) {
+        let Some(seconds) = self.config.xwayland.idle_timeout else {
+            return;
+        };
+        if !self.xwayland.running() || self.xwayland.idle_check.is_some() || self.has_x11_windows()
+        {
+            return;
+        }
+        let timer = Timer::from_duration(Duration::from_secs(seconds.into()));
+        let inserted = self.loop_handle.insert_source(timer, |_, _, state| {
+            state.xwayland.idle_check = None;
+            state.check_xwayland_idle();
+            TimeoutAction::Drop
+        });
+        match inserted {
+            Ok(token) => self.xwayland.idle_check = Some(token),
+            Err(err) => warn!(error = ?err.error, "can't time Xwayland's idle check"),
+        }
+    }
+
+    /// `[xwayland] idle-timeout` changed: time the check again.
+    pub fn xwayland_idle_timeout_changed(&mut self) {
+        if let Some(token) = self.xwayland.idle_check.take() {
+            self.loop_handle.remove(token);
+        }
+        self.arm_xwayland_idle_check();
+    }
+
+    /// The idle timeout is over with no X11 window: ask X, on a thread (it
+    /// blocks), whether only pila's own clients are left.
+    fn check_xwayland_idle(&mut self) {
+        let (Some(wm), Some(display), Some(pid)) = (
+            &self.xwayland.wm,
+            self.xwayland.display(),
+            self.xwayland.pid,
+        ) else {
+            return;
+        };
+        if self.config.xwayland.idle_timeout.is_none() || self.has_x11_windows() {
+            return;
+        }
+        let id = wm.id();
+        let (sender, channel) = smithay::reexports::calloop::channel::channel();
+        let spawned = std::thread::Builder::new()
+            .name("pila-x11-idle".into())
+            .spawn(move || {
+                let _ = sender.send(only_pilas_x11_clients(display, pid));
+            });
+        if let Err(err) = spawned {
+            warn!(?err, "can't check whether Xwayland is idle");
+            return;
+        }
+        let inserted = self
+            .loop_handle
+            .insert_source(channel, move |event, _, state| {
+                if let smithay::reexports::calloop::channel::Event::Msg(result) = event {
+                    state.xwayland_idle_checked(id, result);
+                }
+            });
+        if let Err(err) = inserted {
+            warn!(error = ?err.error, "can't check whether Xwayland is idle");
+        }
+    }
+
+    /// What X said about its clients (`check_xwayland_idle`): with only
+    /// pila's own left, stop Xwayland until an X11 app connects again; with
+    /// others (a settings daemon, an app with no window yet), check again
+    /// after another timeout.
+    fn xwayland_idle_checked(&mut self, id: XwmId, result: Result<bool, String>) {
+        // Xwayland may have gone, or a window come, meanwhile.
+        let same = self.xwayland.wm.as_ref().is_some_and(|wm| wm.id() == id);
+        if !same || self.config.xwayland.idle_timeout.is_none() || self.has_x11_windows() {
+            return;
+        }
+        match result {
+            Ok(true) => {
+                info!("no X11 clients left; stopping Xwayland");
+                // Only the server: its window manager, which X may still send
+                // events to, goes when the connection closes (`xwayland_gone`).
+                self.xwayland.stopped_idle = true;
+                if let Some(token) = self.xwayland.token.take() {
+                    self.loop_handle.remove(token);
+                }
+                // Dropping the source only marks its Wayland client dead,
+                // until a Wayland client's next request: end it at once. Not
+                // reaped before that client's cleanup, the process is still
+                // Xwayland.
+                if let Some(pid) = self.xwayland.pid.and_then(|pid| i32::try_from(pid).ok()) {
+                    // SAFETY: a signal, to pila's own child.
+                    unsafe { libc::kill(pid, libc::SIGTERM) };
+                }
+            }
+            Ok(false) => {
+                debug!("X11 clients without windows are left; Xwayland keeps running");
+                self.arm_xwayland_idle_check();
+            }
+            Err(err) => warn!(%err, "can't ask Xwayland for its clients; it keeps running"),
+        }
+    }
+
+    /// Offer X the Wayland selections set before its window manager started.
+    fn offer_selections_to_x11(&mut self) {
+        let Some(wm) = self.xwayland.wm.as_mut() else {
+            return;
+        };
+        let selections = [
+            (SelectionTarget::Clipboard, self.xwayland.clipboard.clone()),
+            (SelectionTarget::Primary, self.xwayland.primary.clone()),
+        ];
+        for (target, mime_types) in selections {
+            if let Some(mime_types) = mime_types {
+                if let Err(err) = wm.new_selection(target, Some(mime_types)) {
+                    warn!(?err, ?target, "failed to offer the selection to X11 apps");
+                }
+            }
+        }
+    }
+
+    /// A Wayland client set (or cleared) a selection: kept for an X that
+    /// starts later, offered to a running one.
+    pub fn wayland_selection_changed(
+        &mut self,
+        target: SelectionTarget,
+        mime_types: Option<Vec<String>>,
+    ) {
+        match target {
+            SelectionTarget::Clipboard => self.xwayland.clipboard = mime_types.clone(),
+            SelectionTarget::Primary => self.xwayland.primary = mime_types.clone(),
+        }
+        if let Some(xwm) = self.xwayland.wm.as_mut() {
+            if let Err(err) = xwm.new_selection(target, mime_types) {
+                warn!(?err, ?target, "failed to offer the selection to X11 apps");
+            }
         }
     }
 
@@ -478,6 +867,7 @@ impl XwmHandler for Pila {
             self.focus_recent_window();
         }
         self.queue_redraw();
+        self.arm_xwayland_idle_check();
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, _surface: X11Surface) {}
@@ -621,6 +1011,11 @@ impl XwmHandler for Pila {
     }
 
     fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
+        // X's own now: nothing of Wayland's to offer a later X.
+        match selection {
+            SelectionTarget::Clipboard => self.xwayland.clipboard = None,
+            SelectionTarget::Primary => self.xwayland.primary = None,
+        }
         match selection {
             SelectionTarget::Clipboard => {
                 set_data_device_selection(&self.display_handle, &self.seat, mime_types, ())
@@ -740,12 +1135,20 @@ mod tests {
     #[test]
     fn xwayland_stops_restarting_if_it_keeps_dying() {
         let start = Instant::now();
-        let mut restarts = Vec::new();
+        let mut failures = Vec::new();
         for _ in 0..MAX_RESTARTS {
-            assert!(may_restart(&mut restarts, start));
+            assert!(may_restart(&mut failures, start));
         }
-        assert!(!may_restart(&mut restarts, start + Duration::from_secs(1)));
-        assert!(may_restart(&mut restarts, start + RESTART_WINDOW));
+        assert!(!may_restart(&mut failures, start + Duration::from_secs(1)));
+        assert!(may_restart(&mut failures, start + RESTART_WINDOW));
+    }
+
+    #[test]
+    fn xwayland_is_idle_with_only_pilas_own_clients_left() {
+        assert!(all_ours(3, &[8, 7, 7], &[7, 8]));
+        assert!(!all_ours(4, &[8, 7, 7, 9], &[7, 8]));
+        // A client X can't name the process of isn't taken for pila's.
+        assert!(!all_ours(4, &[8, 7, 7], &[7, 8]));
     }
 
     #[test]

@@ -14,13 +14,9 @@ const LONG_HOLD: &str = "[animations]\nenabled = false\nspeed = 4\n";
 const WHITE: [u8; 4] = [255, 255, 255, 255];
 const BLACK: [u8; 4] = [0, 0, 0, 255];
 
-/// Pila with `config`, once Xwayland is up: starting it holds the event
-/// loop back for a moment, which could take the time a test has to see the
-/// cursor big.
+/// Pila with `config`.
 fn start(config: &str) -> TestPila {
-    let mut pila = TestPila::with_config(config);
-    pila.wait_log("Xwayland ready");
-    pila
+    TestPila::with_config(config)
 }
 
 fn magnification(state: &Value) -> f64 {
