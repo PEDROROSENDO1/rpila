@@ -520,7 +520,9 @@ Key flows and invariants:
   (xdg-shell discards title, app id and decoration mode on unmap), so the unmapping commit
   never answers as an initial commit: the client's next one does, and the decoration mode
   it had (`ChosenDecoration`) goes out again with that configure, since a decoration object
-  outlives the unmap and its client doesn't ask again.
+  outlives the unmap and its client doesn't ask again. A destroyed decoration object
+  (`XdgDecorationHandler::decoration_destroyed`, called by Smithay on the commit that applies
+  it, the mode already dropped) forgets it: the client draws its own from then on.
   `handle_xdg_commit` sends the initial configure, then on the first commit with a
   buffer moves it into `space` via `place_new_window` (centered on the pointer's output, or
   where its session restores it, see "Session management"; cascaded by `CASCADE_STEP` if

@@ -717,3 +717,34 @@ fn scrolling_reaches_the_window_under_the_pointer() {
         }
     )));
 }
+
+/// A window that destroys its decoration object draws its own decorations
+/// from its next commit: Pila's title bar goes, and stays gone when it maps
+/// again.
+#[test]
+fn a_window_that_destroys_its_decoration_object_loses_its_title_bar() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client.window("a").size(400, 300).create();
+    let w = pila.wait_window("a");
+    assert_eq!(w["title_bar"], true);
+    client.with_window(window, |w| {
+        if let Some(decoration) = w.decoration.take() {
+            decoration.destroy();
+        }
+        w.surface.commit();
+    });
+    client.flush();
+    pila.wait("no title bar", |s| {
+        window_in(s, "a").is_some_and(|w| w["title_bar"] == false && w["ssd"] == false)
+    });
+    client.set_auto_draw(window, false);
+    client.unmap(window);
+    pila.wait("unmapped", |s| window_in(s, "a").is_none());
+    client.remap(window);
+    let w = pila.wait_window("a");
+    assert_eq!(
+        (w["ssd"].clone(), w["title_bar"].clone()),
+        (false.into(), false.into())
+    );
+}

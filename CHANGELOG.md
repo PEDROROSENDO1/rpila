@@ -11,7 +11,11 @@
   configuration turns it off. The frame statistics count those frames apart (`torn`), and
   `pila-check` runs `vkcube` that way where it's installed.
 - **For packagers: Pila's Smithay fork also carries Smithay's asynchronous page flips** (its pull
-  request #1948, not merged yet), still at `github.com/igalmarino/smithay`, branch `pila`.
+  request #1948, not merged yet), still at `github.com/igalmarino/smithay`, branch `pila`, now on
+  Smithay's main of 2026-11-14 (xdg-decoration version 2). The revisions earlier releases pin
+  are kept by tags (`rev-b8f524b3`, `rev-64a43022`).
+- **An app that destroys its xdg-decoration object draws its own decorations for good:** Pila's
+  title bar went, but came back when the window was mapped again.
 - **Resizing a window with the pointer keeps up with the app:** Pila sent a new size for every
   pointer motion (up to a thousand a second with a fast mouse), more than an app draws; it now
   sends the next one once the app has acknowledged the last, so a slow app (a browser, an

@@ -319,13 +319,24 @@ impl XdgDecorationHandler for Pila {
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
         set_decoration_mode(&toplevel, DecorationMode::ServerSide);
     }
+
+    /// The client destroyed its decoration object: it draws its own from this
+    /// commit (Smithay has dropped the mode), and when it maps again too.
+    fn decoration_destroyed(&mut self, toplevel: ToplevelSurface) {
+        smithay::wayland::compositor::with_states(toplevel.wl_surface(), |states| {
+            if let Some(chosen) = states.data_map.get::<ChosenDecoration>() {
+                *chosen.0.locked() = None;
+            }
+        });
+    }
 }
 
 /// The decoration mode a toplevel settled on with pila, kept in its surface
 /// data: unmapping discards the toplevel's state, decoration mode included,
 /// but the decoration object lives on and its client won't ask again, so the
-/// mode goes out again with the initial configure of the new mapping.
-struct ChosenDecoration(std::sync::Mutex<DecorationMode>);
+/// mode goes out again with the initial configure of the new mapping. None
+/// once the object is destroyed.
+struct ChosenDecoration(std::sync::Mutex<Option<DecorationMode>>);
 
 fn set_decoration_mode(toplevel: &ToplevelSurface, mode: DecorationMode) {
     toplevel.with_pending_state(|state| {
@@ -334,9 +345,9 @@ fn set_decoration_mode(toplevel: &ToplevelSurface, mode: DecorationMode) {
     smithay::wayland::compositor::with_states(toplevel.wl_surface(), |states| {
         *states
             .data_map
-            .get_or_insert_threadsafe(|| ChosenDecoration(std::sync::Mutex::new(mode)))
+            .get_or_insert_threadsafe(|| ChosenDecoration(std::sync::Mutex::new(Some(mode))))
             .0
-            .locked() = mode;
+            .locked() = Some(mode);
     });
     // The protocol requires a configure in response, even if the mode is unchanged.
     if toplevel.is_initial_configure_sent() {
@@ -351,7 +362,7 @@ fn restore_decoration_mode(toplevel: &ToplevelSurface) {
         states
             .data_map
             .get::<ChosenDecoration>()
-            .map(|chosen| *chosen.0.locked())
+            .and_then(|chosen| *chosen.0.locked())
     });
     if let Some(mode) = chosen {
         toplevel.with_pending_state(|state| {

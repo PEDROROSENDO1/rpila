@@ -44,7 +44,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # without waiting for a release (0.7.0 is from June 2025). Move `rev` forward
 # on purpose, with a full test run and a bare-metal check.
 #
-# From Pila's fork for now, branch `pila`: Smithay's 3a08ff96 (2026-11-14) plus
+# From Pila's fork for now, branch `pila`: Smithay's fd8e3f50 (2026-11-14) plus
 # what it lacks, each kept until Smithay has it:
 # - a text cursor with no width (GTK's) is kept, so input methods' candidate
 #   windows go next to it
@@ -53,11 +53,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # - asynchronous page flips, Smithay's pull request #1948 rebased (tearing,
 #   `tearing.rs`: Pila doesn't build without its `PresentationMode`; the flips
 #   themselves are bare metal's, `scripts/check` with vkcube).
-# On a bump: rebase that branch on the new rev, or go back to
+# On a bump: tag the rev `main` pins (`rev-<sha>`: released versions pin older
+# ones, kept by their tags), rebase that branch on the new rev, or go back to
 # `https://github.com/Smithay/smithay.git` once it has them.
 [dependencies.smithay]
 git = "https://github.com/igalmarino/smithay.git"
-rev = "64a430226eed4f46e0d20592ed83c8f0b9750f2c"
+rev = "9171b5883e6b0b8525fb18622e42ae0844ec311c"
 default-features = false
 features = [
     "backend_winit",
@@ -85,4 +86,5 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 # X11 test clients (`tests/x11.rs`), through pila's Xwayland.
 x11rb = "0.13"
+
 

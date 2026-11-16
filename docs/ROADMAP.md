@@ -18,8 +18,7 @@ Nothing open: what was here is in the changelog's Unreleased section.
 
 ## Next
 
-1. **Smithay update:** onto Smithay's current main (xdg-decoration v2 among the changes), with
-   the fork's additions rebased on it.
+Nothing planned beyond what waits below: a feature users ask for goes here first.
 
 ## Waiting for hardware and testers
 
