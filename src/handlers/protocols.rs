@@ -81,6 +81,8 @@ pub fn init_globals(
     crate::input_method::init_globals(dh);
     // Its handler is in `pointer_constraints.rs`.
     PointerConstraintsState::new::<Pila>(dh);
+    // Its handler is in `pointer_warp.rs`.
+    smithay::wayland::pointer_warp::PointerWarpManager::new::<Pila>(dh);
     XdgToplevelIconManager::new::<Pila>(dh);
     // Its handler is in `transients.rs`.
     XdgDialogState::new::<Pila>(dh);

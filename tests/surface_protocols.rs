@@ -30,6 +30,7 @@ use wayland_protocols::{
             wp_cursor_shape_device_v1::Shape, wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
         },
         fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+        pointer_warp::v1::client::wp_pointer_warp_v1::WpPointerWarpV1,
         presentation_time::client::wp_presentation::WpPresentation,
         primary_selection::zv1::client::zwp_primary_selection_device_manager_v1::ZwpPrimarySelectionDeviceManagerV1,
         security_context::v1::client::wp_security_context_manager_v1::WpSecurityContextManagerV1,
@@ -51,6 +52,7 @@ const PUBLIC: &[&str] = &[
     "wp_content_type_manager_v1",
     "wp_cursor_shape_manager_v1",
     "wp_fractional_scale_manager_v1",
+    "wp_pointer_warp_v1",
     "wp_presentation",
     "wp_single_pixel_buffer_manager_v1",
     "wp_viewporter",
@@ -553,6 +555,93 @@ fn a_faded_window_doesnt_cover_whats_behind_it() {
         done += 1;
     }
     assert!(done >= 20, "{done} frame callbacks in 1 s");
+}
+
+// --- wp-pointer-warp ---
+
+/// Window "a" (400x300 at (100, 100), no title bar) with the pointer on it at
+/// (20, 20); the client's warp manager and the serial of the pointer's enter.
+fn pointer_on_a(pila: &mut TestPila, client: &Client) -> (WpPointerWarpV1, u32) {
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.move_to(120.0, 120.0);
+    client.wait("the pointer on the window", |s| s.pointer_name.is_some());
+    let warp: WpPointerWarpV1 = client.bind("wp_pointer_warp_v1", 1);
+    let serial = client.lock().pointer_enter_serial;
+    (warp, serial)
+}
+
+const TWO_WINDOWS: &str = "[[window-rule]]\napp-id = \"a\"\ntitle-bar = false\n\
+    size = [400, 300]\nposition = [100, 100]\n\
+    [[window-rule]]\napp-id = \"b\"\ntitle-bar = false\n\
+    size = [200, 200]\nposition = [600, 100]\n";
+
+fn pointer_at(state: &Value) -> (f64, f64) {
+    (
+        state["pointer"]["x"].as_f64().unwrap(),
+        state["pointer"]["y"].as_f64().unwrap(),
+    )
+}
+
+#[test]
+fn a_client_warps_the_pointer_within_its_surface() {
+    let mut pila = TestPila::with_config(TWO_WINDOWS);
+    let client = pila.client();
+    let (warp, serial) = pointer_on_a(&mut pila, &client);
+    let surface = client.surface(common::client::Window(0));
+    warp.warp_pointer(&surface, &pointer(&client), 300.0, 150.0, serial);
+    client.flush();
+    pila.wait("the pointer where the client put it", |s| {
+        pointer_at(s) == (400.0, 250.0)
+    });
+    client.wait("the motion", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, common::client::Ev::Motion { x, y } if (*x, *y) == (300.0, 150.0)))
+    });
+}
+
+#[test]
+fn a_warp_off_the_surface_with_a_stale_serial_or_while_locked_does_nothing() {
+    let mut pila = TestPila::with_config(TWO_WINDOWS);
+    let client = pila.client();
+    let (warp, serial) = pointer_on_a(&mut pila, &client);
+    let other = pila.client();
+    other.window("b").create();
+    pila.wait_window("b");
+    pila.settle();
+    let surface = client.surface(common::client::Window(0));
+    let unmoved = |pila: &mut TestPila, what: &str| {
+        pila.stays(what, std::time::Duration::from_millis(300), |s| {
+            pointer_at(s) == (120.0, 120.0)
+        });
+    };
+    // Past its edge, onto the other client's window.
+    warp.warp_pointer(&surface, &pointer(&client), 550.0, 50.0, serial);
+    client.flush();
+    unmoved(&mut pila, "onto another window");
+    // Past its edge, onto nothing.
+    warp.warp_pointer(&surface, &pointer(&client), 450.0, 250.0, serial);
+    client.flush();
+    unmoved(&mut pila, "onto the background");
+    // Not the enter's serial.
+    warp.warp_pointer(&surface, &pointer(&client), 300.0, 150.0, serial + 1000);
+    client.flush();
+    unmoved(&mut pila, "a wrong serial");
+    // The other client, which doesn't have the pointer.
+    let other_warp: WpPointerWarpV1 = other.bind("wp_pointer_warp_v1", 1);
+    let b = other.surface(common::client::Window(0));
+    other_warp.warp_pointer(&b, &pointer(&other), 10.0, 10.0, serial);
+    other.flush();
+    unmoved(&mut pila, "a client without the pointer");
+    // Locked.
+    let locker = pila.client();
+    let lock = locker.lock_session();
+    locker.lock_surface(&lock, "HEADLESS-1", [255, 0, 0, 0]);
+    pila.wait("locked", |s| s["locked"] == true);
+    warp.warp_pointer(&surface, &pointer(&client), 300.0, 150.0, serial);
+    client.flush();
+    unmoved(&mut pila, "locked");
 }
 
 // --- Cursors --------------------------------------------------------------------

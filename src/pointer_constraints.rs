@@ -149,7 +149,7 @@ impl Pila {
     /// Global origin of a window's or layer surface's main surface, and
     /// the part of it that's shown (surface-local: a window's geometry, a
     /// layer surface's size).
-    fn surface_origin(
+    pub(crate) fn surface_origin(
         &self,
         surface: &WlSurface,
     ) -> Option<(Point<f64, Logical>, Rectangle<i32, Logical>)> {

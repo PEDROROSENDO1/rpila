@@ -101,6 +101,7 @@ use wayland_protocols::{
             zwp_pointer_gesture_swipe_v1::ZwpPointerGestureSwipeV1,
             zwp_pointer_gestures_v1::ZwpPointerGesturesV1,
         },
+        pointer_warp::v1::client::wp_pointer_warp_v1::WpPointerWarpV1,
         presentation_time::client::{
             wp_presentation::WpPresentation, wp_presentation_feedback::WpPresentationFeedback,
         },
@@ -284,6 +285,7 @@ logged!(
     WpContentTypeV1,
     WpAlphaModifierV1,
     WpAlphaModifierSurfaceV1,
+    WpPointerWarpV1,
     WpSinglePixelBufferManagerV1,
     ZxdgExporterV2,
     ZxdgExportedV2,

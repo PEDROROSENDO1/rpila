@@ -1000,6 +1000,12 @@ Key flows and invariants:
   pointer (`Pila::input.host_pointer`); a DRM backend sends real relative motion through the same
   checks. A locked client's cursor position hint (`cursor_position_hint`) moves Pila's pointer
   there, kept within its window, so unlocking doesn't jump.
+- **Pointer warp** (`pointer_warp.rs`, wp-pointer-warp-v1): a client moves the pointer within
+  its own surface. Refused while locked, with a serial other than the pointer's latest enter,
+  unless the pointer is on that surface or a surface of its tree, and unless the place it asks
+  for is on that tree too (`surface_under`: never onto another client's surface or nothing).
+  The move is `Pila::warp_pointer`'s (a binding's too): a constraint holding the pointer keeps
+  it, clients get it as motion, and it isn't activity.
 - **X11** (`xwayland.rs`, `focus.rs`): Pila starts Xwayland at launch and runs Smithay's
   `X11Wm`; spawned clients get its `DISPLAY` (never the host's) and the startup command
   waits for X (`pending_startup`), or for it to fail: dying before it's ready, which Smithay's

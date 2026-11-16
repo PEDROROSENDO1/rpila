@@ -44,6 +44,7 @@ pub mod minimize;
 pub mod output_management;
 pub mod output_power;
 pub mod pointer_constraints;
+pub mod pointer_warp;
 pub mod redraw;
 pub mod render;
 pub mod rounded;
