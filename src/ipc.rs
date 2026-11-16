@@ -315,6 +315,8 @@ pub enum Request {
     /// By the window's id.
     Focus(String),
     Close(String),
+    /// By the window's id; `Focus` brings it back.
+    Minimize(String),
 }
 
 /// A line of the protocol as a request, or why it isn't one. Reads it and
@@ -349,6 +351,7 @@ pub fn parse_request(line: &[u8]) -> Result<Request, String> {
         "action" => Request::Action(Action::parse(string_field(&request, "action")?)?),
         "focus" => Request::Focus(string_field(&request, "id")?.to_string()),
         "close" => Request::Close(string_field(&request, "id")?.to_string()),
+        "minimize" => Request::Minimize(string_field(&request, "id")?.to_string()),
         other => return Err(format!("unknown request {other:?}")),
     })
 }
@@ -385,7 +388,7 @@ fn handle(
             }
             Ok(json!({}))
         }
-        Request::Focus(_) | Request::Close(_) if state.is_locked() => {
+        Request::Focus(_) | Request::Close(_) | Request::Minimize(_) if state.is_locked() => {
             Err("the session is locked".to_string())
         }
         Request::Focus(id) => {
@@ -394,6 +397,11 @@ fn handle(
         }
         Request::Close(id) => {
             close_window(&named_window(state, &id)?);
+            Ok(json!({}))
+        }
+        Request::Minimize(id) => {
+            let window = named_window(state, &id)?;
+            state.minimize_window(&window);
             Ok(json!({}))
         }
     }

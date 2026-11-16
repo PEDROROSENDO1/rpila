@@ -122,11 +122,11 @@ each time it changes, until Pila quits.
 Run an action, as in a key binding (for example
 .BR "workspace 2" ).
 .TP
-.BI "pila msg focus " id ", pila msg close " id
-Focus a window, or ask it to close, by the
+.BI "pila msg focus " id ", pila msg close " id ", pila msg minimize " id
+Focus a window, ask it to close or minimize it, by the
 .I id
 .B pila msg windows
-gives.
+gives (focusing a minimized window brings it back).
 .PP
 Scripts should use
 .BR \-\-json :

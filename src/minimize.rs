@@ -89,7 +89,8 @@ impl Pila {
         self.windows.minimized.contains(window)
     }
 
-    /// Minimize `window` (title bar button, Mod+N, or the client asking).
+    /// Minimize `window` (title bar button, Mod+N, the client or a taskbar
+    /// asking, `pila msg minimize`).
     /// Focus moves to the most recently used window still on screen.
     pub fn minimize_window(&mut self, window: &Window) {
         let focused = self.focused_window();

@@ -295,6 +295,42 @@ fn focus_and_close_take_a_window_by_its_id() {
     }
 }
 
+/// A dock's click: the window by its id goes, the focus moves on, and
+/// `focus` brings it back.
+#[test]
+fn minimize_takes_a_window_by_its_id_and_focus_brings_it_back() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    client.window("b").create();
+    pila.wait_focus("b");
+    let b_id = named(&query(&pila, &["windows"]), "b")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let out = msg(&pila, &["minimize", &b_id]);
+    assert!(out.status.success(), "{}", error(&out));
+    pila.wait("b minimized", |s| {
+        window_in(s, "b").unwrap()["minimized"] == true
+    });
+    pila.wait_focus("a");
+    assert_eq!(named(&query(&pila, &["windows"]), "b")["minimized"], true);
+    // Again: nothing more to do.
+    assert!(msg(&pila, &["minimize", &b_id]).status.success());
+
+    assert!(msg(&pila, &["focus", &b_id]).status.success());
+    pila.wait_focus("b");
+    assert_eq!(named(&query(&pila, &["windows"]), "b")["minimized"], false);
+
+    let out = msg(&pila, &["minimize", "no-such-id"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(error(&out).contains("no window"), "{}", error(&out));
+    let out = msg(&pila, &["minimize"]);
+    assert_eq!(out.status.code(), Some(2));
+}
+
 #[test]
 fn a_locked_session_refuses_actions_and_still_answers_questions() {
     let mut pila = TestPila::start();
@@ -315,6 +351,7 @@ fn a_locked_session_refuses_actions_and_still_answers_questions() {
         vec!["action", "workspace", "2"],
         vec!["focus", &id],
         vec!["close", &id],
+        vec!["minimize", &id],
     ] {
         let out = msg(&pila, &args);
         assert_eq!(out.status.code(), Some(1), "{args:?}");
@@ -323,6 +360,7 @@ fn a_locked_session_refuses_actions_and_still_answers_questions() {
     assert!(pila.alive());
     apps.roundtrip();
     assert!(!apps.with_window(a, |w| w.close_requested));
+    assert_eq!(window_in(&pila.state(), "a").unwrap()["minimized"], false);
     assert_eq!(pila.state()["workspace"], 1);
     assert!(msg(&pila, &["outputs"]).status.success());
     // Turning the monitors off and on gets past nothing: idling locks, then

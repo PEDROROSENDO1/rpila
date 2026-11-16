@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **`pila msg minimize <id>`** minimizes a window by its id, as a dock does through
+  wlr-foreign-toplevel-management; `pila msg focus <id>` brings it back. Refused while the
+  session is locked, like `focus` and `close`.
 - **Window rules can choose the monitor and keep the focus where it is:** `open-on-output` opens
   a window on a monitor named by connector (`eDP-1`) or as an `[[output]]` section does
   (`"Make Model"`), falling back to the pointer's when that one is unplugged or off;

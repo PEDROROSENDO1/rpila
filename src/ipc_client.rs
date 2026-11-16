@@ -24,6 +24,7 @@ Requests:
   action <action>     Run an action, as in [bindings]: action workspace 2
   focus <id>          Focus a window, by its id in `windows`
   close <id>          Ask a window to close
+  minimize <id>       Minimize a window; focus brings it back
 
 Options:
   --json              Print Pila's answer as it is (docs/IPC.md)";
@@ -75,7 +76,7 @@ fn request(args: &[String]) -> Result<Value, String> {
         "action" => Ok(json!({ "request": "action", "action": rest.join(" ") })),
         "subscribe" if rest.is_empty() => Ok(json!({ "request": "subscribe" })),
         "subscribe" => Ok(json!({ "request": "subscribe", "events": rest })),
-        "focus" | "close" => Ok(json!({ "request": name, "id": one_id()? })),
+        "focus" | "close" | "minimize" => Ok(json!({ "request": name, "id": one_id()? })),
         other => Err(format!("unknown request {other:?}")),
     }
 }

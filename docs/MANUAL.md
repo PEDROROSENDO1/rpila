@@ -705,6 +705,7 @@ pila msg --json outputs | jq     # the monitors, as JSON for scripts
 pila msg action workspace 2      # any action, as in [bindings]
 pila msg focus <id>              # focus a window
 pila msg close <id>              # close a window
+pila msg minimize <id>           # minimize a window (focus brings it back)
 pila msg --json subscribe        # windows, workspaces and monitors as they change
 ```
 

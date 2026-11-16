@@ -16,6 +16,7 @@ pila msg [--json] subscribe [EVENTS] Events as they happen, until Pila quits
 pila msg action <action>             Run an action, as in [bindings]
 pila msg focus <id>                  Focus a window, on whichever workspace
 pila msg close <id>                  Ask a window to close
+pila msg minimize <id>               Minimize a window (focus brings it back)
 ```
 
 For example: `pila msg action workspace 2`, `pila msg --json windows | jq`,
@@ -66,8 +67,9 @@ actions are those of `config.example.toml`.
 | `action` | `action`: as in `[bindings]` | nothing more |
 | `focus` | `id` | nothing more |
 | `close` | `id` | nothing more |
+| `minimize` | `id` | nothing more (also when it's minimized already; `focus` brings it back) |
 
-While the session is locked, `action`, `focus` and `close` are refused, `quit` included, and
+While the session is locked, `action`, `focus`, `close` and `minimize` are refused, `quit` included, and
 queries still answer. Only the actions `power-off-monitors`, `power-on-monitors` and
 `switch-layout` still run: idling locks first and then turns the monitors off, and a lock screen
 may switch the keyboard layout to type the password. An action with `spawn` runs a command as your user; any program of yours can
