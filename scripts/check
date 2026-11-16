@@ -330,7 +330,14 @@ if [ "${1:-}" = "--workload" ]; then
         noctalia &
         shell=$!
         sleep 6
-        notify "pila check" "a notification" || mark "noctalia: sending the notification failed"
+        if ! notify "pila check" "a notification"; then
+            # No session bus (a container): a panel through Noctalia's own
+            # IPC opens a layer surface just the same.
+            mark "noctalia: sending the notification failed; opening a panel"
+            noctalia msg panel-toggle control-center >/dev/null 2>&1
+            sleep 2
+            noctalia msg panel-toggle control-center >/dev/null 2>&1
+        fi
         sleep 4
         stop "$shell"
         sleep 1
