@@ -1109,9 +1109,10 @@ impl Pila {
     ) -> Option<Rectangle<i32, Logical>> {
         let pos = match self.window_location(window) {
             Some(loc) => (loc + window.geometry().size.downscale(2).to_point()).to_f64(),
-            // Not placed yet: where its session puts it, or at the pointer.
+            // Not placed yet: where its rules or session put it, or at the
+            // pointer.
             None => match self
-                .session_output(window)
+                .opening_output(window)
                 .and_then(|output| self.space.output_geometry(&output))
             {
                 Some(geo) => geo.loc.to_f64(),
@@ -1133,8 +1134,9 @@ impl Pila {
     /// output, or where its session says if the client restored one
     /// (`session_management.rs`), cascaded if that spot is taken; or filling
     /// the output if the client asked for maximize/fullscreen before mapping
-    /// or its session has it filled. Window rules may
-    /// give it a position, or another workspace (it opens there, unfocused).
+    /// or its session has it filled. Window rules may give it an output, a
+    /// position, another workspace (it opens there, unfocused), or leave the
+    /// keyboard focus where it was.
     pub fn place_new_window(&mut self, window: Window) {
         // Its app id and title are known by now.
         let props = self.resolve_window_rules(&window);
@@ -1152,14 +1154,18 @@ impl Pila {
         );
         let pointer_location = self.pointer_location();
         let (maximized, fullscreen) = fill_state(&window);
-        // A position rule wins over the session, and is from the pointer's
-        // output like any other.
+        // A rule's output (`open-on-output`) wins over the session's, and a
+        // position rule over the session's place; a position is from the
+        // output the window opens on, the rule's or the pointer's.
+        let rule_output = self.rule_output(&window);
         let restored = self
             .take_session_restore(&window)
-            .filter(|_| props.position.is_none());
+            .filter(|_| props.position.is_none())
+            .filter(|(_, output)| rule_output.as_ref().is_none_or(|rule| rule == output));
         let restored_rect = restored.as_ref().map(|(rect, _)| *rect);
-        let anchor = restored
-            .and_then(|(_, output)| self.space.output_geometry(&output))
+        let anchor = rule_output
+            .or(restored.map(|(_, output)| output))
+            .and_then(|output| self.space.output_geometry(&output))
             .map_or(pointer_location, |geo| geo.loc.to_f64());
         let output_geo = if fullscreen {
             self.output_geometry_at(anchor)
@@ -1213,8 +1219,9 @@ impl Pila {
 
         // The app id, for window rules.
         let app_id = crate::foreign_toplevel::app_id(&window);
-        debug!(app_id, ?location, size = ?window.geometry().size, maximized, fullscreen, "mapping window");
-        self.map_window(window.clone(), location, true);
+        let focused = props.open_focused != Some(false);
+        debug!(app_id, ?location, size = ?window.geometry().size, maximized, fullscreen, focused, "mapping window");
+        self.map_window(window.clone(), location, focused);
         self.announce_toplevel(&window);
         // A window set on another one opens where that one is.
         let parent_workspace = self
@@ -1240,6 +1247,17 @@ impl Pila {
             return;
         }
         self.animate_open(&window);
+        if !focused {
+            // On top, but the keyboard and the active window stay as they
+            // were.
+            debug!(target: "pila::rules", app_id, "opens unfocused");
+            self.keep_transients_above(&window);
+            if let Some(toplevel) = window.toplevel() {
+                toplevel.send_pending_configure();
+            }
+            self.refresh_pointer_focus();
+            return;
+        }
         self.focus_window(Some(window), smithay::utils::SERIAL_COUNTER.next_serial());
     }
 

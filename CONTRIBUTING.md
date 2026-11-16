@@ -230,6 +230,9 @@ The `dev` user has no `sudo` unless `FULL_SUDO` is set.
   instead, and everything in it gets those powers.
 - **Nested Pila opens on the wrong desktop.** The container uses the session `scripts/dev`
   last ran from. Run `scripts/dev` in a terminal of the session you want.
+- **Nested Pila opens over your work.** On a Pila host, a window rule for its app id, `pila`,
+  sends it to another monitor and leaves the keyboard where it was (`open-on-output`,
+  `open-focused = false`; `docs/MANUAL.md`, "Window and layer rules").
 - **`Permission denied` on the socket.** Your host UID isn't the one the container user got.
   Check `id -u` on the host and inside; they must match. Make sure you're not using rootless
   Docker.

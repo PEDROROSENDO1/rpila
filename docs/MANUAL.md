@@ -658,9 +658,10 @@ in the configuration turns it off for every game.
 ## Window and layer rules
 
 Rules change how particular windows or panels behave. A `[[window-rule]]` matches windows by
-app id, title or tag, with `*` for any text, and can set: animations, the workspace to open on,
-size, position, opening maximized or fullscreen, staying above the others or on all
-workspaces, the title bar, corner radius, opacity, blur and shadow. A window's rules follow its
+app id, title or tag, with `*` for any text, and can set: animations, the workspace and monitor
+to open on, opening without the keyboard focus, size, position, opening maximized or
+fullscreen, staying above the others or on all workspaces, the title bar, corner radius,
+opacity, blur and shadow. A window's rules follow its
 title as it changes (a browser's page title), except what applies when it opens. A
 `[[layer-rule]]` matches bars, launchers and notifications by namespace, and sets their
 animations and blur.
@@ -674,6 +675,20 @@ blur = true
 [[window-rule]]
 app-id = "thunderbird"
 open-on-workspace = 3
+```
+
+A new window opens on the monitor under the pointer. `open-on-output` names another, by
+connector (`eDP-1`) or as an `[[output]]` section does (`"Make Model"`); if that monitor isn't
+plugged in or is off, the pointer's is used. With `open-focused = false` the window opens on top
+but the keyboard stays with the window you were typing in. Together they keep a window that opens
+while you work out of the way: Pila run nested for development, say, whose window has the app id
+`pila`:
+
+```toml
+[[window-rule]]
+app-id = "pila"
+open-on-output = "eDP-1"
+open-focused = false
 ```
 
 `pila msg windows` shows each window's app id and title. Every option is in

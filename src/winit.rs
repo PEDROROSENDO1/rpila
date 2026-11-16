@@ -16,7 +16,11 @@ use smithay::{
         calloop::EventLoop,
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{DisplayHandle, Resource},
-        winit::window::Window as WinitWindow,
+        winit::{
+            dpi::LogicalSize,
+            platform::wayland::WindowAttributesWayland,
+            window::{Window as WinitWindow, WindowAttributes},
+        },
     },
     utils::Transform,
     wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState},
@@ -28,13 +32,27 @@ use crate::{backend::Backend, frame, render, Pila};
 
 const REFRESH_MHZ: i32 = 60_000;
 
+/// The host window: Smithay's defaults (`winit::init`), with Pila's title
+/// and the app id `pila`, which the host's window rules can match (a Pila
+/// host can open it on another output, unfocused: `open-on-output`,
+/// `open-focused`). Nested on X11 the Wayland attributes are ignored.
+fn window_attributes() -> WindowAttributes {
+    WindowAttributes::default()
+        .with_surface_size(LogicalSize::new(1280.0, 800.0))
+        .with_title("Pila")
+        .with_visible(true)
+        .with_platform_attributes(Box::new(
+            WindowAttributesWayland::default().with_name("pila", "pila"),
+        ))
+}
+
 pub fn init_winit(
     event_loop: &mut EventLoop<'static, Pila>,
     state: &mut Pila,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let display_handle = &state.display_handle.clone();
 
-    let (mut backend, winit) = winit::init::<GlesRenderer>()?;
+    let (mut backend, winit) = winit::init_from_attributes::<GlesRenderer>(window_attributes())?;
     crate::render::warm_up(backend.renderer());
     let node = render_node(&mut backend);
     init_dmabuf(

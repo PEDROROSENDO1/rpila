@@ -21,6 +21,8 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025; for now from Pil
   the container was entered from: on Pila a wp-security-context socket, so privileged
   protocols are hidden here too; on GNOME a hard link to the session's socket); the compositor
   creates its own socket in `$XDG_RUNTIME_DIR` and clients launched from it connect there.
+  The nested window's app id is `pila`: the user's host config opens it on eDP-1, unfocused
+  (`open-on-output`, `open-focused = false`), away from the work on DP-1.
 - The user drives the container from the host with `scripts/dev` (`up`, `shell`, `claude`,
   `cargo ...`, `rebuild` after a Dockerfile change; see CONTRIBUTING.md); any `scripts/dev`
   command run from a session makes its Wayland socket again. Logging out and back in leaves

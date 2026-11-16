@@ -411,9 +411,10 @@ impl Pila {
             let toplevel = &toplevel;
             if !toplevel.is_initial_configure_sent() {
                 restore_decoration_mode(toplevel);
-                self.send_initial_scale(surface, self.session_output(&window));
                 self.begin_session_restore(&window);
                 self.apply_initial_rules(&window);
+                // After the rules: one may name the output it opens on.
+                self.send_initial_scale(surface, self.opening_output(&window));
                 toplevel.send_configure();
             } else if has_buffer(surface) {
                 self.windows.unmapped.remove(index);

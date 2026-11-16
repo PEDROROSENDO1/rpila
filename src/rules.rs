@@ -19,11 +19,12 @@ use std::cell::RefCell;
 use serde::Deserialize;
 use smithay::{
     desktop::{LayerSurface, Window},
+    output::Output,
     wayland::{compositor::with_states, xdg_toplevel_tag::XdgToplevelTagSurfaceData},
 };
 use tracing::debug;
 
-use crate::{config::AnimationKind, Pila};
+use crate::{config::AnimationKind, edid::Monitor, Pila};
 
 /// Whether `text` matches `pattern`, where `*` stands for any run of
 /// characters (possibly none) and everything else for itself.
@@ -69,6 +70,8 @@ pub struct WindowRuleFile {
     tag: Option<String>,
     animations: Option<AnimationsFile>,
     open_on_workspace: Option<usize>,
+    open_on_output: Option<String>,
+    open_focused: Option<bool>,
     open_maximized: Option<bool>,
     open_fullscreen: Option<bool>,
     size: Option<[i32; 2]>,
@@ -113,6 +116,11 @@ pub struct WindowProps {
     pub animations: WindowAnimations,
     /// The workspace it opens on (from 0).
     pub open_on_workspace: Option<usize>,
+    /// The output it opens on, named as an `[[output]]` section is
+    /// (`Pila::output_named`); the pointer's if that one isn't there.
+    pub open_on_output: Option<String>,
+    /// `false`: it opens without the keyboard focus, which stays where it was.
+    pub open_focused: Option<bool>,
     pub open_maximized: Option<bool>,
     pub open_fullscreen: Option<bool>,
     /// Its size when it opens (logical; the client may adjust it).
@@ -141,6 +149,8 @@ impl WindowProps {
     fn merge(&mut self, other: &WindowProps) {
         self.animations.merge(&other.animations);
         self.open_on_workspace = other.open_on_workspace.or(self.open_on_workspace);
+        self.open_on_output = other.open_on_output.clone().or(self.open_on_output.take());
+        self.open_focused = other.open_focused.or(self.open_focused);
         self.open_maximized = other.open_maximized.or(self.open_maximized);
         self.open_fullscreen = other.open_fullscreen.or(self.open_fullscreen);
         self.size = other.size.or(self.size);
@@ -216,6 +226,15 @@ impl WindowRuleFile {
                 ))
             }
         };
+        if self
+            .open_on_output
+            .as_ref()
+            .is_some_and(|name| name.trim().is_empty())
+        {
+            return Err(format!(
+                "window-rule {index}: open-on-output is empty: give an output's name (\"eDP-1\") or its monitor's (\"Make Model\")"
+            ));
+        }
         if let Some(opacity) = self.opacity {
             if !OPACITIES.contains(&opacity) {
                 return Err(format!(
@@ -257,6 +276,8 @@ impl WindowRuleFile {
             props: WindowProps {
                 animations,
                 open_on_workspace,
+                open_on_output: self.open_on_output,
+                open_focused: self.open_focused,
                 open_maximized: self.open_maximized,
                 open_fullscreen: self.open_fullscreen,
                 size: self.size.map(|[w, h]| (w, h)),
@@ -395,6 +416,51 @@ impl Pila {
             // decorations (a title bar). Again, now that it's all known.
             self.set_fill_state(window, maximized, fullscreen);
         }
+    }
+
+    /// The output called `name` the way an `[[output]]` section names one
+    /// (`Config::output`): its monitor's make, model and serial, else make
+    /// and model, else its connector (`eDP-1`). Only one that's on: a window
+    /// isn't opened on a screen nobody sees.
+    pub fn output_named(&self, name: &str) -> Option<Output> {
+        let on: Vec<&Output> = self
+            .space
+            .outputs()
+            .filter(|output| {
+                self.backend.as_ref().and_then(|b| b.output_power(output)) != Some(false)
+            })
+            .collect();
+        let by_monitor = |matches: fn(&Monitor, &str) -> bool| {
+            on.iter().find(|output| {
+                self.outputs
+                    .monitors
+                    .get(&output.name())
+                    .is_some_and(|monitor| matches(monitor, name))
+            })
+        };
+        by_monitor(Monitor::is_exactly)
+            .or_else(|| by_monitor(Monitor::is_model))
+            .or_else(|| on.iter().find(|output| output.name() == name))
+            .map(|output| (*output).clone())
+    }
+
+    /// The output a window not placed yet will open on, when it's not the
+    /// pointer's: the one its rules name (`open-on-output`, if that one is
+    /// there and on), else the one its session restores it to.
+    pub fn opening_output(&self, window: &Window) -> Option<Output> {
+        self.rule_output(window)
+            .or_else(|| self.session_output(window))
+    }
+
+    /// The output `open-on-output` names for `window`, if it's there and on.
+    pub fn rule_output(&self, window: &Window) -> Option<Output> {
+        let name = with_window_props(window, |props| props.open_on_output.clone())?;
+        let output = self.output_named(&name);
+        if output.is_none() {
+            let app_id = crate::foreign_toplevel::app_id(window);
+            debug!(target: "pila::rules", app_id, name, "open-on-output: no such output on, the pointer's instead");
+        }
+        output
     }
 
     /// Match `layer` against the layer rules again and keep the result.
@@ -537,6 +603,7 @@ mod tests {
             [[window-rule]]
             app-id = "mpv"
             open-on-workspace = 3
+            open-on-output = "eDP-1"
             size = [800, 450]
             position = [20, 30]
 
@@ -544,6 +611,7 @@ mod tests {
             app-id = "mpv"
             title = "*fullscreen*"
             open-fullscreen = true
+            open-focused = false
             size = [1280, 720]
             "#,
         );
@@ -552,10 +620,14 @@ mod tests {
         assert_eq!(mpv.size, Some((800, 450)));
         assert_eq!(mpv.position, Some((20, 30)));
         assert_eq!(mpv.open_fullscreen, None);
+        assert_eq!(mpv.open_on_output.as_deref(), Some("eDP-1"));
+        assert_eq!(mpv.open_focused, None);
         let full = resolve_window(&rules, "mpv", "fullscreen film", "");
         assert_eq!(full.size, Some((1280, 720)));
         assert_eq!(full.open_fullscreen, Some(true));
         assert_eq!(full.open_on_workspace, Some(2));
+        assert_eq!(full.open_on_output.as_deref(), Some("eDP-1"));
+        assert_eq!(full.open_focused, Some(false));
 
         let invalid = |text: &str| {
             #[derive(Deserialize)]
@@ -574,6 +646,7 @@ mod tests {
         assert!(invalid("[[window-rule]]\nopen-on-workspace = 5").contains("1 to 4"));
         assert!(invalid("[[window-rule]]\nopen-on-workspace = 0").contains("1 to 4"));
         assert!(invalid("[[window-rule]]\nsize = [0, 300]").contains("size"));
+        assert!(invalid("[[window-rule]]\nopen-on-output = \" \"").contains("open-on-output"));
         assert!(invalid("[[window-rule]]\nopacity = 0").contains("opacity"));
         assert!(invalid("[[window-rule]]\nopacity = 1.5").contains("opacity"));
         assert!(invalid("[[window-rule]]\ncorner-radius = 100").contains("corner-radius"));

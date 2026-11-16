@@ -336,9 +336,18 @@
 # [[window-rule]]
 # app-id = "thunderbird"
 # open-on-workspace = 3            # opens there, without switching to it
+# open-on-output = "eDP-1"         # opens on that monitor (its connector, or
+#                                  # "Make Model" as in [[output]]) instead of
+#                                  # the pointer's, if it's there and on
+# open-focused = false             # opens without taking the keyboard focus
 # open-maximized = true            # or open-fullscreen = true
 # always-on-top = true             # above the others, from when it opens
 # all-workspaces = true            # on every workspace, from when it opens
+#
+# [[window-rule]]
+# app-id = "pila"                  # Pila run nested (development) opens on
+# open-on-output = "eDP-1"         # the laptop's panel, leaving the keyboard
+# open-focused = false             # with what you're working on
 #
 # # A layer surface's namespace: the `RUST_LOG` line above logs it; in Pila's
 # # source, scripts/layer-namespaces lists those of what you run.

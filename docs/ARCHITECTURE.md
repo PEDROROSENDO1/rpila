@@ -752,7 +752,12 @@ Key flows and invariants:
   it opens: `size` and `open-maximized`/`open-fullscreen` before an xdg toplevel's
   initial configure (`apply_initial_rules` from `handle_xdg_commit`; X11: size by
   `configure`, fill after placing, in `map_window_request`), `position` (from the
-  usable area's top-left, title bar included), `open-on-workspace` (`park`ed there,
+  usable area's top-left, title bar included), `open-on-output` (`Pila::rule_output`:
+  the output `Pila::output_named` finds, as `Config::output` matches sections, only if it's
+  on; it beats a restored session's output, and `Pila::opening_output` gives it to
+  `output_geometry_for_window` for fills before mapping and to the initial scale, sent after
+  `apply_initial_rules`), `open-focused = false` (mapped and on top, not activated,
+  `focus_window` skipped), `open-on-workspace` (`park`ed there,
   unfocused, no animation) and `always-on-top`/`all-workspaces` (`stacking.rs`) in
   `place_new_window`; live, like `animations`: `title-bar =
   false` (`decoration::bar_hidden`: no bar drawn nor laid out, the window stays SSD),

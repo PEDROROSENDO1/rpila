@@ -6,6 +6,9 @@ mod common;
 use common::client::Decorations;
 use common::*;
 use wayland_protocols::xdg::toplevel_tag::v1::client::xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1;
+use wayland_protocols_wlr::output_power_management::v1::client::{
+    zwlr_output_power_manager_v1::ZwlrOutputPowerManagerV1, zwlr_output_power_v1::Mode,
+};
 
 const BAR: i64 = 28;
 /// pila's background where nothing is drawn.
@@ -395,4 +398,101 @@ fn a_tag_rule_leaves_a_window_without_that_tag_alone() {
     let w = pila.wait_window("plain");
     assert_eq!(w["tag"], "");
     assert_eq!(rect(&w["geometry"]).2, 400);
+}
+
+fn two_outputs(config: &str) -> TestPila {
+    TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        config: config.into(),
+        ..Options::default()
+    })
+}
+
+/// `open-on-output`: the window opens on B though the pointer is on A, and
+/// a position counts from B; maximized, it fills B.
+#[test]
+fn a_rule_opens_a_window_on_a_named_output() {
+    let mut pila = two_outputs(
+        "[[window-rule]]\napp-id = \"there\"\nopen-on-output = \"B\"\n\n\
+         [[window-rule]]\napp-id = \"placed\"\nopen-on-output = \"B\"\nposition = [50, 60]\n\n\
+         [[window-rule]]\napp-id = \"filled\"\nopen-on-output = \"B\"\nopen-maximized = true\n",
+    );
+    pila.move_to(100.0, 100.0);
+    let client = pila.client();
+    let w = open(&mut pila, &client, "there", "");
+    assert_eq!(w["output"], "B", "{w}");
+    // Centered on B (x from 1280), title bar included.
+    let (x, y, width, height) = rect(&w["geometry"]);
+    assert_eq!(
+        (x, y),
+        (1280 + (1024 - 400) / 2, (768 - 300 + BAR) / 2),
+        "{w}"
+    );
+    assert_eq!((width, height), (400, 300));
+    let w = open(&mut pila, &client, "placed", "");
+    assert_eq!(rect(&w["geometry"]), (1280 + 50, 60 + BAR, 400, 300));
+    client.window("filled").create();
+    pila.wait("filled on B", |s| {
+        window_in(s, "filled").is_some_and(|w| {
+            w["maximized"] == true && rect(&w["geometry"]) == (1280, BAR, 1024, 768 - BAR)
+        })
+    });
+}
+
+/// An output that isn't there, or is powered off, isn't opened on: the
+/// pointer's is, as with no rule.
+#[test]
+fn a_missing_or_powered_off_output_falls_back_to_the_pointers() {
+    let mut pila = two_outputs(
+        "[[window-rule]]\napp-id = \"nowhere\"\nopen-on-output = \"HDMI-A-9\"\n\n\
+         [[window-rule]]\napp-id = \"dark\"\nopen-on-output = \"B\"\n",
+    );
+    pila.move_to(100.0, 100.0);
+    let client = pila.client();
+    let w = open(&mut pila, &client, "nowhere", "");
+    assert_eq!(w["output"], "A", "{w}");
+    pila.wait_log("open-on-output: no such output on");
+
+    let manager: ZwlrOutputPowerManagerV1 = client.bind("zwlr_output_power_manager_v1", 1);
+    let power = manager.get_output_power(&client.output("B"), &client.qh, "power".into());
+    client.flush();
+    client.wait_logged("power", "Mode { mode: Value(On) }");
+    power.set_mode(Mode::Off);
+    client.flush();
+    pila.wait("B off", |s| s["outputs"][1]["power"] == false);
+    let w = open(&mut pila, &client, "dark", "");
+    assert_eq!(w["output"], "A", "{w}");
+}
+
+/// `open-focused = false`: the window opens on top, but the keyboard and
+/// the active window stay where they were, and it isn't told it's active.
+#[test]
+fn open_focused_false_keeps_the_keyboard_where_it_was() {
+    let mut pila =
+        TestPila::with_config("[[window-rule]]\napp-id = \"quiet\"\nopen-focused = false\n");
+    let client = pila.client();
+    let here = client.window("here").create();
+    pila.wait_focus("here");
+    let quiet = client.window("quiet").create();
+    pila.wait_window("quiet");
+    pila.wait_log("opens unfocused");
+    let state = pila.state();
+    let quiet_state = window_in(&state, "quiet").unwrap();
+    assert_eq!(quiet_state["mapped"], true);
+    let here_state = window_in(&state, "here").unwrap();
+    assert!(
+        quiet_state["stack"].as_i64() > here_state["stack"].as_i64(),
+        "on top: {state}"
+    );
+    assert_eq!(state["focused"], "here");
+    client.roundtrip();
+    assert!(
+        !client
+            .configures(quiet)
+            .iter()
+            .any(|c| c.has(client::states::ACTIVATED)),
+        "{:?}",
+        client.configures(quiet)
+    );
+    assert!(client.last_configure(here).has(client::states::ACTIVATED));
 }
