@@ -415,7 +415,12 @@ impl Pila {
     /// window moves so that its bottom right corner stays (called from
     /// `commit`, after `handle_xdg_commit`).
     pub fn finish_resize_commit(&mut self, surface: &WlSurface) {
-        let Some(window) = self.window_for_surface(surface) else {
+        // Only xdg toplevels resize through it (X11 windows are configured
+        // directly).
+        let Some(window) = self
+            .window_for_surface(surface)
+            .filter(|w| w.toplevel().is_some())
+        else {
             return;
         };
         let Some(mut window_loc) = self.space.element_location(&window) else {
