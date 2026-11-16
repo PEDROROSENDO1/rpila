@@ -117,7 +117,8 @@ Key flows and invariants:
   looks the root up). Its location is in the parent surface's coordinates, as the text
   cursor's: `parent_geometry` gives the parent's own geometry (a window's, a popup's; none
   for a layer surface), which the drawing takes off (`render.rs` draws popups from their
-  root's geometry). `place_popup` puts it below the text cursor, above if it doesn't fit,
+  root's geometry). `place_popup` puts it below the text cursor (one with no width, as GTK
+  sends, is kept by Pila's fork of Smithay; Smithay's own drops it), above if it doesn't fit,
   slid sideways to stay in its room (`popup_bounds`): the output the text cursor is on (a
   window may span two), without the panels drawn above windows, which would cover it
   (`output_area`, usable, unless a fullscreen window covers the top layer:

@@ -121,8 +121,9 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
   Smithay.
 - **Explicit sync across devices.** Fences for the copy are Smithay's; Pila's
   `wait_for_client_rendering` (implicit fences, syncobj points) is for the primary only.
-- **Drivers.** NVIDIA's proprietary driver's GBM, and a dGPU that sleeps (runtime PM: an output on
-  it wakes it). Hybrid laptops are the common case; the user's (AMD Renoir) has one GPU.
+- **Drivers.** NVIDIA's proprietary driver's GBM on either side of a copy (as the only GPU it
+  works: a tester's GTX 1060), and a dGPU that sleeps (runtime PM: an output on it wakes it).
+  Hybrid laptops are the common case; the author's (AMD Renoir) has one GPU.
 - **Pacing.** Each output already paces itself by its own vblanks; a secondary's vblank also
   waits for the copy. `idle_wait` and `late_refreshes` are per output and carry over.
 
@@ -130,8 +131,8 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
 
 - Nothing with a second GPU: the container has no seat, and its headless backend has one
   renderer. Step 1 needs `scripts/check` on a TTY (one GPU); steps 2 and 3 need a machine with
-  two GPUs and monitors on both, which the user doesn't have: they need a tester.
-- Possibly in CI: `vkms.yml` runs the udev backend on the kernel's virtual KMS driver; kernels
-  with vkms' configfs can make several vkms devices, which would exercise step 2's device handling
-  and outputs on a second device (rendering on llvmpipe, scanning out on vkms), not real copies
-  between GPUs.
+  two GPUs and monitors on both, which the author doesn't have: they need a tester.
+- CI covers part of step 2: `vkms.yml` runs the udev backend on the kernel's virtual KMS driver
+  with a second vkms device (configfs) added and removed as a second GPU: device handling and
+  outputs on it (rendering on llvmpipe, copied through memory, scanning out on vkms), not real
+  copies between GPUs.
