@@ -41,17 +41,26 @@ out=target/coverage
 rm -rf "$out/profiles"
 mkdir -p "$out/profiles"
 echo "Running the tests with coverage (a separate build in $out/target)..."
-RUSTFLAGS="-C instrument-coverage" \
-    LLVM_PROFILE_FILE="$PWD/$out/profiles/%p-%m.profraw" \
-    CARGO_TARGET_DIR="$out/target" \
-    cargo test --quiet || echo "warning: some tests failed; coverage is still reported" >&2
+export RUSTFLAGS="-C instrument-coverage"
+export LLVM_PROFILE_FILE="$PWD/$out/profiles/%p-%m.profraw"
+export CARGO_TARGET_DIR="$out/target"
+cargo test --quiet || echo "warning: some tests failed; coverage is still reported" >&2
+
+# The profiles come from every test executable (the unit tests' included)
+# and from the pila binary the integration tests run: the report reads the
+# code's map from all of them, or the unit tests' lines count as missed.
+objects=(--object "$out/target/debug/pila")
+while IFS= read -r executable; do
+    objects+=(--object "$executable")
+done < <(cargo test --no-run --quiet --message-format=json 2>/dev/null |
+    sed -n 's/.*"executable":"\([^"]*\)".*/\1/p')
 
 "$profdata" merge -sparse "$out"/profiles/*.profraw -o "$out/pila.profdata"
 ignore='(\.cargo|/rustc/|/tests/|/target/)'
-"$cov" report "$out/target/debug/pila" --instr-profile="$out/pila.profdata" \
+"$cov" report "${objects[@]}" --instr-profile="$out/pila.profdata" \
     --ignore-filename-regex="$ignore"
 if $html; then
-    "$cov" show "$out/target/debug/pila" --instr-profile="$out/pila.profdata" \
+    "$cov" show "${objects[@]}" --instr-profile="$out/pila.profdata" \
         --ignore-filename-regex="$ignore" --format=html --output-dir="$out/html"
     echo "HTML report: $out/html/index.html"
 fi
