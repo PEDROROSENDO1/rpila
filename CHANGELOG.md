@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Window rules can choose the monitor and keep the focus where it is:** `open-on-output` opens
+  a window on a monitor named by connector (`eDP-1`) or as an `[[output]]` section does
+  (`"Make Model"`), falling back to the pointer's when that one is unplugged or off;
+  `open-focused = false` opens it on top while the keyboard stays with the window you were typing
+  in. Pila run nested now has the app id `pila`, so a rule can send a development run to another
+  monitor, out of the way.
 - **Blur doesn't allocate on every frame of a resize:** a blurred panel animating its size or a
   blurred window being resized kept getting new textures for its backdrop, one set per frame;
   they're now a little bigger than needed (with room to grow, once one has grown out of
