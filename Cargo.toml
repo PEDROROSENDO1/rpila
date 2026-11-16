@@ -52,13 +52,18 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 #   fails without);
 # - asynchronous page flips, Smithay's pull request #1948 rebased (tearing,
 #   `tearing.rs`: Pila doesn't build without its `PresentationMode`; the flips
-#   themselves are bare metal's, `scripts/check` with vkcube).
+#   themselves are bare metal's, `scripts/check` with vkcube);
+# - an X display reserved apart from starting Xwayland, and an `X11Wm` that
+#   removes its event sources when dropped: Smithay's pull request #2269
+#   without its selection part (Xwayland on demand, `xwayland.rs`: Pila
+#   doesn't build without `XWaylandDisplay`;
+#   `x11::xwayland_stops_when_idle_if_asked` fails on the leaked sources).
 # On a bump: tag the rev `main` pins (`rev-<sha>`: released versions pin older
 # ones, kept by their tags), rebase that branch on the new rev, or go back to
 # `https://github.com/Smithay/smithay.git` once it has them.
 [dependencies.smithay]
 git = "https://github.com/igalmarino/smithay.git"
-rev = "9171b5883e6b0b8525fb18622e42ae0844ec311c"
+rev = "12a26c10f2df789cd2d18c20af1386da65ba51da"
 default-features = false
 features = [
     "backend_winit",
