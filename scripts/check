@@ -688,6 +688,19 @@ if [ -n "$stats" ] && grep -q 'backend=Udev' "$log"; then
     fi
 fi
 
+# Monitors on another GPU (`other-gpus`, `udev/secondary.rs`) are drawn on the
+# primary and copied over: through a buffer both GPUs share or, when none can
+# be shared, through memory (Smithay logs "Falling back to cpu-copy"), which a large
+# monitor can't afford at its refresh rate. The copy's CPU time is in those
+# outputs' frame statistics; the way it went is reported, not judged.
+if grep -q 'using another GPU for its monitors' "$log"; then
+    if grep -q 'Falling back to cpu-copy' "$log"; then
+        info "monitors on another GPU: their frames copied through memory (no buffer could be shared between the GPUs)"
+    else
+        info "monitors on another GPU: their frames copied between the GPUs (no copy through memory logged)"
+    fi
+fi
+
 # The first frame after an output is set up (swapchain, modeset) is a cost of
 # setting it up, logged apart from the budget (`udev/draw.rs`).
 setups=$(grep -o 'first frame after setting the output up output="[^"]*" cpu_ms=[0-9.]*' "$log" |

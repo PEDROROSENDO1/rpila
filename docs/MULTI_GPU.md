@@ -88,7 +88,8 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
    `UdevEvent::Added/Removed` for devices plug them in and out (their outputs as monitors
    unplugged). VT switches pause and resume every device. An output on a secondary device draws
    with `GpuManager::renderer(&primary, &its device, format)` and `PrimaryGpuElement`s; the
-   copy isn't logged apart in the frame statistics yet (see "Risks"). Tried in CI with two vkms devices
+   copy's CPU time is in that output's own frame statistics, and `scripts/check` reports which
+   way it went (see "Risks"). Tried in CI with two vkms devices
    (`vkms.yml`): device handling and outputs on the second one, not real copies between GPUs.
 3. **What clients are told.** Per-surface dmabuf feedback (Smithay's `DmabufFeedbackBuilder`
    with a scanout tranche for the output's device) lets a fullscreen client allocate buffers a
@@ -106,10 +107,12 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
 
 - **Frame budget.** A secondary output's frame is rendered on the primary and copied (a dmabuf
   import on the target, or a CPU copy if the formats don't meet). That's GPU time and, for a CPU
-  copy, CPU time inside the 4 ms; the frame statistics will show it (log the copy on its own,
-  like captures).
+  copy, CPU time inside the 4 ms; the frame statistics show it in that output's own line (the
+  copy is inside Smithay's `render_frame`, so it can't be timed apart; its GPU time isn't
+  measured, as no output's is).
 - **Formats and modifiers.** The copy needs a format both devices share; with none in common
-  Smithay falls back to a CPU copy, which a 4K monitor can't afford at 60 Hz. Log the path taken.
+  Smithay falls back to a CPU copy, which a 4K monitor can't afford at 60 Hz. Smithay logs it
+  ("Falling back to cpu-copy", at `info`), and `scripts/check` reports which way the copy went.
 - **Software renderers.** llvmpipe can't read a buffer imported from another device (Mesa maps it
   as a dumb buffer, which the kernel refuses for an imported one: a segfault in its shaders, seen
   in `vkms.yml` with two vkms devices). Smithay keeps software renderers out of such imports but
