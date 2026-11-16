@@ -568,10 +568,11 @@ impl Element for RoundedSolid {
     }
 
     fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        let geometry = self.geometry(scale);
         without_corners(
             self.inner.opaque_regions(scale),
-            self.geometry(scale).loc,
-            self.geometry(scale),
+            geometry.loc,
+            geometry,
             self.radii,
         )
     }

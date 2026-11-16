@@ -843,17 +843,13 @@ impl Pila {
     /// frame. The tests' state counts it as running, and their redraw check
     /// waits for that frame.
     pub fn animations_held(&self) -> bool {
-        self.animation_count() > 0 || self.workspace_slide.is_some()
-    }
-
-    /// How many animations are in progress.
-    fn animation_count(&self) -> usize {
         let a = &self.animations;
-        a.appearing.len()
-            + a.ghosts.len()
-            + a.layers.len()
-            + a.layer_ghosts.len()
-            + a.resizing.len()
+        !a.appearing.is_empty()
+            || !a.ghosts.is_empty()
+            || !a.layers.is_empty()
+            || !a.layer_ghosts.is_empty()
+            || !a.resizing.is_empty()
+            || self.workspace_slide.is_some()
     }
 
     /// Whether anything is still animating now, so frames are wanted back

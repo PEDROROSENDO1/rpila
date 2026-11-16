@@ -332,15 +332,15 @@ fn init_dmabuf(
 /// without one (llvmpipe: no dmabufs then).
 fn render_node(backend: &mut WinitGraphicsBackend<GlesRenderer>) -> Option<DrmNode> {
     let display = backend.renderer().egl_context().display();
-    match EGLDevice::device_for_display(display).and_then(|d| d.try_get_render_node()) {
-        Ok(Some(node)) => Some(node),
-        Ok(None) => {
-            warn!("no DRM device for the EGL display, using linux-dmabuf v3");
-            None
-        }
-        Err(err) => {
-            warn!(%err, "no DRM device for the EGL display, using linux-dmabuf v3");
-            None
-        }
+    let found = EGLDevice::device_for_display(display).and_then(|d| d.try_get_render_node());
+    if let Ok(Some(node)) = found {
+        return Some(node);
     }
+    // No device, or no sysfs to tell it's a DRM node (`DrmNode::from_path`).
+    let err = found.err().map(|err| err.to_string());
+    warn!(
+        err,
+        "no DRM device for the EGL display, using linux-dmabuf v3"
+    );
+    None
 }
