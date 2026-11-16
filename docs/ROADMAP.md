@@ -4,21 +4,29 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated for **0.5.9** (2026-11-15). Pila is alpha and a daily driver on its author's
+Last updated 2026-11-16, after **0.5.9**. Pila is alpha and a daily driver on its author's
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells (Noctalia, Dux Shell, waybar and friends), bare metal with direct scanout, all covered by
-891 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
+925 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
 doesn't speak yet.
 
 ## Now: the next release
 
 Small, testable in CI, no new hardware needed.
 
-Nothing open: what was here is in the changelog's Unreleased section.
+**0.6.0** is ready and waits for its author's own check on bare metal: tearing for games,
+Xwayland started on demand (and stopped when idle, or turned off), X11 keyboard grabs, faded
+surfaces, pointer warps, blur behind popups (an input method's candidate window too), snapping to
+the top and bottom halves, and the manual's list of the desktop tools that work. The changelog's
+Unreleased section has all of it.
 
 ## Next
 
-Nothing planned beyond what waits below: a feature users ask for goes here first.
+- **More bars tried on Pila:** ironbar and nwg-panel (lighter than waybar, which a tester asked
+  for), and swayidle, once they're in the dev container; each goes into the manual's list as it
+  works or doesn't, and one that uses standard protocols and fails is a bug.
+
+A feature users ask for goes here first.
 
 ## Waiting for hardware and testers
 
@@ -51,5 +59,7 @@ to say so.
   as the protocol policy in
   [CONTRIBUTING.md](https://github.com/igalmarino/pila/blob/main/CONTRIBUTING.md) allows.
   Features with no protocol go through Pila's configuration and `pila msg`.
+- A build without X11 support: `[xwayland] enabled = false` and Xwayland left uninstalled give a
+  session with no X at all, and the X11 code Pila compiles in is pure Rust, with no X libraries.
 - Breaking configuration or `pila msg`: keys, actions and fields are only added to
   ("Compatibility" in CONTRIBUTING.md).
