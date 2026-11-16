@@ -33,13 +33,16 @@ ENV TZ="${TZ}" \
 #     tests in scripts/apps; GTK 4, foot and kitty reach it through
 #     text-input-v3. A CJK font (wqy-microhei, small) to read its candidates
 #     in screenshots
+#   - swayidle, ironbar and nwg-panel: desktop tools to try on Pila for the
+#     manual's list of what works ("Building your desktop")
 RUN pacman -Syu --noconfirm --needed \
         git openssh github-cli less vim nano jq ripgrep fd unzip \
         rustup clang mold pkgconf gdb shellcheck cargo-audit \
         wayland wayland-protocols libxkbcommon libinput systemd-libs seatd \
         mesa libglvnd libdisplay-info pixman \
         foot kitty weston wayland-utils mesa-utils ttf-dejavu gtk4-demos \
-        fuzzel waybar swaybg mako libnotify swaylock wl-clipboard wlr-randr \
+        fuzzel waybar swaybg mako libnotify swaylock swayidle wl-clipboard wlr-randr \
+        ironbar nwg-panel \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
         grim slurp wtype wlopm wlsunset noctalia quickshell dux-shell ffmpeg \
         meson just wireplumber nlohmann-json stb nodejs npm labwc valgrind \
