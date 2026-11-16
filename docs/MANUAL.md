@@ -564,6 +564,18 @@ daemon, an input method's X part) keeps it running. Stopping it loses whatever w
 server itself (`xrdb`, `setxkbmap`, `xmodmap`): leave the timeout unset if your autostart sets
 any of those.
 
+For a session with no X11 at all, turn it off; Pila then reserves no X display and sets no
+`DISPLAY`, so apps that can use either pick Wayland:
+
+```toml
+[xwayland]
+enabled = false
+```
+
+Turned off while X11 apps run, Xwayland stays until they're gone and it stops (with
+`idle-timeout`) or Pila exits; programs started meanwhile get no `DISPLAY`. Xwayland is an
+optional dependency of Pila's packages, and without it installed there are no X11 apps either.
+
 Apps that ask for every key while they have the focus (virtual machines, remote desktops:
 keyboard-shortcuts-inhibit, or an X11 app that grabs the keyboard) get Pila's bindings and
 touchpad gestures too, all but the one that quits Pila. Clicking another window always gets out.

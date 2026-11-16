@@ -943,7 +943,7 @@ Key flows and invariants:
   compiled by `render::warm_up`, kept in the EGL context; a failure disables blur.
 - **Session environment** (`Pila::spawn`, `start_session`): children get `WAYLAND_DISPLAY`,
   the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet
-  or not), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
+  or not; none with `[xwayland] enabled = false`), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
   and `PILA_SOCKET` (`ipc.rs`); `spawn` adds `PILA_OUTPUT`, the output under the pointer.
   Other compositors' IPC sockets and markers (`OTHER_COMPOSITORS_ENV`: `NIRI_SOCKET`,
   `SWAYSOCK`, `HYPRLAND_INSTANCE_SIGNATURE`, …) are removed, for a Pila started from inside
@@ -1045,8 +1045,12 @@ Key flows and invariants:
   it, clients get it as motion, and it isn't activity.
 - **X11** (`xwayland.rs`, `focus.rs`): Xwayland on demand. At launch Pila only reserves an
   X display (`reserve_xwayland`: Smithay's `XWaylandDisplay`, its number, lock file and
-  listening sockets, held until exit), unless Xwayland isn't installed; spawned clients get
-  its `DISPLAY` from the start (never the host's), and the startup programs don't wait for X.
+  listening sockets, held until exit), unless Xwayland isn't installed or `[xwayland] enabled =
+  false`; spawned clients get its `DISPLAY` from the start (never the host's; `Pila::x11_display`,
+  none while turned off), and the startup programs don't wait for X. Turned on or off on reload
+  (`xwayland_config_changed`): on, the display is reserved then; off, it's let go at once if
+  Xwayland doesn't run, else when it stops (idle or crashed: `listen_for_x11` gives it up
+  instead of watching again), so its apps keep running meanwhile.
   While Xwayland doesn't run, Pila watches the sockets (`listen_for_x11`) without accepting:
   the first X11 app to connect makes one readable, and Pila stops watching (from an idle
   callback, `x11_app_connecting`: a calloop source removed from its own callback stays in the

@@ -160,7 +160,7 @@ impl Pila {
             self.apply_workspace_count();
         }
         if old.xwayland != self.config.xwayland {
-            self.xwayland_idle_timeout_changed();
+            self.xwayland_config_changed();
         }
         if old.window_rules != self.config.window_rules
             || old.layer_rules != self.config.layer_rules

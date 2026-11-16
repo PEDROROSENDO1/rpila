@@ -51,6 +51,7 @@ shake-magnification = 2.5
 
 [xwayland]
 idle-timeout = 30
+enabled = true
 
 [keyboard]
 layout = "us,de"

@@ -3,7 +3,9 @@
 //! as `DISPLAY`, and starts Xwayland when an X11 app first connects to it
 //! (`listen_for_x11`), running Smithay's X11 window manager (`X11Wm`) on it.
 //! With `[xwayland] idle-timeout` it stops again once no X11 client is left
-//! (`check_xwayland_idle`), and the next one starts it.
+//! (`check_xwayland_idle`), and the next one starts it. `[xwayland] enabled =
+//! false` reserves nothing; turned off while Xwayland runs, it stays for its
+//! apps and the display goes when it stops (`xwayland_config_changed`).
 //!
 //! X11 windows live in the same `Space` as Wayland ones (`Window::new_x11_window`).
 //! Managed windows are placed and focused like Wayland toplevels; override-
@@ -246,7 +248,8 @@ impl XwaylandState {
         }
     }
 
-    /// The display X11 apps get (`DISPLAY=:n`), from startup on.
+    /// The display reserved for X11 apps, from startup on; what new programs
+    /// get as `DISPLAY` is `Pila::x11_display`.
     pub fn display(&self) -> Option<u32> {
         self.reservation
             .as_ref()
@@ -341,6 +344,13 @@ impl Pila {
     /// Hold an X display for X11 apps from startup: they get its `DISPLAY` at
     /// once, and the first to connect starts Xwayland (`listen_for_x11`).
     pub fn reserve_xwayland(&mut self) {
+        if !self.config.xwayland.enabled {
+            info!("Xwayland is turned off ([xwayland] enabled = false): no X11 display");
+            return;
+        }
+        if self.xwayland.reservation.is_some() {
+            return;
+        }
         if !crate::config::in_path("Xwayland") {
             info!("Xwayland isn't installed; X11 apps won't run");
             return;
@@ -363,6 +373,12 @@ impl Pila {
     /// app connecting makes one readable. The connection waits in the
     /// socket's queue for Xwayland to take it (`x11_app_connecting`).
     fn listen_for_x11(&mut self) {
+        // Turned off while it ran: the display goes with it.
+        if !self.config.xwayland.enabled {
+            info!("Xwayland is turned off; X11 display released");
+            self.stop_xwayland();
+            return;
+        }
         let Some(reservation) = self.xwayland.reservation.clone() else {
             return;
         };
@@ -596,12 +612,33 @@ impl Pila {
         }
     }
 
-    /// `[xwayland] idle-timeout` changed: time the check again.
-    pub fn xwayland_idle_timeout_changed(&mut self) {
+    /// `[xwayland]` changed. Turned on: reserve the display (programs Pila
+    /// starts from then on get it). Turned off: give it back, or, while
+    /// Xwayland runs, leave it to its apps until it stops (`listen_for_x11`).
+    /// Then time the idle check again.
+    pub fn xwayland_config_changed(&mut self) {
+        if !self.config.xwayland.enabled
+            && !self.xwayland.running()
+            && self.xwayland.token.is_none()
+        {
+            if self.xwayland.reservation.is_some() {
+                self.listen_for_x11();
+            }
+        } else if self.config.xwayland.enabled && self.xwayland.reservation.is_none() {
+            self.reserve_xwayland();
+        }
         if let Some(token) = self.xwayland.idle_check.take() {
             self.loop_handle.remove(token);
         }
         self.arm_xwayland_idle_check();
+    }
+
+    /// The display new programs get as `DISPLAY`: none while X11 apps are
+    /// turned off, even if Xwayland still runs for those it has.
+    pub fn x11_display(&self) -> Option<u32> {
+        self.xwayland
+            .display()
+            .filter(|_| self.config.xwayland.enabled)
     }
 
     /// The idle timeout is over with no X11 window: ask X, on a thread (it

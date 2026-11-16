@@ -456,6 +456,84 @@ fn xwayland_comes_back_after_a_crash() {
     assert_ne!(xwayland_pid(&pila), pid);
 }
 
+/// Whether the X socket of `display` (`:n`) is there.
+fn x_socket_exists(display: &str) -> bool {
+    std::path::Path::new(&format!("/tmp/.X11-unix/X{}", &display[1..])).exists()
+}
+
+/// `[xwayland] enabled = false`: no display reserved, no `DISPLAY` for what
+/// Pila starts, no Xwayland.
+#[test]
+fn xwayland_can_be_turned_off() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start_with(Options {
+        config: "[xwayland]\nenabled = false\n".into(),
+        command: Some("echo \"[$DISPLAY]\" > $XDG_RUNTIME_DIR/ran".into()),
+        ..Options::default()
+    });
+    assert_eq!(pila.wait_file("ran").trim(), "[]");
+    assert!(pila.state()["xwayland"].is_null());
+    assert!(pila.log().contains("Xwayland is turned off"));
+    assert_eq!(find_xwayland(&pila), None);
+}
+
+/// Turned on, the display is reserved at once; turned off with no X11 app,
+/// it's given back at once.
+#[test]
+fn xwayland_turned_on_and_off_on_save() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::with_config("[xwayland]\nenabled = false\n");
+    assert!(pila.state()["xwayland"].is_null());
+    pila.write_config("[xwayland]\nenabled = true\n");
+    pila.wait_log("config reloaded");
+    let display = reserved_display(&mut pila);
+    assert!(x_socket_exists(&display));
+    pila.write_config("[xwayland]\nenabled = false\n");
+    pila.wait("the display given back", |s| s["xwayland"].is_null());
+    assert!(!x_socket_exists(&display), "{display}'s socket stays");
+    // And on again: an X11 app runs.
+    pila.write_config("");
+    let x11 = X11::connect(&mut pila).unwrap();
+    x11.window("x", (200, 200), 0xff0000);
+    pila.wait("its window", |s| x11_window(s, "x").is_some());
+}
+
+/// Turned off while X11 apps run, Xwayland stays for them; once it stops
+/// (here for being idle) it isn't started again, and new programs get no
+/// `DISPLAY` meanwhile.
+#[test]
+fn xwayland_turned_off_while_running_stays_for_its_apps() {
+    if !xwayland_installed() {
+        return;
+    }
+    let bind = "[bindings]\n\"Mod+x\" = \"spawn echo [$DISPLAY] > $XDG_RUNTIME_DIR/env\"\n";
+    let mut pila = TestPila::with_config(bind);
+    let x11 = X11::connect(&mut pila).unwrap();
+    x11.window("x", (200, 200), 0xff0000);
+    pila.wait("its window", |s| x11_window(s, "x").is_some());
+    let display = reserved_display(&mut pila);
+    pila.write_config(&format!(
+        "{bind}[xwayland]\nenabled = false\nidle-timeout = 1\n"
+    ));
+    pila.wait_log("config reloaded");
+    pila.stays(
+        "Xwayland running for its window",
+        Duration::from_millis(1500),
+        |s| s["xwayland_running"] == true && x11_window(s, "x").is_some(),
+    );
+    pila.combo("Super+x");
+    assert_eq!(pila.wait_file("env").trim(), "[]");
+    drop(x11);
+    pila.wait("Xwayland stopped and the display given back", |s| {
+        s["xwayland_running"] == false && s["xwayland"].is_null()
+    });
+    assert!(!x_socket_exists(&display), "{display}'s socket stays");
+}
+
 fn x11_window<'a>(state: &'a Value, class: &str) -> Option<&'a Value> {
     window_in(state, class).filter(|w| w["x11"] == true)
 }

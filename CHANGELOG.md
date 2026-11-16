@@ -14,6 +14,9 @@
   or keeps failing is started again by the next app rather than right away. It now gets Pila's whole
   environment (Smithay's `spawn_with_inherited_env`), so variables such as `MESA_*` or
   `__GLX_VENDOR_LIBRARY_NAME` reach it.
+- **X11 apps can be turned off, and Xwayland is optional:** `[xwayland] enabled = false` reserves no
+  X display and sets no `DISPLAY`, for a session with no X11 at all; turned off while X11 apps run,
+  Xwayland stays for them until it stops. Applies on save, like the rest.
 - **For packagers: Pila's Smithay fork also carries Smithay's X display reservation** (its pull
   request #2269, not merged yet), with which Xwayland starts on demand and its window manager
   leaves no event source behind.

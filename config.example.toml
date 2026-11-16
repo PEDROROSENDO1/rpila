@@ -115,8 +115,11 @@
 # connects. Unset, it then runs until Pila exits; with idle-timeout, it stops
 # that many seconds (1 to 3600) after its last X11 client leaves, and starts
 # again with the next one. Stopping it loses what was set in X (xrdb,
-# setxkbmap, xmodmap). Read as soon as the file is saved.
+# setxkbmap, xmodmap). enabled = false: no X11 apps at all, no X display and
+# no DISPLAY; turned off while Xwayland runs, it stays for its apps until it
+# stops. Read as soon as the file is saved.
 [xwayland]
+# enabled = true                   # (default)
 # idle-timeout = 10                # e.g.
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or

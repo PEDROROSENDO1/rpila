@@ -1422,13 +1422,26 @@ impl CursorFile {
 pub const XWAYLAND_IDLE_TIMEOUTS: std::ops::RangeInclusive<u32> = 1..=3600;
 
 /// `[xwayland]`: how Pila runs Xwayland (`xwayland.rs`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct XwaylandConfig {
+    /// X11 apps can run: an X display is reserved for them and Xwayland
+    /// started when one connects. Off, nothing X is set up, and turned off
+    /// while Xwayland runs it stays for its apps but isn't started again.
+    pub enabled: bool,
     /// Stop Xwayland this long after its last X11 client leaves (it starts
     /// again with the next one). Unset, it runs until Pila exits once
     /// started.
     pub idle_timeout: Option<u32>,
+}
+
+impl Default for XwaylandConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            idle_timeout: None,
+        }
+    }
 }
 
 impl XwaylandConfig {
@@ -2554,6 +2567,7 @@ mod tests {
     fn xwayland_idle_timeout_is_unset_by_default_and_bounded() {
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.xwayland.idle_timeout, None);
+        assert!(config.xwayland.enabled);
         let config = Config::from_toml("[xwayland]\nidle-timeout = 10", &no_env).unwrap();
         assert_eq!(config.xwayland.idle_timeout, Some(10));
         for text in ["idle-timeout = 0", "idle-timeout = 3601"] {

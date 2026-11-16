@@ -2032,7 +2032,7 @@ impl Pila {
             None => cmd.env_remove("PILA_SOCKET"),
         };
         // X11 apps go to pila's Xwayland, never the host's X server.
-        match self.xwayland.display() {
+        match self.x11_display() {
             Some(display) => cmd.env("DISPLAY", format!(":{display}")),
             None => cmd.env_remove("DISPLAY"),
         };
