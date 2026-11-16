@@ -106,7 +106,7 @@ A short report helps even if everything works:
   (foreign-toplevel-management), night light (gamma control), screen off and monitor
   settings (output power and management), blur behind panels and windows (background-effect),
   workspace indicators and switchers (ext-workspace), a visual system bell, dialogs that stay
-  above their window and modal ones that keep the focus (xdg-dialog), window rules by tag
+  above their window and modal ones that keep the focus (xdg-dialog, and X11's), window rules by tag
   (xdg-toplevel-tag), Vulkan's FIFO presentation (wp-fifo, wp-commit-timing), explicit sync
   (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full shell
   such as Noctalia or Dux Shell. Sandboxed apps (Flatpak) don't see the protocols that read the

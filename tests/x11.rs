@@ -534,6 +534,99 @@ fn a_transient_x11_window_stays_above_its_parent() {
     assert_eq!(stacking(&state), vec!["XParent", "XChild"]);
 }
 
+/// A parent and a dialog set on it (`WM_TRANSIENT_FOR`), modal from the start
+/// (`_NET_WM_STATE_MODAL` set before mapping) if `modal`; the dialog has the
+/// focus.
+fn x11_parent_and_dialog(pila: &mut TestPila, x: &X11, modal: bool) -> (u32, u32) {
+    let parent = x.window("XParent", (400, 300), 0xff0000);
+    pila.wait_focus("XParent");
+    let dialog = x.unmapped_window("XDialog", (100, 100), 0x00ff00, false);
+    x.conn
+        .change_property32(
+            PropMode::REPLACE,
+            dialog,
+            AtomEnum::WM_TRANSIENT_FOR,
+            AtomEnum::WINDOW,
+            &[parent],
+        )
+        .unwrap();
+    if modal {
+        let state = x.atom("_NET_WM_STATE");
+        let modal = x.atom("_NET_WM_STATE_MODAL");
+        x.conn
+            .change_property32(PropMode::REPLACE, dialog, state, AtomEnum::ATOM, &[modal])
+            .unwrap();
+    }
+    x.conn.map_window(dialog).unwrap();
+    x.conn.flush().unwrap();
+    pila.wait_focus("XDialog");
+    (parent, dialog)
+}
+
+/// Clicks a corner of the parent, which the centered dialog doesn't cover.
+fn click_x11_parent(pila: &mut TestPila) {
+    let (gx, gy, ..) = rect(&x11_window(&pila.state(), "XParent").unwrap()["geometry"]);
+    pila.click_at(gx as f64 + 5.0, gy as f64 + 5.0);
+}
+
+#[test]
+fn clicking_the_parent_of_a_modal_x11_dialog_focuses_the_dialog() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    x11_parent_and_dialog(&mut pila, &x, true);
+    let client = pila.client();
+    client.window("other").size(100, 100).create();
+    pila.wait_focus("other");
+    click_x11_parent(&mut pila);
+    let state = pila.wait_focus("XDialog");
+    assert_eq!(stacking(&state), vec!["other", "XParent", "XDialog"]);
+}
+
+#[test]
+fn an_x11_dialog_that_isnt_modal_lets_the_parent_have_the_focus() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    x11_parent_and_dialog(&mut pila, &x, false);
+    click_x11_parent(&mut pila);
+    pila.wait_focus("XParent");
+}
+
+/// `_NET_WM_STATE_MODAL` asked for after mapping takes the focus from the
+/// parent and shows in the window's `_NET_WM_STATE`; taken back, the parent
+/// can have the focus again.
+#[test]
+fn an_x11_dialog_turning_modal_takes_the_focus_from_its_parent() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let (_, dialog) = x11_parent_and_dialog(&mut pila, &x, false);
+    click_x11_parent(&mut pila);
+    pila.wait_focus("XParent");
+    x.net_wm_state(dialog, true, &["_NET_WM_STATE_MODAL"]);
+    pila.wait_focus("XDialog");
+    assert!(x
+        .net_wm_state_of(dialog)
+        .iter()
+        .any(|s| s == "_NET_WM_STATE_MODAL"));
+    x.net_wm_state(dialog, false, &["_NET_WM_STATE_MODAL"]);
+    let started = Instant::now();
+    while x
+        .net_wm_state_of(dialog)
+        .iter()
+        .any(|s| s == "_NET_WM_STATE_MODAL")
+    {
+        assert!(started.elapsed() < TIMEOUT, "the modal state stayed");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    click_x11_parent(&mut pila);
+    pila.wait_focus("XParent");
+}
+
 #[test]
 fn clicking_an_x11_window_focuses_it() {
     let mut pila = TestPila::start();

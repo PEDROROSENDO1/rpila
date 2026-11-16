@@ -5,6 +5,9 @@
 - **An X11 app's own transparency shows with rounded corners:** an app that sets
   `_NET_WM_WINDOW_OPACITY` on its window (terminals' opacity settings, `picom-trans`) was drawn
   opaque when the window had a `corner-radius`. It dates from 0.2.0, when rounded corners came.
+- **Modal X11 dialogs keep the focus,** as Wayland ones (xdg-dialog) already did: a dialog that
+  sets `_NET_WM_STATE_MODAL` (before it shows, or later) gets the focus whenever its parent window
+  would, so a click on the parent or Mod+Tab to it lands on the dialog.
 
 ## 0.5.8 (2026-11-15)
 

@@ -3,11 +3,10 @@
 //! `WM_TRANSIENT_FOR`. A window and its descendants are a family: children
 //! stay above their parent in the `Space`'s stacking order, and the family
 //! minimizes and changes workspace together. A modal child (xdg-dialog's
-//! `set_modal`) takes the focus whenever its parent would get it; the client
-//! keeps blocking its own widgets, pila neither blocks the pointer over the
-//! parent nor dims it. X11 windows are never modal here: Smithay's window
-//! manager ignores `_NET_WM_STATE_MODAL` requests (`X11Surface::is_popup` is
-//! always false).
+//! `set_modal`, X11's `_NET_WM_STATE_MODAL`, set before mapping or asked for
+//! after) takes the focus whenever its parent would get it; the client keeps
+//! blocking its own widgets, pila neither blocks the pointer over the parent
+//! nor dims it.
 //!
 //! Smithay's `Space::map_element` puts the window on top, so whatever moves
 //! a mapped window then calls `keep_transients_above`.
@@ -47,6 +46,9 @@ fn is_parent_of(parent: &Window, child: &Window) -> bool {
 
 /// Whether `window` asked to be modal.
 fn is_modal(window: &Window) -> bool {
+    if let Some(x11) = window.x11_surface() {
+        return x11.is_modal();
+    }
     window.toplevel().is_some_and(|toplevel| {
         with_states(toplevel.wl_surface(), |states| {
             states
@@ -64,20 +66,23 @@ fn is_modal(window: &Window) -> bool {
 
 impl XdgDialogHandler for Pila {
     fn dialog_hint_changed(&mut self, toplevel: ToplevelSurface, hint: ToplevelDialogHint) {
-        let is_modal = hint == ToplevelDialogHint::Modal;
-        // A dialog turning modal takes the focus from its parent.
-        let Some(window) = self.window_for_surface(toplevel.wl_surface()) else {
-            return;
-        };
-        let parent = self.transient_parent(&window);
-        if is_modal && parent.is_some() && parent == self.focused_window() {
-            self.focus_window(parent, smithay::utils::SERIAL_COUNTER.next_serial());
-            self.queue_redraw();
+        if let Some(window) = self.window_for_surface(toplevel.wl_surface()) {
+            self.modal_changed(&window, hint == ToplevelDialogHint::Modal);
         }
     }
 }
 
 impl Pila {
+    /// After `window` turned modal or stopped being so: a dialog turning
+    /// modal takes the focus from its parent.
+    pub fn modal_changed(&mut self, window: &Window, is_modal: bool) {
+        let parent = self.transient_parent(window);
+        if is_modal && parent.is_some() && parent == self.focused_window() {
+            self.focus_window(parent, smithay::utils::SERIAL_COUNTER.next_serial());
+            self.queue_redraw();
+        }
+    }
+
     /// Who gets the focus when `window` should: its topmost modal child on
     /// screen, that one's if it has one, and so on; else `window` itself.
     pub fn focus_redirect(&self, window: Window) -> Window {

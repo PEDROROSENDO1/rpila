@@ -533,6 +533,14 @@ impl XwmHandler for Pila {
         }
     }
 
+    fn modal_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        self.x11_modal_request(&surface, true);
+    }
+
+    fn unmodal_request(&mut self, _xwm: XwmId, surface: X11Surface) {
+        self.x11_modal_request(&surface, false);
+    }
+
     fn maximize_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         self.x11_fill_request(&surface, |_, fullscreen| (true, fullscreen));
     }
@@ -660,6 +668,19 @@ impl Pila {
                 let _ = surface.set_maximized(maximized);
                 let _ = surface.set_fullscreen(fullscreen);
             }
+        }
+    }
+
+    /// `_NET_WM_STATE_MODAL` asked for or taken back: X keeps the state
+    /// (`X11Surface::is_modal` reads it, as `transients.rs` does), and a
+    /// mapped dialog turning modal takes the focus from its parent.
+    fn x11_modal_request(&mut self, surface: &X11Surface, modal: bool) {
+        if let Err(err) = surface.set_modal(modal) {
+            warn!(?err, "failed to set an X11 window's modal state");
+            return;
+        }
+        if let Some(window) = self.window_for_x11(surface) {
+            self.modal_changed(&window, modal);
         }
     }
 }
