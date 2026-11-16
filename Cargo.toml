@@ -96,3 +96,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 
 
+
+# No `[profile.release]`: LTO measured on 2026-11-16 (`scripts/check --nested`, three runs
+# each) gave no gain with "thin" and about 3% less CPU per frame with "fat" and one codegen
+# unit, for 2.3 times the clean build (184 s against 81) in every package build.
