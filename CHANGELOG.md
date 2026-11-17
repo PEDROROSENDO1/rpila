@@ -36,6 +36,9 @@
   `open-focused = false` opens it on top while the keyboard stays with the window you were typing
   in. Pila run nested now has the app id `pila`, so a rule can send a development run to another
   monitor, out of the way.
+- **A blurred window's backdrop is kept while it's hidden:** on another workspace or minimized,
+  it was dropped and made anew when the window showed again, textures and all, which on battery
+  cost that frame its refresh; it now stays until the window closes.
 - **Blur doesn't allocate on every frame of a resize:** a blurred panel animating its size or a
   blurred window being resized kept getting new textures for its backdrop, one set per frame;
   they're now a little bigger than needed (with room to grow, once one has grown out of

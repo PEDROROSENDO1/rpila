@@ -187,6 +187,9 @@ pub struct Scene {
     pub dnd_icon: Option<(WlSurface, Point<i32, Logical>)>,
     /// The window menu, above everything but the cursor (`window_menu.rs`).
     pub window_menu: Option<crate::window_menu::SceneMenu>,
+    /// Windows off the `Space` (on another workspace, minimized): their
+    /// blurred backdrops are kept for when they show again (`blur.rs`).
+    pub hidden_windows: Vec<WlSurface>,
     /// `corner-radius` from the config, for the snap preview.
     pub corner_radius: u32,
     pub colors: Colors,

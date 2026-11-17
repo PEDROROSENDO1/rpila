@@ -702,7 +702,12 @@ impl BlurCache {
                 }
             }
         }
-        self.entries.retain(|k, e| k.1 != output_name || e.used);
+        // A hidden window's is kept for when it shows again: made anew, its
+        // first frame back allocates and blurs everything (a refresh missed on
+        // battery, back from another workspace).
+        let hidden = |id: &ObjectId| scene.hidden_windows.iter().any(|s| s.id() == *id);
+        self.entries
+            .retain(|k, e| k.1 != output_name || e.used || hidden(&k.0));
     }
 
     /// Blur behind `rects` (in space coordinates) of `surface`, what's on the

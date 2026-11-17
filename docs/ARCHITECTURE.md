@@ -991,7 +991,10 @@ Key flows and invariants:
   with them but not with `opacity`. It's prepared with the windows where a slide will
   leave them. It's never declared opaque: what it hid would count as not shown (`frame.rs`)
   and its client drop to a frame a second while the blur still shows it. A window under
-  an opaque one (`SceneWindow::covers`) isn't prepared, but keeps its entry. Shaders are
+  an opaque one (`SceneWindow::covers`) isn't prepared, but keeps its entry, and so does a window
+  off the `Space` (on another workspace, minimized: `Scene::hidden_windows`), so its first frame
+  back doesn't allocate and blur everything anew (that missed a refresh on battery, back from
+  another workspace); it goes when the window does. Shaders are
   compiled by `render::warm_up`, kept in the EGL context; a failure disables blur.
 - **Session environment** (`Pila::spawn`, `start_session`): children get `WAYLAND_DISPLAY`,
   the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet

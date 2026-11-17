@@ -839,6 +839,50 @@ fn a_blur_rule_blurs_whats_behind_a_window() {
     assert_eq!(pila.pixel(636.0, 100.0), CLEAR);
 }
 
+/// Seen on a TTY, on battery: back on a workspace, a blurred window's
+/// backdrop was made anew (textures allocated, everything blurred again), and
+/// that frame missed a refresh. It's kept while the window is on another
+/// workspace or minimized.
+#[test]
+fn a_blurred_windows_backdrop_is_kept_while_it_is_hidden() {
+    let config = format!(
+        "workspaces = 2\n{}",
+        glass_window_rule(540, 300, "blur = true")
+    );
+    let mut pila = TestPila::with_config(&config);
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    wait_mixed(&mut pila, 636.0, 400.0);
+    let allocated = |pila: &mut TestPila| pila.settle()["blur"]["allocated"].as_u64().unwrap_or(0);
+    let before = allocated(&mut pila);
+    pila.combo("Super+2");
+    pila.wait("on workspace 2", |s| s["workspace"] == 2);
+    pila.settle();
+    pila.combo("Super+1");
+    pila.wait("back on workspace 1", |s| s["workspace"] == 1);
+    wait_mixed(&mut pila, 636.0, 400.0);
+    assert_eq!(allocated(&mut pila), before, "back from another workspace");
+    client.request(window, |t| t.set_minimized());
+    pila.wait("minimized", |s| {
+        window_in(s, "glass").is_some_and(|w| w["minimized"] == true)
+    });
+    pila.settle();
+    let id = pila.window("glass")["id"].as_str().unwrap().to_string();
+    let focused = std::process::Command::new(env!("CARGO_BIN_EXE_pila"))
+        .args(["msg", "focus", &id])
+        .env_remove("PILA_SOCKET")
+        .env("WAYLAND_DISPLAY", &pila.display)
+        .env("XDG_RUNTIME_DIR", &pila.dir)
+        .status()
+        .expect("run pila msg");
+    assert!(focused.success());
+    pila.wait("restored", |s| {
+        window_in(s, "glass").is_some_and(|w| w["minimized"] == false)
+    });
+    wait_mixed(&mut pila, 636.0, 400.0);
+    assert_eq!(allocated(&mut pila), before, "restored");
+}
+
 #[test]
 fn without_blur_a_clear_window_is_clear() {
     let mut pila = TestPila::with_config(&glass_window_rule(540, 300, ""));

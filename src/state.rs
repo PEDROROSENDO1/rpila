@@ -786,6 +786,10 @@ impl Pila {
                 (icon.surface.clone(), at)
             }),
             window_menu: self.window_menu.as_ref().map(|menu| menu.scene()),
+            hidden_windows: self
+                .off_space_windows()
+                .filter_map(|window| Some(window.wl_surface()?.into_owned()))
+                .collect(),
             corner_radius: self.config.corner_radius,
             colors: self.config.colors,
             ..Default::default()
