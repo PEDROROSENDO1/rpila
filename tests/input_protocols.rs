@@ -643,6 +643,51 @@ fn a_virtual_keyboard_runs_bindings() {
     assert!(!saw_key(&app, 16, true));
 }
 
+/// A virtual keyboard's modifiers (`wtype -M ctrl`, an on-screen keyboard's
+/// Shift latched) are the keyboard's: the focused app is told, and a key
+/// typed with them makes the binding they make.
+#[test]
+fn a_virtual_keyboards_modifiers_reach_the_app_and_bindings() {
+    // In xkb's masks of the US keymap: Shift 1, Control 4, Mod4 (Super) 64.
+    const SHIFT: u32 = 1;
+    const CONTROL: u32 = 4;
+    const SUPER: u32 = 64;
+    let mut pila = TestPila::start();
+    let app = pila.client();
+    let window = app.window("editor").create();
+    pila.wait_focus("editor");
+    let typist = pila.client();
+    let keyboard = virtual_keyboard(&typist, &keymap_of(&app));
+
+    keyboard.modifiers(CONTROL, 0, 0, 0);
+    typist.flush();
+    app.wait("Control held", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::Modifiers { depressed, .. } if *depressed == CONTROL))
+    });
+    keyboard.modifiers(0, 0, 0, 0);
+    typist.flush();
+    app.wait("Control released", |s| {
+        matches!(
+            s.events
+                .iter()
+                .rev()
+                .find(|e| matches!(e, Ev::Modifiers { .. })),
+            Some(Ev::Modifiers { depressed: 0, .. })
+        )
+    });
+
+    // Super and Shift as modifiers, then q: Mod+Shift+Q, close.
+    keyboard.modifiers(SUPER | SHIFT, 0, 0, 0);
+    keyboard.key(1, 16, 1);
+    keyboard.key(2, 16, 0);
+    keyboard.modifiers(0, 0, 0, 0);
+    typist.flush();
+    app.wait("the close request", |s| s.windows[window.0].close_requested);
+    assert!(!saw_key(&app, 16, true));
+}
+
 /// Typing on a virtual keyboard (an on-screen one) is the user being active.
 #[test]
 fn a_virtual_keyboard_counts_as_activity() {
