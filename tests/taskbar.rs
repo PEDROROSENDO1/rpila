@@ -422,6 +422,34 @@ fn the_workspace_group_holds_every_output() {
     client.wait("the group entered C too", |s| enters(s) == 3);
 }
 
+/// A monitor unplugged leaves the workspace group, so a pager stops showing
+/// the workspaces on it, and the manager says `done`.
+#[test]
+fn an_unplugged_monitor_leaves_the_workspace_group() {
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        ..Options::default()
+    });
+    let client = pila.client();
+    let _manager: ExtWorkspaceManagerV1 = client.bind("ext_workspace_manager_v1", 1);
+    client.wait_logged("ext_workspace_manager_v1", "Done");
+    let count = |s: &common::client::Shared, tag: &str, event: &str| {
+        s.log
+            .iter()
+            .filter(|l| l.tag == tag && l.event.starts_with(event))
+            .count()
+    };
+    client.wait("the group entered A and B", |s| {
+        count(s, "workspace_group", "OutputEnter") == 2
+    });
+    let dones = count(&client.lock(), "ext_workspace_manager_v1", "Done");
+    pila.request(serde_json::json!({ "cmd": "output_remove", "name": "B" }));
+    client.wait("the group left B, then done", |s| {
+        count(s, "workspace_group", "OutputLeave") == 1
+            && count(s, "ext_workspace_manager_v1", "Done") > dones
+    });
+}
+
 #[test]
 fn a_client_activates_a_workspace_on_commit() {
     let mut pila = TestPila::start();
