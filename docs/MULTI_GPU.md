@@ -108,8 +108,8 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
 - **Frame budget.** A secondary output's frame is rendered on the primary and copied (a dmabuf
   import on the target, or a CPU copy if the formats don't meet). That's GPU time and, for a CPU
   copy, CPU time inside the 4 ms; the frame statistics show it in that output's own line (the
-  copy is inside Smithay's `render_frame`, so it can't be timed apart; its GPU time isn't
-  measured, as no output's is).
+  copy is inside Smithay's `render_frame`, so it can't be timed apart; its GPU time, rendering
+  and copy together, is in that output's `gpu_*` fields where the driver gives native fences).
 - **Formats and modifiers.** The copy needs a format both devices share; with none in common
   Smithay falls back to a CPU copy, which a 4K monitor can't afford at 60 Hz. Smithay logs it
   ("Falling back to cpu-copy", at `info`), and `scripts/check` reports which way the copy went.

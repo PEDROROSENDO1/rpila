@@ -8,34 +8,22 @@
 //! (`RenderTiming`): from the start of their drawing (`prepare`) until the
 //! later of their commit queued and their GPU work done (the fence the kernel
 //! waits on before the flip; `frame_stats::GpuFrame`), the worst of the last
-//! `WINDOW` frames. Its margin before the vblank is that, plus the worst of
-//! the other outputs (one drawn first holds it back), plus `SLACK` (the timer
-//! waking up late, the kernel's lead before the vblank). Leaner margins were
-//! tried on a TTY: counted from when a held frame was meant to be drawn and
-//! without the other outputs' worst, they left 1-3 ms instead of 3-8 and
-//! saved 0.7-1.8 ms of latency, but an app starting up on the same GPU
-//! (shaders, uploads) made a held frame late twice in three runs, and that's
-//! what no frame of Pila's foretells. Frames that were a
-//! client's buffer as it is (direct scanout) are kept apart from those drawn,
-//! and the margin is the worst of either: leaving direct scanout, the first
-//! frame drawn again would otherwise get the margin of a buffer handed over.
-//! A frame that still shows late after being held turns it off for that
-//! output for `BACKOFF`.
-//!
-//! What it leaves is measured: for each held frame, its margin and how long
-//! before the vblank it aimed at it was ready (`spare`), both in the frame
-//! statistics (`frame_stats.rs`): the smallest spare says how much the margin
-//! could shrink.
+//! `WINDOW` frames. Frames that were a client's buffer as it is (direct
+//! scanout) are kept apart from those drawn, and the worst of either counts:
+//! leaving direct scanout, the first frame drawn again would otherwise get the
+//! margin of a buffer handed over. The margin before the vblank is that, plus
+//! the worst of the other outputs (one drawn first holds it back), plus
+//! `SLACK` (the timer waking up late, the kernel's lead before the vblank),
+//! and never under half a period (`MIN_MARGIN_DIVISOR`).
 //!
 //! Frames are held only in a steady scene (`draw::hold_late`): not while
 //! Pila animates, nor for `SETTLING` after a window or layer surface appears
 //! or a window draws itself at a new size (`settling`, `Pila::start_settling`,
 //! animated or not). Then apps are busy on the GPU as no frame of Pila's
-//! foretells: a terminal starting up (shaders, glyphs) made a held frame take
-//! 9.4 ms on the GPU on battery, one redrawing itself maximized and a game
-//! closing after flooding the GPU made held frames late on a single monitor,
-//! all with the margin above. An animation of Pila's shows at the same
-//! vblank either way: holding gains nothing there.
+//! foretells, and an animation of Pila's shows at the same vblank either way:
+//! holding gains nothing there. A frame already held is let go at once if the
+//! scene stops being steady while it waits (`still_held`), and one that still
+//! shows late turns holding off for that output for `BACKOFF`.
 //!
 //! Not for a frame that can't be measured or has no vblank to aim at: before
 //! any frame was measured, after a composited frame with no native fence to
@@ -43,6 +31,22 @@
 //! mode's refresh is rounded: the grid drifts), while tearing or with
 //! adaptive sync (the flip makes the vblank), or while a lock waits for its
 //! frame.
+//!
+//! What it leaves is measured: for each held frame, its margin and how long
+//! before the vblank it aimed at it was ready (`spare`), both in the frame
+//! statistics (`frame_stats.rs`).
+//!
+//! Why the margin is what it is, from TTY runs on the author's laptop (AMD
+//! Renoir, 60 Hz): counted from when a held frame was meant to be drawn and
+//! without the other outputs' worst, it left 1-3 ms instead of 3-8 and saved
+//! 0.7-1.8 ms of latency, but an app starting up on the same GPU made a held
+//! frame late twice in three runs. With the laptop's screen alone on battery
+//! the other outputs' part is nothing, and the margin (4-5 ms) let held
+//! frames come late as apps got busy on the GPU: a terminal starting up
+//! (shaders, glyphs: 9.4 ms on the GPU), one redrawing itself maximized, a
+//! game closing after flooding the GPU, a shell's panel animating itself. The
+//! steady scene and the half-period floor are what held up: no frame late in
+//! either setup.
 
 use std::collections::VecDeque;
 use std::time::Duration;

@@ -282,26 +282,27 @@ Key flows and invariants:
   say), it waits too, until the wait is over. An output with a frame in flight (its vblank draws it)
   or a lock waiting for its frame never waits. Past those waits a frame is drawn late, its
   margin before the next vblank (`render-late`, on by default; `udev/render_late.rs`,
-  `draw::hold_late`): `OutputSurface::render_at` holds the output and a timer
-  (`schedule_late_render`) draws it then, so what clients and input bring meanwhile makes that
-  vblank; a held frame is let go at once if the scene stops being steady meanwhile (see below:
-  `render_late::still_held`; a window opening while it waited made it late). The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
-  `prepare` to the later of the commit queued and the GPU's fence, which `Pila::watch_gpu` reports
-  through `Backend::gpu_done`), plus the other outputs' worst (drawn first, they hold it up), plus
-  `render_late::SLACK`, never under half a period (`MIN_MARGIN_DIVISOR`: leaner margins, and
-  one output's alone, left apps busy on the same GPU making held frames late: the module docs); frames that were a
-  client's buffer as it is are kept apart and the worst of either counts, so the first frame
-  drawn after direct scanout isn't given a handed-over buffer's margin. Nothing is held before a frame was measured, after a composited frame with
-  no fence, with a vblank older than a second (the rounded refresh drifts), after a torn frame
-  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset, while Pila
-  animates, for 300 ms after a window or layer surface appears or a window draws itself at a new
-  size (`Pila::start_settling`, from `animate_open`, `layer_committed` and `geometry_committed`'s
-  `DrawnSize`, animated or not: `render_late::settling`; apps are busy on the GPU then, as recent
-  frames don't foretell, and an animation of Pila's shows at the same vblank either way) or while
-  a lock waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
-  output for two seconds. A held frame counts as on its way for missed refreshes
-  (`back_to_back`). A frame that fails
-  at the DRM level (render or queue: no DRM master yet after a VT switch, a monitor beyond
+  `draw::hold_late`), but only in a steady scene: `OutputSurface::render_at` holds the output
+  and a timer (`schedule_late_render`) draws it then, so what clients and input bring meanwhile
+  makes that vblank. The margin is the worst of the output's last frames' readiness
+  (`RenderTiming`: from `prepare` to the later of the commit queued and the GPU's fence, which
+  `Pila::watch_gpu` reports through `Backend::gpu_done`; frames that were a client's buffer as
+  it is kept apart, the worst of either counting, so the first frame drawn after direct scanout
+  isn't given a handed-over buffer's margin), plus the other outputs' worst (drawn first, they
+  hold it up), plus `render_late::SLACK`, never under half a period (`MIN_MARGIN_DIVISOR`).
+  Nothing is held before a frame was measured, after a composited frame with no fence, with a
+  vblank older than a second (the rounded refresh drifts), after a torn frame
+  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset, while a lock
+  waits, while Pila animates, or for 300 ms after a window or layer surface appears or a window
+  draws itself at a new size (`Pila::start_settling`, from `animate_open`, `layer_committed` and
+  `geometry_committed`'s `DrawnSize`, animated or not: `render_late::settling`): apps are busy
+  on the GPU then as recent frames don't foretell, and an animation of Pila's shows at the same
+  vblank either way. A held frame is let go at once if the scene stops being steady while it
+  waits (`render_late::still_held`), and one that still comes late or misses a refresh
+  (`queued_held`) turns it off for that output for two seconds. Leaner margins, and one output's
+  alone, left apps busy on the same GPU making held frames late on a TTY: the module docs say
+  how. A held frame counts as on its way for missed refreshes (`back_to_back`). A frame that
+  fails at the DRM level (render or queue: no DRM master yet after a VT switch, a monitor beyond
   the link's bandwidth) blocks only its own output until a per-output timer retries it
   (`recovery.rs`: 100 ms doubling up to 10 s, logged at the 1st, 2nd, 4th… failure, reset by
   a queued frame, `ActivateSession` or the output coming on; the retry takes DRM master

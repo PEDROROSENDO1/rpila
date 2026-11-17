@@ -737,9 +737,10 @@ host name and home directory. It sends nothing anywhere; read it before posting 
 **`pila-check`** tests Pila on your hardware: run from a TTY (Ctrl+Alt+F3, log in) while your
 session keeps running on its own, it starts Pila with your monitors, keyboard and input
 settings, runs real programs through windows, workspaces, captures, blur and fullscreen for
-about a minute, quits by itself and prints PASS or FAIL per check, with frame times. Its log is
-`~/.local/state/pila/pila-tty.log`. `pila-check --nested` does the same in a window of your
-session, and `pila-check --help` lists the rest.
+about a minute, quits by itself and prints PASS or FAIL per check, with frame times (CPU and GPU)
+and each monitor's latency. Its log is `~/.local/state/pila/pila-tty.log`. `pila-check --nested`
+does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-check` runs it with
+`render-late` off to compare, and `pila-check --help` lists the rest.
 
 | Problem | What to do |
 |---|---|

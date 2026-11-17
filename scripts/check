@@ -378,7 +378,8 @@ usage: $name [--nested | --vrr] [<config.toml>]
 
 Runs Pila for about a minute with scripted scenarios (windows, minimize,
 workspaces, captures, blur, fullscreen) and judges its log: PASS or FAIL per
-check, with frame times. Nothing to do but wait; it quits by itself.
+check, with frame times (CPU, GPU) and, on bare metal, latency. Nothing to do
+but wait; it quits by itself.
 
   (no option)  on bare metal: run it from a TTY (Ctrl+Alt+F3, log in), not
                from a graphical session, which can keep running on its VT;
@@ -387,6 +388,9 @@ check, with frame times. Nothing to do but wait; it quits by itself.
   --vrr        on bare metal, with adaptive sync asked of every monitor
   --judge      judge an existing log again
   <config>     start from that config instead of yours
+
+PILA_CHECK_RENDER_LATE=false runs it with render-late off, to compare the
+frames' latency with and without it.
 
 Its log: $out/pila-tty.log (bare metal) or pila-check.log (--nested).
 EOF

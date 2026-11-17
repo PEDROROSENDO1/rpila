@@ -95,17 +95,20 @@ Some things break without any visible sign, so the suite checks them:
 
 Pila shouldn't miss a refresh while there's something to show, at whatever rate the monitor
 runs, and its CPU time per frame has to average under 4 ms (a quarter of a 60 Hz period).
-`frame_stats.rs` logs frames, average and worst CPU time and missed refreshes per output. On
-bare metal the missed refreshes are exact, taken from the DRM vblank sequence. `scripts/check`
+`frame_stats.rs` logs frames, average and worst CPU time, the GPU's time and missed refreshes
+per output and, on bare metal, how long each frame took from being asked for to being on screen.
+On bare metal the missed refreshes are exact, taken from the DRM vblank sequence. `scripts/check`
 runs a release build through real programs (terminals, xterm, a launcher, screenshots, a screen
 share, blur, a fullscreen app, Noctalia) and fails on a missed refresh or a blown budget.
 Changes to rendering, input or the event loop go through it before they're committed.
 
-Last bare-metal run, 2026-11-13, on an AMD Renoir laptop on mains power with an external
-monitor: 23 five-second windows over both outputs, 0.18 to 1.24 ms of CPU per frame on average,
-no missed or late refresh in 1,869 frames, and the slowest frame took 5.3 ms. Leaving direct
-scanout, which took 11.7 ms the day before, now takes 0.06 ms (see "Late frames on my laptop"
-below).
+Last bare-metal runs, 2026-11-17, with 0.6.1's code, on an AMD Renoir laptop. With an external
+monitor, on mains power: no missed or late refresh in 6,350 frames, at most 1.23 ms of CPU per
+frame on average over five seconds, 3.6 ms for the slowest frame, and the GPU's part at most
+1.6 ms on average and 4.8 ms at worst. With the laptop's screen alone, on battery, where
+everything costs about twice as much: none missed in 5,246 frames, at most 2.0 ms on average
+and 7.6 ms for the slowest frame. Leaving direct scanout, which took 11.7 ms on 2026-11-12, takes
+0.06 ms (see "Late frames on my laptop" below).
 
 ### Real hardware
 
@@ -211,6 +214,34 @@ The run after both fixes, with both monitors, was clean (see the numbers above).
 Where a check was possible, each of these fixes added one, so the same mistake fails the suite
 next time. The late frames are the exception: that's timing on real hardware, and only
 `scripts/check` measures it.
+
+### Rendering late
+
+0.6.1 draws each frame as close to the monitor's refresh as it safely can, instead of right after
+the last one, so what apps draw in the meantime still makes that refresh. On my laptop the time
+from a redraw being asked for to the frame on screen went from 25.8 to 21.3 ms on its own screen
+and from 28.5 to 21.7 ms on the external monitor. It took about fifteen `scripts/check` runs on
+the TTY, half of them failed, and what shipped isn't the first version that passed:
+
+- The first version took its margin from the worst of each monitor's recent frames, plus the
+  other monitor's worst. It passed with both monitors. A leaner margin without the other
+  monitor's part saved one or two more milliseconds and made a frame late in two runs of three:
+  an app starting up on the same GPU, which nothing in Pila's own frames predicts.
+- With the laptop's screen alone, on battery, the original margin failed too: the other
+  monitor's part had been covering for it. Each run found a different app busy on the GPU at the
+  wrong moment: a terminal starting, one redrawing itself maximized, a game closing, the shell's
+  panel animating itself.
+- What held up is a rule more than a number: frames are held only while nothing on screen is
+  opening, closing, resizing or animating, the margin is never under half a refresh, and a held
+  frame is let go at once if that changes while it waits. That last part was the final bug: a
+  frame held just before a window opened was still drawn at its moment, with the new window in it.
+- On the way it turned up a bug that had nothing to do with it: a blurred window's backdrop was
+  thrown away while the window was on another workspace and rebuilt when it came back, which on
+  battery cost that frame its refresh.
+
+Each of these has a test where one was possible; the timing itself, again, only `scripts/check`
+on the hardware measures. The frame statistics now log the GPU's time and each frame's latency,
+and `pila-check` prints them, so a tester's run shows whether the margin holds on other machines.
 
 ## Other projects' rules
 

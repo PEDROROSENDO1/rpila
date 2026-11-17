@@ -72,7 +72,7 @@ A short report helps even if everything works:
 2. For your real hardware, run `pila-check` on a spare TTY (Ctrl+Alt+F3, log in), which leaves
    your session running. It starts real programs (`kitty` or `foot`; `python3`, `grim`, `xterm`
    and `fuzzel` for more scenarios) for about a minute, quits by itself and prints PASS or FAIL
-   per check, with frame times. Its log is `~/.local/state/pila/pila-tty.log`. It comes with
+   per check, with frame times and latency. Its log is `~/.local/state/pila/pila-tty.log`. It comes with
    the packages, Nix's build and `scripts/install`; in a checkout it's `scripts/check`.
 3. Send a [test report](https://github.com/igalmarino/pila/issues/new?template=test_report.yml)
    with what you tried and what worked, or a [bug report](#reporting-bugs) for what didn't.
@@ -96,7 +96,8 @@ A short report helps even if everything works:
   opacity, blur and shadow per app; blur and animations per panel or launcher.
 - **Monitors:** several at once, hotplugged, each with its own mode, position, rotation,
   (fractional) scale and adaptive sync; a fullscreen app's frames sent to the screen as it drew
-  them (direct scanout, `direct-scanout`).
+  them (direct scanout, `direct-scanout`); each frame drawn as close to the refresh as it safely
+  can be, for less latency (`render-late`).
 - **Apps get their windows back:** place, size, maximized or fullscreen, for apps that ask
   (xdg-session-management), even after Pila restarts.
 - **X11 apps** through Xwayland, with the clipboard shared both ways. Xwayland starts when an
@@ -346,7 +347,8 @@ and the default key bindings: the modifier key, terminal and launcher, programs 
 Pila (`autostart`), keyboard layout and repeat, key bindings, touchpad gestures
 (`[gestures]`), touchpad and mouse settings, the cursor (`[cursor]`), each monitor's mode,
 scale, rotation, position and adaptive sync, monitors on other GPUs (`other-gpus`), direct
-scanout (`direct-scanout`), the number of workspaces, rounded corners, shadows (`[shadow]`),
+scanout (`direct-scanout`), tearing for games (`tearing`), drawing frames close to the refresh
+(`render-late`), the number of workspaces, rounded corners, shadows (`[shadow]`),
 colors (`[colors]`), animations (`[animations]`) and
 per-app rules (`[[window-rule]]`, `[[layer-rule]]`). A missing file means the defaults; an invalid one is
 reported in the log and in a notification, and Pila starts with the defaults. `PILA_MOD`, `PILA_TERMINAL` and

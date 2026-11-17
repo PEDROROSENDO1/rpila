@@ -186,15 +186,16 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   not counted. The GPU's part of a frame (`gpu_avg_ms`, `gpu_max_ms`: from its submission to
   its native fence signaling, not waited for; none on software rendering) is logged with the
   rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. On bare
-  metal frames are drawn late, as close to their vblank as recent frames allow (`render-late`,
-  `udev/render_late.rs`), and their latency (redraw asked → vblank that showed it) is logged
-  and reported too; `PILA_CHECK_RENDER_LATE=false scripts/check` gives the numbers without it. Screen captures, which build frames of their own after the outputs', are
-  logged apart (`captures`), held to the same budget (`scripts/check` streams one, as a
-  screen share does: `scripts/capture-stream`). The event loop's own work after each
-  iteration (`after_frames`: taskbars, IPC, the `Space`), paced by events rather than
-  frames, is logged apart too (`loop`). Any change that touches rendering, input or the
-  event loop is checked with it (release build) before it's committed; bare-metal numbers
-  come from the user with `scripts/check` (see Commands).
+  metal frames are drawn late while the scene is steady, as close to their vblank as recent
+  frames allow (`render-late`, `udev/render_late.rs`), and their latency (redraw asked →
+  vblank that showed it) is logged and reported too; `PILA_CHECK_RENDER_LATE=false
+  scripts/check` gives the numbers without it. Screen captures, which build frames of their
+  own after the outputs', are logged apart (`captures`), held to the same budget
+  (`scripts/check` streams one, as a screen share does: `scripts/capture-stream`). The event
+  loop's own work after each iteration (`after_frames`: taskbars, IPC, the `Space`), paced
+  by events rather than frames, is logged apart too (`loop`). Any change that touches
+  rendering, input or the event loop is checked with it (release build) before it's
+  committed; bare-metal numbers come from the user with `scripts/check` (see Commands).
 - **Rules:** nothing blocking on the event loop (I/O, D-Bus, font loading go to threads
   or run in the background, like `text.rs` and `export_environment`); work proportional
   to damage; expensive paths (offscreen textures, blur, captures) only while they're

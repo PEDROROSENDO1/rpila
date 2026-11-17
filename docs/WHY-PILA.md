@@ -46,7 +46,8 @@ nothing changed.
 - **Blur proportional to change:** dual-Kawase blur (ext-background-effect, or per window by
   rule) renders only the windows and layer surfaces that reach the region, through a damage
   tracker of its own, and reruns the passes only when what's behind changed. A window covered
-  by an opaque one isn't processed.
+  by an opaque one isn't processed; one on another workspace or minimized keeps its backdrop,
+  so showing it again allocates nothing.
 - **Nothing blocking on the event loop:** font loading and shaping, the cursor theme, D-Bus
   environment export and GPU waits for captures run on threads or behind fences. One-time
   costs (shader compilation, offscreen textures for workspace slides, common glyphs) are paid at
@@ -57,11 +58,25 @@ nothing changed.
   nothing composited. Such surfaces get per-surface dmabuf feedback with a scanout tranche of the
   plane's formats, so the client allocates buffers the plane accepts. On by default, on the
   primary GPU's outputs; `direct-scanout = false` turns it off.
+- **Rendering late:** on the DRM backend, while the scene is steady, a frame is drawn as close to
+  its vblank as the output's recent frames allow (the worst of the last 128, CPU and GPU, plus
+  the other outputs' and a slack, never under half a period), so commits and pointer motion
+  that arrive meanwhile make that vblank. Not during Pila's animations or for 300 ms after a
+  window or layer surface appears or a window changes size (apps busy on the GPU then), nor
+  with tearing or adaptive sync; a held frame is let go at once if the scene stops being
+  steady, and one that still comes late turns it off on that output for two seconds. On the
+  author's laptop: 25.8 to 21.3 ms and 28.5 to 21.7 ms from a redraw asked for to the vblank
+  that showed it, no refresh missed with two monitors or the laptop's screen alone on battery.
+  `render-late = false` turns it off.
 - **Measured, not assumed:** `RUST_LOG=pila::frames=debug` logs, per output every 5 s, frame
-  count, mean and worst CPU time, missed refreshes, idle redraws and direct-scanout frames.
-  On bare metal, missed refreshes are counted from the DRM vblank sequence, and each late
-  frame is attributed: held back by the idle wait, drawn late, or shown late after being
-  submitted in time. Captures and the event loop's own housekeeping are logged apart.
+  count, mean and worst CPU time, the GPU's time (from submission to the native fence's signal,
+  stamped by the kernel and read without waiting), missed refreshes, idle redraws and
+  direct-scanout frames. On bare metal, missed refreshes are counted from the DRM vblank
+  sequence, and each late frame is attributed: held back by the idle wait, drawn late, or shown
+  late after being submitted in time; the frames' latency (from a redraw asked for to the
+  vblank that showed it) and, for frames rendered late, their margin and how long before the
+  vblank they were ready are logged too. Captures and the event loop's own housekeeping are
+  logged apart.
   `scripts/check` runs real clients through scenarios on a TTY and judges these numbers;
   changes to rendering, input or the event loop are checked with it before they're committed.
 
