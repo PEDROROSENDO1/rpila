@@ -34,6 +34,42 @@ fn geometry(pila: &mut TestPila) -> (i64, i64, i64, i64) {
     rect(&pila.window("a")["geometry"])
 }
 
+/// With `mod` set to Alt or Ctrl (Alt is the default nested), that key
+/// held with the left button moves the window; Super then is a plain click.
+#[test]
+fn mod_drag_follows_the_configured_mod_key() {
+    for (config, key) in [("alt", "Alt"), ("ctrl", "Ctrl")] {
+        let mut pila = TestPila::with_config(&format!("mod = \"{config}\"\n"));
+        let client = pila.client();
+        client.window("a").size(400, 300).create();
+        pila.wait_focus("a");
+        let (x, y, w, h) = geometry(&mut pila);
+        pila.move_to((x + 100) as f64, (y + 100) as f64);
+
+        pila.key_press("Super");
+        pila.press("left");
+        client.wait("Super+click reaching the app", |s| {
+            s.events
+                .iter()
+                .any(|e| matches!(e, common::client::Ev::Button { pressed: true, .. }))
+        });
+        pila.release("left");
+        pila.key_release("Super");
+        pila.wait("no grab", |s| s["pointer"]["grabbed"] == false);
+
+        pila.key_press(key);
+        pila.press("left");
+        pila.wait("a move grab", |s| s["pointer"]["grab"] == "move");
+        pila.move_by(30.0, 20.0);
+        pila.wait("moved", |s| {
+            rect(&window_in(s, "a").unwrap()["geometry"]) == (x + 30, y + 20, w, h)
+        });
+        pila.release("left");
+        pila.key_release(key);
+        pila.wait("the grab ends", |s| s["pointer"]["grabbed"] == false);
+    }
+}
+
 #[test]
 fn mod_left_drag_moves_and_the_client_never_sees_the_click() {
     let (mut pila, client, _, (x, y, w, h)) = one_window(Decorations::Server);
@@ -374,6 +410,38 @@ fn dragging_to_the_left_edge_snaps_with_a_preview() {
     assert!(state["snap_preview"].is_null());
     assert_eq!(geometry(&mut pila), (0, BAR, 640, 800 - BAR));
     client.wait_configure(window, "tiled", |c| c.has(states::TILED_LEFT));
+}
+
+/// A window snapped with the keyboard in the middle of a drag (Mod+Left
+/// with the button held) and then dropped on the top edge is maximized, and
+/// restoring it gives back its size from before the snap, not the half.
+#[test]
+fn snapped_during_a_drag_then_dropped_on_the_top_edge_restores_its_old_size() {
+    let (mut pila, _client, _, (x, y, w, h)) = one_window(Decorations::Server);
+    pila.move_to((x + 100) as f64, (y + 100) as f64);
+    pila.key_press("Super");
+    pila.press("left");
+    pila.wait("a move grab", |s| s["pointer"]["grab"] == "move");
+    pila.key("Left");
+    pila.wait("snapped left", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["snapped"] == "left" && a["geometry"]["w"] == 640
+    });
+    pila.move_to(600.0, 0.0);
+    let state = pila.wait("a preview", |s| !s["snap_preview"].is_null());
+    assert_eq!(rect(&state["snap_preview"]), (0, 0, 1280, 800));
+    pila.release("left");
+    pila.key_release("Super");
+    pila.wait("maximized", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["maximized"] == true && a["snapped"].is_null() && a["geometry"]["w"] == 1280
+    });
+    pila.combo("Super+Down");
+    pila.wait("its size from before the snap", |s| {
+        let a = window_in(s, "a").unwrap();
+        let (_, _, gw, gh) = rect(&a["geometry"]);
+        a["maximized"] == false && (gw, gh) == (w, h)
+    });
 }
 
 #[test]
