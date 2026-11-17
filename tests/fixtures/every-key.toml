@@ -48,6 +48,8 @@ layer = 150
 workspace = 250
 
 [cursor]
+theme = "Adwaita"
+size = 24
 shake-to-find = true
 shake-magnification = 2.5
 

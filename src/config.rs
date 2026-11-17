@@ -1381,20 +1381,32 @@ impl ColorsFile {
 pub const SHAKE_MAGNIFICATIONS: std::ops::RangeInclusive<f64> = 1.5..=5.0;
 
 /// `[cursor]`, validated.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CursorConfig {
     /// Shaking the pointer makes the cursor bigger for a moment
     /// (`shake_cursor.rs`).
     pub shake_to_find: bool,
     /// How many times bigger it gets at most.
     pub shake_magnification: f64,
+    /// The xcursor theme; `None`: `XCURSOR_THEME`, else `default`
+    /// (`cursor::CursorTheme::load`). Set, it's also the `XCURSOR_THEME` of
+    /// what Pila starts.
+    pub theme: Option<String>,
+    /// The cursor's size in logical pixels; `None`: `XCURSOR_SIZE`, else 24.
+    /// Set, it's also the `XCURSOR_SIZE` of what Pila starts.
+    pub size: Option<u32>,
 }
+
+/// The cursor sizes `[cursor] size` takes, in logical pixels.
+pub const CURSOR_SIZES: std::ops::RangeInclusive<u32> = 8..=256;
 
 impl Default for CursorConfig {
     fn default() -> Self {
         Self {
             shake_to_find: true,
             shake_magnification: 3.0,
+            theme: None,
+            size: None,
         }
     }
 }
@@ -1405,6 +1417,8 @@ impl Default for CursorConfig {
 struct CursorFile {
     shake_to_find: Option<bool>,
     shake_magnification: Option<f64>,
+    theme: Option<String>,
+    size: Option<u32>,
 }
 
 impl CursorFile {
@@ -1420,9 +1434,25 @@ impl CursorFile {
                 SHAKE_MAGNIFICATIONS.end()
             ));
         }
+        if self
+            .theme
+            .as_deref()
+            .is_some_and(|theme| theme.trim().is_empty())
+        {
+            return Err("cursor.theme is empty: name a theme, or leave it out".to_string());
+        }
+        if let Some(size) = self.size.filter(|size| !CURSOR_SIZES.contains(size)) {
+            return Err(format!(
+                "cursor.size = {size}: must be {} to {}",
+                CURSOR_SIZES.start(),
+                CURSOR_SIZES.end()
+            ));
+        }
         Ok(CursorConfig {
             shake_to_find: self.shake_to_find.unwrap_or(defaults.shake_to_find),
             shake_magnification: magnification,
+            theme: self.theme,
+            size: self.size,
         })
     }
 }
@@ -2562,6 +2592,25 @@ mod tests {
         assert!(Config::from_toml("[shadow]\nsize = 65", &no_env).is_err());
         assert!(Config::from_toml("[shadow]\nsize = -1", &no_env).is_err());
         assert!(Config::from_toml("[shadow]\noffset = [0, 65]", &no_env).is_err());
+    }
+
+    #[test]
+    fn the_cursor_theme_and_size_are_optional_and_bounded() {
+        let cursor = Config::from_toml("", &no_env).unwrap().cursor;
+        assert_eq!((cursor.theme, cursor.size), (None, None));
+        let cursor = Config::from_toml("[cursor]\ntheme = \"Adwaita\"\nsize = 32", &no_env)
+            .unwrap()
+            .cursor;
+        assert_eq!(cursor.theme.as_deref(), Some("Adwaita"));
+        assert_eq!(cursor.size, Some(32));
+        for (text, wanted) in [
+            ("[cursor]\ntheme = \" \"", "cursor.theme is empty"),
+            ("[cursor]\nsize = 4", "cursor.size = 4: must be 8 to 256"),
+            ("[cursor]\nsize = 300", "cursor.size = 300"),
+        ] {
+            let err = Config::from_toml(text, &no_env).unwrap_err();
+            assert!(err.contains(wanted), "{text:?}: {err}");
+        }
     }
 
     #[test]

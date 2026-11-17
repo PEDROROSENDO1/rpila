@@ -319,9 +319,13 @@ shake-magnification = 2.0   # 1.5 to 5
 # shake-to-find = false     # never grow it
 ```
 
-The cursor's theme and size are `XCURSOR_THEME` and `XCURSOR_SIZE` (24 unless set); nested, the
-desktop around Pila draws apps' named cursors at its own size, and those two set only the grown
-one. Pila draws the grown cursor from the theme's larger images, so it stays sharp as far as the
+The cursor's theme and size are `theme` and `size` under `[cursor]`, else `XCURSOR_THEME` and
+`XCURSOR_SIZE` (24 unless set). Set in the file, they apply as soon as it's saved and the apps
+Pila starts from then on get them as `XCURSOR_THEME` and `XCURSOR_SIZE`, so apps that draw their
+own cursor (X11 ones, and older Wayland ones) match it; apps already running keep theirs until
+they're started again. Apps that name their cursor shape instead (cursor-shape: GTK 4, Qt, foot,
+kitty) get Pila's. Nested, the desktop around Pila draws apps' named cursors at its own size,
+and the theme and size set only the grown one. Pila draws the grown cursor from the theme's larger images, so it stays sharp as far as the
 theme goes. `[animations]` `speed` slows it down too, and with animations off it grows and shrinks
 at once.
 

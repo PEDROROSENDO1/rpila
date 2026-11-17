@@ -186,6 +186,13 @@ impl Pila {
         if !self.config.cursor.shake_to_find && self.shake_cursor.magnified() {
             self.reset_shake_cursor();
         }
+        // A new theme or size: Pila's cursor at once (the redraw below), and
+        // the apps started from now on (`session_env`).
+        if (&old.cursor.theme, old.cursor.size)
+            != (&self.config.cursor.theme, self.config.cursor.size)
+        {
+            self.cursor_theme = crate::cursor::CursorTheme::load(&self.config.cursor);
+        }
         self.queue_redraw();
     }
 

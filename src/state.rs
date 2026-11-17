@@ -512,6 +512,7 @@ impl Pila {
         seat.add_pointer();
 
         let socket_name = Self::init_wayland_listener(display, event_loop);
+        let cursor_theme = crate::cursor::CursorTheme::load(&config.cursor);
         let loop_signal = event_loop.get_signal();
 
         Self {
@@ -567,7 +568,7 @@ impl Pila {
             animations: Default::default(),
             workspace_slide: None,
             shake_cursor: Default::default(),
-            cursor_theme: crate::cursor::CursorTheme::load(),
+            cursor_theme,
             slide_pool: Default::default(),
             frame_stats: HashMap::new(),
             settling_since: None,
@@ -1971,6 +1972,13 @@ impl Pila {
             cmd.arg("--systemd");
         }
         cmd.args(SESSION_ENV);
+        // The cursor `[cursor]` sets, for apps that draw their own.
+        if self.config.cursor.theme.is_some() {
+            cmd.arg("XCURSOR_THEME");
+        }
+        if self.config.cursor.size.is_some() {
+            cmd.arg("XCURSOR_SIZE");
+        }
         self.session_env(&mut cmd);
         let mut child = match cmd.spawn() {
             Ok(child) => child,
@@ -2065,6 +2073,15 @@ impl Pila {
             Some(display) => cmd.env("DISPLAY", format!(":{display}")),
             None => cmd.env_remove("DISPLAY"),
         };
+        // Apps that draw their own cursor (X11 ones among them) use the
+        // theme and size Pila draws its own with; unset, they inherit
+        // Pila's XCURSOR_THEME and XCURSOR_SIZE, which Pila reads too.
+        if let Some(theme) = &self.config.cursor.theme {
+            cmd.env("XCURSOR_THEME", theme);
+        }
+        if let Some(size) = self.config.cursor.size {
+            cmd.env("XCURSOR_SIZE", size.to_string());
+        }
     }
 
     pub fn spawn_all(&mut self, commands: &[String]) {

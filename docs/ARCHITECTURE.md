@@ -209,8 +209,11 @@ Key flows and invariants:
   Named shapes (cursor-shape, Pila's own grab cursors) come from `CursorTheme` (one,
   `Pila::cursor_theme`, for every backend and capture) where Pila draws them: bare metal always,
   nested and headless only magnified; `Pila::frame_input` leaves `FrameInput::named_cursor` empty
-  where the host draws it (`Backend::draws_cursor`). A thread reads the xcursor theme at
-  startup, every shape at every nominal size up to `LARGEST_IMAGE` times `XCURSOR_SIZE`, and
+  where the host draws it (`Backend::draws_cursor`). The theme and size are `[cursor]`'s, else
+  `XCURSOR_THEME`'s and `XCURSOR_SIZE`'s (`CursorTheme::load`); set in the config, `session_env`
+  hands them to what Pila starts and `export_environment` to the session bus, and a reload that
+  changes them loads a new `CursorTheme` (`apply_config`). A thread reads the xcursor theme at
+  startup, every shape at every nominal size up to `LARGEST_IMAGE` times the size, and
   until then the built-in arrow stands in (one buffer, kept: a new one each frame would be
   damage), so no frame reads a file. `get` picks the image for a buffer scale, `get_magnified`
   the smallest at least as large as a magnified cursor shows.

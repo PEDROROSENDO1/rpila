@@ -152,3 +152,36 @@ fn a_client_cursor_surface_is_drawn_bigger_too() {
     assert_eq!(pila.pixel(px + 50.0, py + 50.0), window);
     pila.wait_pixel(px + 30.0, py + 30.0, window);
 }
+
+/// `[cursor] theme` and `size` are the cursor Pila draws, before
+/// `XCURSOR_THEME` and `XCURSOR_SIZE`, and the ones of the apps it starts
+/// (those that draw their own cursor read them); a reload changes them.
+#[test]
+fn the_cursor_theme_and_size_come_from_the_config_and_reach_spawned_apps() {
+    let spawn_env = "[bindings]\n\"Mod+x\" = \"spawn env > $XDG_RUNTIME_DIR/env\"\n";
+    let mut pila = start(&format!(
+        "{spawn_env}[cursor]\ntheme = \"Adwaita\"\nsize = 32\n"
+    ));
+    let state = pila.state();
+    assert_eq!(state["pointer"]["cursor_theme"], "Adwaita");
+    assert_eq!(state["pointer"]["cursor_size"], 32);
+    pila.combo("Super+x");
+    let env = pila.wait_file("env");
+    assert!(env.lines().any(|l| l == "XCURSOR_THEME=Adwaita"), "{env}");
+    assert!(env.lines().any(|l| l == "XCURSOR_SIZE=32"), "{env}");
+    pila.write_config(&format!(
+        "{spawn_env}[cursor]\ntheme = \"Bibata\"\nsize = 48\n"
+    ));
+    pila.wait("the new cursor", |s| {
+        s["pointer"]["cursor_theme"] == "Bibata" && s["pointer"]["cursor_size"] == 48
+    });
+}
+
+/// Unset, the theme is the default one at 24, as with no XCURSOR_* (the
+/// tests start Pila without them).
+#[test]
+fn the_cursor_theme_and_size_have_defaults() {
+    let state = start("").state();
+    assert_eq!(state["pointer"]["cursor_theme"], "default");
+    assert_eq!(state["pointer"]["cursor_size"], 24);
+}

@@ -328,6 +328,8 @@ impl Pila {
                     })
                 }),
                 "cursor": cursor,
+                "cursor_theme": self.cursor_theme.name(),
+                "cursor_size": self.cursor_theme.size(),
                 "constrained": self.input.constrained.is_some(),
             },
             "keyboard_grabbed": self.seat.get_keyboard().is_some_and(|k| k.is_grabbed()),

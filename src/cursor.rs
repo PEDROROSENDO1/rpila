@@ -69,9 +69,10 @@ pub fn handle_commit(status: &CursorImageStatus, surface: &WlSurface) {
 /// bare metal always, nested and headless while it's magnified
 /// (`shake_cursor.rs`; otherwise the host draws named shapes).
 ///
-/// The theme and size come from `XCURSOR_THEME` (default `default`) and
-/// `XCURSOR_SIZE` (default 24). Only the first frame of animated cursors is
-/// used. Without a usable theme, a built-in arrow stands in for every shape.
+/// The theme and size come from `[cursor] theme` and `size`, else from
+/// `XCURSOR_THEME` (default `default`) and `XCURSOR_SIZE` (default 24); a
+/// reload that changes them loads the theme again (`Pila::apply_config`).
+/// Only the first frame of animated cursors is used. Without a usable theme, a built-in arrow stands in for every shape.
 ///
 /// On a scaled output the image is loaded at the size times the scale
 /// (rounded up, `scale::buffer_scale`), so it keeps its logical size and
@@ -85,7 +86,9 @@ pub fn handle_commit(status: &CursorImageStatus, surface: &WlSurface) {
 /// drawn; a frame never reads a file.
 pub struct CursorTheme {
     loaded: Arc<OnceLock<Loaded>>,
-    /// The size asked for (`XCURSOR_SIZE`), in logical pixels.
+    /// The theme's name, as asked for.
+    name: String,
+    /// The size asked for, in logical pixels.
     size: u32,
     cache: HashMap<(CursorIcon, i32), NamedCursor>,
     /// Images for magnified cursors, by shape and nominal size.
@@ -181,34 +184,40 @@ impl MagnifiedCursor {
 }
 
 impl CursorTheme {
-    pub fn load() -> Self {
-        let name = std::env::var("XCURSOR_THEME")
-            .ok()
+    /// The theme `config` names, else `XCURSOR_THEME`'s, at the size it
+    /// sets, else `XCURSOR_SIZE`'s; read on a thread of its own.
+    pub fn load(config: &crate::config::CursorConfig) -> Self {
+        let name = config
+            .theme
+            .clone()
+            .or_else(|| std::env::var("XCURSOR_THEME").ok())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "default".into());
-        let size = std::env::var("XCURSOR_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
+        let size = config
+            .size
+            .or_else(|| std::env::var("XCURSOR_SIZE").ok()?.parse().ok())
             .filter(|&size| size > 0)
             .unwrap_or(24);
         let loaded = Arc::new(OnceLock::new());
         let result = loaded.clone();
+        let theme = name.clone();
         let spawned = std::thread::Builder::new()
             .name("pila-cursors".into())
             .spawn(move || {
                 let start = std::time::Instant::now();
-                let _ = result.set(read_theme(&name, size));
-                debug!(elapsed = ?start.elapsed(), theme = name, "cursor theme loaded");
+                let _ = result.set(read_theme(&theme, size));
+                debug!(elapsed = ?start.elapsed(), theme, "cursor theme loaded");
             });
         if let Err(err) = spawned {
             warn!(?err, "can't load the cursor theme; using a built-in arrow");
         }
-        Self::new(loaded, size)
+        Self::new(loaded, name, size)
     }
 
-    fn new(loaded: Arc<OnceLock<Loaded>>, size: u32) -> Self {
+    fn new(loaded: Arc<OnceLock<Loaded>>, name: String, size: u32) -> Self {
         Self {
             loaded,
+            name,
             size,
             cache: Default::default(),
             magnified: Default::default(),
@@ -216,9 +225,14 @@ impl CursorTheme {
         }
     }
 
-    /// The size asked for (`XCURSOR_SIZE`), in logical pixels.
+    /// The size asked for, in logical pixels.
     pub fn size(&self) -> u32 {
         self.size
+    }
+
+    /// The theme's name, as asked for (whether or not it was found).
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// The images of `icon`, else of the default arrow; `None` until the
@@ -445,7 +459,7 @@ mod tests {
 
     /// A theme of size 24 whose loading thread hasn't finished.
     fn unloaded() -> CursorTheme {
-        CursorTheme::new(Arc::new(OnceLock::new()), 24)
+        CursorTheme::new(Arc::new(OnceLock::new()), "default".into(), 24)
     }
 
     /// An image of nominal size `nominal` with its hotspot at `hotspot`.

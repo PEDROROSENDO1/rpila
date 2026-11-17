@@ -117,9 +117,15 @@
 # layer = 150                      # launchers, notifications
 # workspace = 250                  # slide sideways
 
-# Shake the pointer to find it: the cursor grows while it's shaken, and
-# shrinks back a moment after. Both read as soon as the file is saved.
+# The cursor's theme and size, and shake to find it: the cursor grows while
+# it's shaken, and shrinks back a moment after. All read as soon as the file
+# is saved. Unset, the theme and size are XCURSOR_THEME's and XCURSOR_SIZE's
+# (else "default" and 24); set, they're also the XCURSOR_THEME and
+# XCURSOR_SIZE of the apps Pila starts from then on (those that draw their own
+# cursor read them).
 [cursor]
+# theme = "Adwaita"                # e.g. a directory in ~/.icons or /usr/share/icons
+# size = 32                        # e.g. in logical pixels: 8 to 256
 # shake-to-find = true             # (default) false: never grow it
 # shake-magnification = 3.0        # (default) how much bigger at most: 1.5 to 5
 
