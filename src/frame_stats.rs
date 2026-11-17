@@ -59,8 +59,10 @@
 //! own, and at trace level every frame's (`GPU done`). Not judged: there's no
 //! budget for it (yet).
 //!
-//! On bare metal two more: how many frames were held to be drawn close to
-//! their vblank (`held`, `udev/render_late.rs`), and the latency of the frames
+//! On bare metal more: how many frames were held to be drawn close to their
+//! vblank (`held`, `udev/render_late.rs`) and how far before it (`margin_avg_ms`,
+//! `margin_max_ms`), how long before it they were ready (`spare_frames`,
+//! `spare_avg_ms`, `spare_min_ms`: the room the margin left), and the latency of the frames
 //! with something new: from the first redraw asked for with it (a client's
 //! commit, input, an animation) to the vblank that showed it, average and
 //! worst (`latency_avg_ms`, `latency_max_ms`).
@@ -95,6 +97,11 @@ pub struct FrameStats {
     gpu_total: Duration,
     gpu_max: Duration,
     held: u32,
+    margin_total: Duration,
+    margin_max: Duration,
+    spare_frames: u32,
+    spare_total: Duration,
+    spare_min: Option<Duration>,
     latency_frames: u32,
     latency_total: Duration,
     latency_max: Duration,
@@ -131,6 +138,15 @@ pub struct Report {
     /// Frames held to be drawn close to their vblank (bare metal), counted
     /// in `frames` too.
     pub held: u32,
+    /// How far before their vblank the held frames were drawn: average and
+    /// worst.
+    pub margin_avg: Duration,
+    pub margin_max: Duration,
+    /// How long before their vblank the held frames were ready (bare
+    /// metal): how many, average and least.
+    pub spare_frames: u32,
+    pub spare_avg: Duration,
+    pub spare_min: Duration,
     /// From a redraw asked for to the vblank that showed it (bare metal):
     /// how many, average and worst.
     pub latency_frames: u32,
@@ -189,6 +205,14 @@ impl FrameStats {
                 .unwrap_or_default(),
             gpu_max: self.gpu_max,
             held: self.held,
+            margin_avg: self.margin_total.checked_div(self.held).unwrap_or_default(),
+            margin_max: self.margin_max,
+            spare_frames: self.spare_frames,
+            spare_avg: self
+                .spare_total
+                .checked_div(self.spare_frames)
+                .unwrap_or_default(),
+            spare_min: self.spare_min.unwrap_or_default(),
             latency_frames: self.latency_frames,
             latency_avg: self
                 .latency_total
@@ -241,10 +265,19 @@ impl FrameStats {
         self.torn += 1;
     }
 
-    /// The frame about to be recorded was held to be drawn close to its
-    /// vblank.
-    pub fn held(&mut self) {
+    /// The frame about to be recorded was held to be drawn `margin` before
+    /// its vblank.
+    pub fn held(&mut self, margin: Duration) {
         self.held += 1;
+        self.margin_total += margin;
+        self.margin_max = self.margin_max.max(margin);
+    }
+
+    /// A held frame was ready `spare` before its vblank.
+    pub fn spare(&mut self, spare: Duration) {
+        self.spare_frames += 1;
+        self.spare_total += spare;
+        self.spare_min = Some(self.spare_min.map_or(spare, |min| min.min(spare)));
     }
 
     /// A frame was shown `latency` after the redraw that asked for it.
@@ -555,6 +588,11 @@ fn log_report(output: &str, report: &Report) {
         gpu_avg_ms = ms(report.gpu_avg),
         gpu_max_ms = ms(report.gpu_max),
         held = report.held,
+        margin_avg_ms = ms(report.margin_avg),
+        margin_max_ms = ms(report.margin_max),
+        spare_frames = report.spare_frames,
+        spare_avg_ms = ms(report.spare_avg),
+        spare_min_ms = ms(report.spare_min),
         latency_frames = report.latency_frames,
         latency_avg_ms = ms(report.latency_avg),
         latency_max_ms = ms(report.latency_max),
@@ -688,8 +726,12 @@ impl Pila {
                 let gpu = stats.record_gpu(started, submitted, signal);
                 if let Some(gpu) = gpu {
                     tracing::trace!(target: "pila::frames", output = name, gpu_us = gpu.as_micros() as u64, "GPU done");
-                    if let Some(backend) = &mut state.backend {
-                        backend.gpu_done(&output, started, signal);
+                    let spare = state
+                        .backend
+                        .as_mut()
+                        .and_then(|backend| backend.gpu_done(&output, started, signal));
+                    if let Some(spare) = spare {
+                        state.record_spare(&output, spare);
                     }
                 }
                 if let Some(gpu) = gpu.filter(|gpu| *gpu > period / 2) {
@@ -715,10 +757,21 @@ impl Pila {
         self.frame_stats.entry(output.name()).or_default().direct();
     }
 
-    /// The frame of `output` recorded next was held to be drawn close to its
-    /// vblank (`udev/render_late.rs`).
-    pub fn record_held_frame(&mut self, output: &Output) {
-        self.frame_stats.entry(output.name()).or_default().held();
+    /// The frame of `output` recorded next was held to be drawn `margin`
+    /// before its vblank (`udev/render_late.rs`).
+    pub fn record_held_frame(&mut self, output: &Output, margin: Duration) {
+        self.frame_stats
+            .entry(output.name())
+            .or_default()
+            .held(margin);
+    }
+
+    /// A held frame of `output` was ready `spare` before its vblank.
+    pub fn record_spare(&mut self, output: &Output, spare: Duration) {
+        self.frame_stats
+            .entry(output.name())
+            .or_default()
+            .spare(spare);
     }
 
     /// A frame of `output` was shown `latency` after the redraw that asked
@@ -862,13 +915,18 @@ mod tests {
     #[test]
     fn held_frames_and_latencies_are_reported_with_the_frames() {
         let mut stats = FrameStats::default();
-        stats.held();
+        stats.held(6 * MS);
+        stats.spare(3 * MS);
+        stats.spare(MS);
         stats.record(Duration::ZERO, MS);
         stats.latency(10 * MS);
         stats.record(1000 * MS, MS);
         stats.latency(20 * MS);
         let report = stats.record(5000 * MS, MS).expect("due after 5 s");
         assert_eq!((report.frames, report.held), (3, 1));
+        assert_eq!((report.margin_avg, report.margin_max), (6 * MS, 6 * MS));
+        assert_eq!(report.spare_frames, 2);
+        assert_eq!((report.spare_avg, report.spare_min), (2 * MS, MS));
         assert_eq!(report.latency_frames, 2);
         assert_eq!((report.latency_avg, report.latency_max), (15 * MS, 20 * MS));
         let report = stats.record(10_000 * MS, MS).expect("due again");

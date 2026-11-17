@@ -19,7 +19,8 @@ set up, which the budget leaves out; whether monitors on another GPU had their f
 through memory; the redraws per output that found nothing new, `idle` in
 the frame statistics, at most one per refresh on bare metal; the GPU's time per frame per
 output, `gpu_avg_ms` and `gpu_max_ms` (where the renderer gives native fences); on bare metal
-the frames' latency per output and how many were held to render late (`PILA_CHECK_RENDER_LATE=false`
+the frames' latency per output, how many were held to render late, how far before their vblank
+and how long before it they were ready (`PILA_CHECK_RENDER_LATE=false`
 runs without it, to compare); the event loop's own work after each iteration, `loop`,
 how often it did all of its housekeeping and the CPU it took; on bare metal, how many frames
 were an app's buffer as it is, `direct`: direct scanout, which the fullscreen terminal may

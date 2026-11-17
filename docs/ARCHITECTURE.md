@@ -287,10 +287,14 @@ Key flows and invariants:
   vblank. The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
   `prepare` to the later of the commit queued and the GPU's fence, which `Pila::watch_gpu` reports
   through `Backend::gpu_done`), plus the other outputs' worst (drawn first, they hold it up), plus
-  `render_late::SLACK`. Nothing is held before a frame was measured, after a composited frame with
+  `render_late::SLACK` (leaner margins left an app starting up on the same GPU making held frames
+  late: the module docs); frames that were a
+  client's buffer as it is are kept apart and the worst of either counts, so the first frame
+  drawn after direct scanout isn't given a handed-over buffer's margin. Nothing is held before a frame was measured, after a composited frame with
   no fence, with a vblank older than a second (the rounded refresh drifts), after a torn frame
-  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset or while a lock
-  waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
+  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset, the first of
+  an animation (`OutputSurface::animated`: it brings new textures, a backdrop, an app starting on
+  the same GPU, which recent frames don't foretell) or while a lock waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
   output for two seconds. A held frame counts as on its way for missed refreshes
   (`back_to_back`). A frame that fails
   at the DRM level (render or queue: no DRM master yet after a VT switch, a monitor beyond
@@ -502,7 +506,10 @@ Key flows and invariants:
   the one measured last (Smithay hands back the last frame's when the primary plane had nothing
   to draw), is an earlier frame's and measures nothing (`gpu_time`). Headless waits for the GPU
   anyway (its CPU time includes it), nested and bare metal never do. On bare metal the report
-  also has the frames held to render late (`held`) and the frames' latency, from the first
+  also has the frames held to render late (`held`), how far before their vblank (`margin_*`,
+  `render_late::Hold`) and how long before it they were ready (`spare_*`: from `RenderTiming`'s
+  `queued` for a client's buffer, else its `gpu_done` through `Backend::gpu_done`; zero for one
+  ready after it), and the frames' latency, from the first
   redraw asked for with something new (`OutputSurface::request`) to the vblank that showed it
   (`latency_frames`, `latency_avg_ms`, `latency_max_ms`). `scripts/check` judges these
   lines and reports the idle redraws per output, the GPU time and latency per output and the

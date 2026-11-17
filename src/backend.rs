@@ -88,16 +88,17 @@ impl Backend {
 
     /// The GPU finished, at `signal`, the frame of `output` whose drawing
     /// started at `started` (`frame_stats::GpuFrame`): bare metal times its
-    /// frames by it to render late (`udev/render_late.rs`).
+    /// frames by it to render late (`udev/render_late.rs`), and says how long
+    /// before its vblank one held for it was ready.
     pub fn gpu_done(
         &mut self,
         output: &Output,
         started: std::time::Duration,
         signal: std::time::Duration,
-    ) {
+    ) -> Option<std::time::Duration> {
         match self {
             Backend::Udev(data) => data.gpu_done(output, started, signal),
-            Backend::Winit(_) | Backend::Headless(_) => {}
+            Backend::Winit(_) | Backend::Headless(_) => None,
         }
     }
 

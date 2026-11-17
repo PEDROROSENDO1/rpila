@@ -176,6 +176,7 @@ fn prepare(state: &mut Pila, id: OutputId) -> Option<Ready> {
 /// until its moment, and is let through from then on.
 fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) -> bool {
     let enabled = state.config.render_late;
+    let animating = state.animating();
     let Some(Backend::Udev(data)) = &mut state.backend else {
         return false;
     };
@@ -191,13 +192,20 @@ fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) 
     let Some(surface) = data.outputs.get_mut(&id) else {
         return false;
     };
-    if let Some(at) = surface.render_at {
-        return now < at;
+    if let Some(hold) = surface.render_at {
+        return now < hold.at;
     }
     // A game that tears wants its frames at once; with adaptive sync the
     // flip makes the vblank; a lock waits for its frame; the first frame
-    // after a modeset starts a new grid.
-    if !enabled || lock_pending || surface.first_frame || surface.torn || surface.presented_variable
+    // after a modeset starts a new grid; the first of an animation brings
+    // what recent frames don't foretell.
+    let starts_animating = animating && !surface.animated;
+    if !enabled
+        || lock_pending
+        || surface.first_frame
+        || surface.torn
+        || surface.presented_variable
+        || starts_animating
     {
         return false;
     }
@@ -206,14 +214,14 @@ fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) 
         .render_timing
         .margin(now, others)
         .and_then(|margin| render_late::render_at(surface.last_vblank_time, now, period, margin));
-    let Some(at) = at else {
+    let Some(hold) = at else {
         return false;
     };
-    surface.render_at = Some(at);
+    surface.render_at = Some(hold);
     if let Some(request) = surface.request.as_mut() {
         request.held = true;
     }
-    data.schedule_late_render(id, at);
+    data.schedule_late_render(id, hold.at);
     true
 }
 
@@ -246,6 +254,7 @@ fn draw(
 
     let direct_scanout = state.config.direct_scanout;
     let flags = frame_flags(direct_scanout);
+    let animating = state.animating();
     let Pila {
         backend,
         blur,
@@ -297,7 +306,10 @@ fn draw(
     surface.redraw_content = crate::redraw::Content::Maybe;
     let request = surface.request.take();
     // Held to be drawn now, its margin before the vblank (`render_late.rs`).
-    let held = surface.render_at.take().is_some();
+    let held = surface.render_at.take();
+    surface.animated = animating;
+    // How long before its vblank a held frame was ready, if it is already.
+    let mut spare = None;
 
     let mut elements = Vec::new();
     if pointer_here {
@@ -435,7 +447,7 @@ fn draw(
                 match drm_output.queue_frame(Some(feedback)) {
                     Ok(()) => {
                         surface.frame_pending = true;
-                        surface.queued_held = held;
+                        surface.queued_held = held.is_some();
                         // What it took to be ready, once its GPU work is
                         // done too (`render_late.rs`).
                         let waits = if direct {
@@ -445,7 +457,9 @@ fn draw(
                         } else {
                             render_late::Waits::Unknown
                         };
-                        surface.render_timing.queued(now, clock.now().into(), waits);
+                        spare = surface
+                            .render_timing
+                            .queued(now, clock.now().into(), waits, held);
                         // Going to a client's buffer or back is a change of
                         // the plane's that the kernel checks anew, in the
                         // test Smithay makes while rendering and in the
@@ -497,7 +511,7 @@ fn draw(
         surface.lock_frame = LockFrame::None;
     }
     let queued = surface.frame_pending;
-    if held {
+    if held.is_some() {
         surface.back_to_back = back_to_back_after_held(surface.back_to_back, queued);
     }
     let wait_over = surface.idle_until.is_none_or(|until| now >= until);
@@ -568,8 +582,11 @@ fn draw(
             if direct {
                 state.record_direct_frame(&output);
             }
-            if held {
-                state.record_held_frame(&output);
+            if let Some(hold) = held {
+                state.record_held_frame(&output, hold.margin());
+            }
+            if let Some(spare) = spare {
+                state.record_spare(&output, spare);
             }
             state.record_frame(&output, cpu);
             if let Some(gpu) = gpu {

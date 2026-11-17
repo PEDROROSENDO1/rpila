@@ -6,14 +6,17 @@
   can be, rather than right after the last one, so what apps draw and where the pointer goes in
   the meantime still make that refresh. How close follows how long the last few seconds of
   frames took, CPU and GPU, and a frame that comes late anyway makes Pila draw at once on that
-  monitor for two seconds; not while a game tears, nor with adaptive sync. On the author's
+  monitor for two seconds; not while a game tears, nor with adaptive sync, nor for the first
+  frame of an animation, and leaving a fullscreen window shown as it is keeps the margin of
+  frames Pila draws. On the author's
   laptop with an external monitor, from a redraw asked for to the refresh that showed it: 25.8
   to 19.7 ms on the laptop's screen, 28.5 to 20.1 ms on the monitor, no refresh missed.
   `render-late = false` turns it off.
 - **The frame statistics time the GPU too** (`RUST_LOG=pila::frames=debug`): each frame's GPU
   work, from its submission to its fence signaling, without waiting for it (`gpu_avg_ms`,
-  `gpu_max_ms`; every frame's at trace level), and on a TTY the frames' latency and how many
-  were drawn late; `pila-check` reports them per monitor (`PILA_CHECK_RENDER_LATE=false`
+  `gpu_max_ms`; every frame's at trace level), and on a TTY the frames' latency, how many were
+  drawn late, how far before the refresh and how long before it they were ready; `pila-check`
+  reports them per monitor (`PILA_CHECK_RENDER_LATE=false`
   compares a run without it). Its count of frames no longer counts them twice once a log has
   the GPU's.
 - **Smithay moved forward** (1 commit, to 33323a9; Pila's fork rebased on it, the revision 0.6.0

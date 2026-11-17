@@ -724,12 +724,14 @@ fi
 # The frames' latency on bare metal (`latency_*` in the frame statistics: from
 # the first redraw asked for with something new to the vblank that showed it),
 # and how many frames were held to be drawn close to their vblank (`held`:
-# `render-late`, `udev/render_late.rs`), per output. Reported, not judged: it
-# depends on what the scenarios ask for when; compare runs with
+# `render-late`, `udev/render_late.rs`), how far before it (`margin_*`) and
+# how long before it they were ready (`spare_*`: what the margin left; the
+# least of it says how much the margin could shrink), per output. Reported,
+# not judged: it depends on what the scenarios ask for when; compare runs with
 # PILA_CHECK_RENDER_LATE=false.
 if [ -n "$stats" ] && grep -q 'backend=Udev' "$log"; then
     awk '{
-        o = ""; f = h = n = a = m = 0
+        o = ""; f = h = n = a = m = ma = mm = sn = sa = 0; sm = -1
         for (i = 1; i <= NF; i++) {
             if ($i ~ /^output=/) { o = substr($i, 8); gsub(/"/, "", o) }
             if ($i ~ /^frames=/) f = substr($i, 8)
@@ -737,14 +739,26 @@ if [ -n "$stats" ] && grep -q 'backend=Udev' "$log"; then
             if ($i ~ /^latency_frames=/) n = substr($i, 16)
             if ($i ~ /^latency_avg_ms=/) a = substr($i, 16)
             if ($i ~ /^latency_max_ms=/) m = substr($i, 16) + 0
+            if ($i ~ /^margin_avg_ms=/) ma = substr($i, 15)
+            if ($i ~ /^margin_max_ms=/) mm = substr($i, 15) + 0
+            if ($i ~ /^spare_frames=/) sn = substr($i, 14)
+            if ($i ~ /^spare_avg_ms=/) sa = substr($i, 14)
+            if ($i ~ /^spare_min_ms=/) sm = substr($i, 14) + 0
         }
         frames[o] += f; held[o] += h; count[o] += n; total[o] += n * a
         if (m > worst[o]) worst[o] = m
+        margin[o] += h * ma; if (mm > mworst[o]) mworst[o] = mm
+        spares[o] += sn; spare[o] += sn * sa
+        if (sn > 0 && (!(o in sleast) || sm < sleast[o])) sleast[o] = sm
     } END {
         for (o in count) if (count[o] > 0)
-            printf "%s %d %.2f %.2f %d %d\n", o, count[o], total[o] / count[o], worst[o], held[o], frames[o]
-    }' <<<"$stats" | while read -r output count average worst held frames; do
+            printf "%s %d %.2f %.2f %d %d %.2f %.2f %d %.2f %.2f\n", o, count[o], total[o] / count[o], worst[o], held[o], frames[o],
+                held[o] ? margin[o] / held[o] : 0, mworst[o], spares[o], spares[o] ? spare[o] / spares[o] : 0, (o in sleast) ? sleast[o] : 0
+    }' <<<"$stats" | while read -r output count average worst held frames margin mworst spares spare sleast; do
         info "latency on $output: ${average} ms on average, worst ${worst} ms ($count frames); $held of $frames frames held to render late"
+        if [ "$spares" -gt 0 ]; then
+            info "render late on $output: drawn ${margin} ms before the vblank on average (at most ${mworst}); ready ${spare} ms before it on average, ${sleast} ms at least ($spares frames)"
+        fi
     done
     backoffs=$(grep -c 'render late: a held frame came late' "$log" || true)
     if [ "$backoffs" -gt 0 ]; then

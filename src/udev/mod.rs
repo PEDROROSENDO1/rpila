@@ -337,13 +337,16 @@ struct OutputSurface {
     render_timing: render_late::RenderTiming,
     /// Held to be drawn then, its margin before the next vblank
     /// (`render_late.rs`); a timer draws it. Cleared when drawn.
-    render_at: Option<Duration>,
+    render_at: Option<render_late::Hold>,
     /// The frame in flight was held so (`render_at`): if it shows late,
     /// rendering late backs off.
     queued_held: bool,
     /// The last frame shown was torn (`tearing.rs`): not held, a game that
     /// tears wants its frames at once.
     torn: bool,
+    /// An animation ran when it was last drawn: the first frame of one
+    /// isn't held (`render_late.rs`).
+    animated: bool,
 }
 
 /// A redraw asked for with something new to show (`OutputSurface::request`).
@@ -494,11 +497,16 @@ impl UdevData {
     }
 
     /// The GPU finished, at `signal`, the frame of `output` whose drawing
-    /// started at `started` (`frame_stats::GpuFrame`), for rendering late.
-    pub fn gpu_done(&mut self, output: &Output, started: Duration, signal: Duration) {
-        if let Some(surface) = self.outputs.values_mut().find(|s| s.output == *output) {
-            surface.render_timing.gpu_done(started, signal);
-        }
+    /// started at `started` (`frame_stats::GpuFrame`), for rendering late:
+    /// how long before its vblank it was ready, if it was held.
+    pub fn gpu_done(
+        &mut self,
+        output: &Output,
+        started: Duration,
+        signal: Duration,
+    ) -> Option<Duration> {
+        let surface = self.outputs.values_mut().find(|s| s.output == *output)?;
+        surface.render_timing.gpu_done(started, signal)
     }
 
     /// Draw `id` again at `at` (monotonic), when its wait after a redraw
