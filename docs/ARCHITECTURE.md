@@ -469,7 +469,9 @@ Key flows and invariants:
   the vblanks that showed frames while an animation runs and the output has a frame on its
   way (`missed_refreshes`, `back_to_back`: an output resting while another animates misses
   nothing); nested
-  estimates them from gaps over 1.5 periods. Screen captures are recorded apart
+  estimates them from gaps over 1.5 periods (`NestedPacing`: a frame within half a period of the
+  last takes the next refresh, and the gap after it counts from the frame before, less that one;
+  a host that renders late draws the first frame after a pause at once and the next late). Screen captures are recorded apart
   (`record_capture`, a `captures` line), the blit into them subtracted from the output's
   frame. The first frame after an output is set up (`OutputSurface::first_frame`: swapchain
   and modeset) is logged on its own and not counted. A redraw that found nothing new on an output

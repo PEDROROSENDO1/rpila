@@ -104,9 +104,9 @@ pub fn init_winit(
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
     // Frames left to render in full: buffer ages are unreliable after a resize.
     let mut full_redraw = 0u8;
-    // When the last frame started, and whether pila wanted the next one right
-    // after it (`frame_stats.rs`).
-    let mut last_frame: Option<(std::time::Instant, bool)> = None;
+    // The refreshes missed between frames, by when they start
+    // (`frame_stats::NestedPacing`).
+    let mut pacing = crate::frame_stats::NestedPacing::default();
     state.backend = Some(Backend::Winit(Box::new(backend)));
 
     event_loop
@@ -142,16 +142,14 @@ pub fn init_winit(
                 WinitEvent::Redraw => {
                     full_redraw = full_redraw.saturating_sub(1);
                     let started = std::time::Instant::now();
+                    let at = state.clock.now().into();
                     if redraw(state, &output, &mut damage_tracker, full_redraw > 0) {
-                        if let Some((last, true)) = last_frame {
-                            let period = crate::frame_stats::refresh_period(&output);
-                            let missed = crate::frame_stats::missed_in_gap(started - last, period);
-                            state.record_missed(&output, missed);
-                        }
-                        state.record_frame(&output, started.elapsed());
+                        let period = crate::frame_stats::refresh_period(&output);
                         // Only animations: the full redraws after a resize
                         // go at the host's pace, which may well pause.
-                        last_frame = Some((started, state.animating()));
+                        let missed = pacing.frame(at, state.animating(), period);
+                        state.record_missed(&output, missed);
+                        state.record_frame(&output, started.elapsed());
                     }
                     // Keep going while buffers need repainting in full, or a
                     // lock still waits for its first locked frame.

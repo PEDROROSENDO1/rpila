@@ -465,6 +465,43 @@ pub fn missed_in_gap(gap: Duration, period: Duration) -> u32 {
     ((gap.as_secs_f64() / period.as_secs_f64()).round() as u32).saturating_sub(1)
 }
 
+/// Nested, the refreshes missed between frames (see the module docs): the
+/// host's vblanks aren't known, only when its frame callbacks let Pila draw.
+/// A frame within half a period of the last can't have had a vblank of its
+/// own: it takes the next one, and the gap after it is counted from the frame
+/// before it, less the refresh it took (a host that draws the first frame
+/// after a pause at once and the next late, `udev/render_late.rs`, makes such
+/// pairs).
+#[derive(Debug, Default)]
+pub struct NestedPacing {
+    /// The last frame with a refresh of its own, and whether an animation
+    /// ran after the last frame (the next was due a period later).
+    last: Option<(Duration, bool)>,
+    /// Frames since `last` that came within half a period of the one before.
+    early: u32,
+}
+
+impl NestedPacing {
+    /// A frame was drawn at `now`, `animating` after it, on an output whose
+    /// refresh lasts `period`: the refreshes missed since the last one.
+    pub fn frame(&mut self, now: Duration, animating: bool, period: Duration) -> u32 {
+        let missed = match self.last {
+            Some((last, _)) if now.saturating_sub(last) < period / 2 => {
+                self.early += 1;
+                self.last = Some((last, animating));
+                return 0;
+            }
+            Some((last, true)) => {
+                missed_in_gap(now.saturating_sub(last), period).saturating_sub(self.early)
+            }
+            _ => 0,
+        };
+        self.early = 0;
+        self.last = Some((now, animating));
+        missed
+    }
+}
+
 /// A frame asked for at least this long before a vblank (or half a period,
 /// if that's shorter) is in time for it: the pillar's budget per frame.
 pub const IN_TIME: Duration = Duration::from_millis(4);
@@ -922,6 +959,37 @@ mod tests {
             late_refreshes(1001 * MS, None, 100 * MS, 1028 * MS, period),
             1
         );
+    }
+
+    /// Seen nested on a host that renders late: after a pause, the host drew
+    /// the first frame of an animation at once and the second came 1 ms
+    /// later; the host showed it a vblank after the first, and its frame
+    /// callback for the third came 27 ms after the second: three frames on
+    /// three vblanks in a row, counted as one missed.
+    #[test]
+    fn a_frame_right_after_another_takes_the_next_refresh_nested() {
+        let period = Duration::from_micros(16_667);
+        let mut pacing = NestedPacing::default();
+        let at = |ms: f64| Duration::from_secs_f64(46.0 + ms / 1000.0);
+        let missed: Vec<u32> = [162.7, 163.7, 190.9, 208.0, 224.9]
+            .into_iter()
+            .map(|ms| pacing.frame(at(ms), true, period))
+            .collect();
+        assert_eq!(missed, [0, 0, 0, 0, 0]);
+        // A real miss after such a pair still counts: 45 ms after the first
+        // is two vblanks later than the pair's two.
+        let mut pacing = NestedPacing::default();
+        pacing.frame(at(0.0), true, period);
+        pacing.frame(at(1.0), true, period);
+        assert_eq!(pacing.frame(at(50.0), true, period), 1);
+        // Evenly paced, a gap of two periods is one missed.
+        let mut pacing = NestedPacing::default();
+        pacing.frame(at(0.0), true, period);
+        assert_eq!(pacing.frame(at(33.3), true, period), 1);
+        // Not animating before: the pause was meant.
+        let mut pacing = NestedPacing::default();
+        pacing.frame(at(0.0), false, period);
+        assert_eq!(pacing.frame(at(100.0), true, period), 0);
     }
 
     #[test]
