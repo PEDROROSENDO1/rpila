@@ -963,3 +963,56 @@ fn redraws_with_nothing_new_on_an_output_are_counted_as_idle() {
     assert!(field("idle") >= 5, "{report}");
     assert!(report.contains("idle_cpu_ms="), "{report}");
 }
+
+/// The frame statistics time the GPU's part of each frame apart, from the
+/// frame's native fence (`frame_stats.rs`, `gpu_frames`, `gpu_avg_ms`,
+/// `gpu_max_ms`): from when it was handed to the GPU to when the GPU finished
+/// it, as the kernel stamped the fence.
+#[test]
+fn the_gpus_time_on_each_frame_is_measured() {
+    let mut pila = two_outputs();
+    let client = pila.client();
+    pila.move_to(500.0, 400.0);
+    let window = client.window("a").size(400, 300).create();
+    assert_eq!(pila.wait_window("a")["output"], "A");
+    for _ in 0..10 {
+        client.draw(window, None);
+        client.roundtrip();
+        pila.settle();
+    }
+    pila.request(json!({"cmd": "quit"}));
+    pila.wait_exit();
+    let log = pila.log();
+    let reports: Vec<&str> = log
+        .lines()
+        .filter(|l| {
+            l.contains("pila::frames") && l.contains("output=\"A\"") && l.contains(" frames ")
+        })
+        .collect();
+    let field = |report: &str, name: &str| -> f64 {
+        report
+            .split_whitespace()
+            .find_map(|f| f.strip_prefix(&format!("{name}=")))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_else(|| panic!("no {name} in {report}"))
+    };
+    let frames: f64 = reports.iter().map(|r| field(r, "frames")).sum();
+    let timed: f64 = reports.iter().map(|r| field(r, "gpu_frames")).sum();
+    assert!(frames >= 10.0, "{log}");
+    // Software rendering (CI's llvmpipe) gives no fences to time.
+    if log.contains("headless renderer software=true") {
+        assert_eq!(timed, 0.0, "{log}");
+        assert!(log.contains("GPU time not measured"), "{log}");
+        return;
+    }
+    // Every frame drawn on the GPU, but for one whose fence signaled only as
+    // Pila quit.
+    assert!(
+        timed >= frames - 1.0,
+        "{timed} of {frames} frames timed:\n{log}"
+    );
+    for report in reports {
+        let (avg, max) = (field(report, "gpu_avg_ms"), field(report, "gpu_max_ms"));
+        assert!(avg <= max && max < 1000.0, "{report}");
+    }
+}

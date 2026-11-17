@@ -979,8 +979,10 @@ fn render_output(
         backend,
         blur,
         cursor_theme,
+        clock,
         ..
     } = state;
+    let rendering_started = clock.now().into();
     let Some(Backend::Headless(data)) = backend else {
         return false;
     };
@@ -1046,8 +1048,14 @@ fn render_output(
                 render::clear_color(scene),
             )
             .map(|r| {
+                // What the GPU drew, to measure its time (`frame_stats.rs`).
+                let gpu = crate::frame_stats::GpuFrame::new(
+                    &r.sync,
+                    rendering_started,
+                    clock.now().into(),
+                );
                 let _ = r.sync.wait();
-                (r.damage.is_some(), r.states)
+                (r.damage.is_some(), r.states, gpu)
             })
             .map_err(|err| error!(?err, "render failed"))
             .ok(),
@@ -1056,7 +1064,7 @@ fn render_output(
             None
         }
     };
-    let Some((damaged, states)) = result else {
+    let Some((damaged, states, gpu)) = result else {
         o.redraw_needed = true;
         return false;
     };
@@ -1077,6 +1085,9 @@ fn render_output(
             wp_presentation_feedback::Kind::Vsync,
         );
         state.record_frame(&output, started.elapsed());
+        if let Some(gpu) = gpu {
+            state.watch_gpu(&output, gpu);
+        }
     } else {
         state.record_idle_frame(&output, started.elapsed());
     }

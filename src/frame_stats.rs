@@ -44,10 +44,26 @@
 //! runs as often as events come (input, clients), not once per frame: a
 //! `loop` line counts the iterations, those that did all of it
 //! (`housekeeping`) and their CPU time, summed and worst (`LoopStats`).
+//!
+//! The GPU's part of a frame is measured apart, where the renderer gives its
+//! frames a native fence (`SyncPoint::export`): from when the frame was handed
+//! to the GPU (its rendering submitted) to when the GPU finished it, the time
+//! the kernel stamped on the fence when it signaled (`fence_signaled_at`),
+//! read once the fence is ready (`Pila::watch_gpu`, an event source on it, so
+//! nothing waits for the GPU). That's the frame's own GPU work and whatever
+//! the GPU had queued before it (clients' rendering), the time the frame
+//! needs on top of its CPU time to be ready for its vblank. The report gives
+//! how many frames were measured (`gpu_frames`: none without native fences,
+//! and direct scanout draws nothing) and their GPU time, average and worst; a
+//! frame whose GPU time alone takes more than half the period is logged on its
+//! own. Not judged: there's no budget for it (yet).
 
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::time::Duration;
 
+use smithay::backend::renderer::sync::SyncPoint;
 use smithay::output::Output;
+use smithay::reexports::calloop::{generic::Generic, Interest, Mode, PostAction};
 use tracing::debug;
 
 use crate::Pila;
@@ -68,6 +84,12 @@ pub struct FrameStats {
     torn: u32,
     idle: u32,
     idle_cpu: Duration,
+    gpu_frames: u32,
+    gpu_total: Duration,
+    gpu_max: Duration,
+    /// When the GPU last finished one of its frames (`gpu_time`), kept
+    /// across reports.
+    last_gpu_signal: Option<Duration>,
 }
 
 /// What `FrameStats` logs.
@@ -91,6 +113,10 @@ pub struct Report {
     /// Redraws that had nothing to show, and their CPU time.
     pub idle: u32,
     pub idle_cpu: Duration,
+    /// Frames whose GPU time was measured (native fences), and that time.
+    pub gpu_frames: u32,
+    pub gpu_avg: Duration,
+    pub gpu_max: Duration,
 }
 
 impl FrameStats {
@@ -137,12 +163,36 @@ impl FrameStats {
             torn: self.torn,
             idle: self.idle,
             idle_cpu: self.idle_cpu,
+            gpu_frames: self.gpu_frames,
+            gpu_avg: self
+                .gpu_total
+                .checked_div(self.gpu_frames)
+                .unwrap_or_default(),
+            gpu_max: self.gpu_max,
         };
         *self = Self {
             start: Some(now),
+            last_gpu_signal: self.last_gpu_signal,
             ..Self::default()
         };
         Some(report)
+    }
+
+    /// A frame handed to the GPU at `submitted`, whose rendering began at
+    /// `started`, was finished by the GPU at `signal`: its GPU time, recorded
+    /// for the next report, if the fence was this frame's (`gpu_time`).
+    pub fn record_gpu(
+        &mut self,
+        started: Duration,
+        submitted: Duration,
+        signal: Duration,
+    ) -> Option<Duration> {
+        let gpu = gpu_time(started, submitted, signal, self.last_gpu_signal)?;
+        self.last_gpu_signal = Some(signal);
+        self.gpu_frames += 1;
+        self.gpu_total += gpu;
+        self.gpu_max = self.gpu_max.max(gpu);
+        Some(gpu)
     }
 
     /// `count` refreshes went by without the frame that was due.
@@ -176,6 +226,131 @@ pub struct LoopStats {
     cpu_max: Duration,
     /// Iterations and full housekeeping runs since startup (`state_json`).
     pub total: (u64, u64),
+}
+
+/// The GPU time of a frame (see the module docs) whose rendering began at
+/// `started` and was handed to the GPU at `submitted`, from the time its
+/// fence signaled, `signal`, if that fence was the frame's own: one that
+/// signaled before the frame began, or at the very moment the last one
+/// measured did (`last`: the same fence, which Smithay hands back when the
+/// primary plane had nothing to draw and kept its last buffer), is an earlier
+/// frame's. A GPU done before the submission ended took no time past it.
+pub fn gpu_time(
+    started: Duration,
+    submitted: Duration,
+    signal: Duration,
+    last: Option<Duration>,
+) -> Option<Duration> {
+    if signal < started || last == Some(signal) {
+        return None;
+    }
+    Some(signal.saturating_sub(submitted))
+}
+
+/// A frame's rendering on its way to the GPU, to measure (`Pila::watch_gpu`).
+#[derive(Debug)]
+pub struct GpuFrame {
+    /// Its native fence, signaled when the GPU is done with it.
+    fence: OwnedFd,
+    /// When its rendering began and when it was handed to the GPU, on the
+    /// monotonic clock (`Pila::clock`).
+    started: Duration,
+    submitted: Duration,
+}
+
+impl GpuFrame {
+    /// The frame whose rendering ended in `sync`, begun at `started` and
+    /// submitted at `submitted`; `None` if `sync` has no native fence (the
+    /// renderer has none, or it waited for the GPU itself), which is logged
+    /// once.
+    pub fn new(sync: &SyncPoint, started: Duration, submitted: Duration) -> Option<Self> {
+        let Some(fence) = sync.export() else {
+            static ONCE: std::sync::Once = std::sync::Once::new();
+            ONCE.call_once(|| {
+                debug!(
+                    target: "pila::frames",
+                    "GPU time not measured: a frame came with no native fence \
+                     (software rendering gives none)"
+                );
+            });
+            return None;
+        };
+        Some(Self {
+            fence,
+            started,
+            submitted,
+        })
+    }
+}
+
+/// `struct sync_file_info` (`linux/sync_file.h`).
+#[repr(C)]
+#[derive(Default)]
+struct SyncFileInfo {
+    name: [u8; 32],
+    status: i32,
+    flags: u32,
+    num_fences: u32,
+    pad: u32,
+    sync_fence_info: u64,
+}
+
+/// `struct sync_fence_info` (`linux/sync_file.h`).
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SyncFenceInfo {
+    obj_name: [u8; 32],
+    driver_name: [u8; 32],
+    status: i32,
+    flags: u32,
+    timestamp_ns: u64,
+}
+
+const _: () = assert!(std::mem::size_of::<SyncFileInfo>() == 56);
+const _: () = assert!(std::mem::size_of::<SyncFenceInfo>() == 80);
+
+/// `SYNC_IOC_FILE_INFO`: `_IOWR('>', 4, struct sync_file_info)`.
+const SYNC_IOC_FILE_INFO: u32 = (3 << 30) | (56 << 16) | ((b'>' as u32) << 8) | 4;
+
+/// When the GPU finished the work behind `fence` (a sync_file), on the
+/// monotonic clock, if it has: the time the kernel stamped on it when it
+/// signaled (`SYNC_IOC_FILE_INFO`), exact however late it's read. `None` if it
+/// hasn't signaled, signaled an error, or isn't a sync_file.
+pub fn fence_signaled_at(fence: BorrowedFd<'_>) -> Option<Duration> {
+    let ioctl = |info: &mut SyncFileInfo| {
+        // SAFETY: `info` is a valid `sync_file_info` for the call, and its
+        // `sync_fence_info`, when set, points to room for `num_fences`
+        // entries, which outlives the call.
+        unsafe {
+            libc::ioctl(
+                fence.as_raw_fd(),
+                SYNC_IOC_FILE_INFO as libc::Ioctl,
+                info as *mut SyncFileInfo,
+            )
+        }
+    };
+    // First how many fences it holds (and whether all signaled), then theirs.
+    let mut info = SyncFileInfo::default();
+    if ioctl(&mut info) != 0 || info.status != 1 || info.num_fences == 0 {
+        return None;
+    }
+    let empty = SyncFenceInfo {
+        obj_name: [0; 32],
+        driver_name: [0; 32],
+        status: 0,
+        flags: 0,
+        timestamp_ns: 0,
+    };
+    let mut fences = vec![empty; info.num_fences as usize];
+    info.sync_fence_info = fences.as_mut_ptr() as u64;
+    if ioctl(&mut info) != 0 || info.status != 1 {
+        return None;
+    }
+    let count = (info.num_fences as usize).min(fences.len());
+    fences[..count]
+        .iter()
+        .map(|fence| Duration::from_nanos(fence.timestamp_ns))
+        .max()
 }
 
 /// What `LoopStats` logs.
@@ -300,6 +475,9 @@ fn log_report(output: &str, report: &Report) {
         torn = report.torn,
         idle = report.idle,
         idle_cpu_ms = ms(report.idle_cpu),
+        gpu_frames = report.gpu_frames,
+        gpu_avg_ms = ms(report.gpu_avg),
+        gpu_max_ms = ms(report.gpu_max),
         "frames"
     );
 }
@@ -406,6 +584,44 @@ impl Pila {
         }
     }
 
+    /// Measure the GPU time of `frame`, one of `output`'s (see the module
+    /// docs): once its fence is ready, from an event source, so nothing waits
+    /// for the GPU.
+    pub fn watch_gpu(&mut self, output: &Output, frame: GpuFrame) {
+        let GpuFrame {
+            fence,
+            started,
+            submitted,
+        } = frame;
+        let name = output.name();
+        let period = refresh_period(output);
+        let inserted = self.loop_handle.insert_source(
+            Generic::new(fence, Interest::READ, Mode::OneShot),
+            move |_, fence, state| {
+                let Some(signal) = fence_signaled_at(fence.as_fd()) else {
+                    // An error on the GPU, or not a sync_file after all.
+                    debug!(target: "pila::frames", output = name, "a frame's fence gave no time");
+                    return Ok(PostAction::Remove);
+                };
+                let stats = state.frame_stats.entry(name.clone()).or_default();
+                let gpu = stats.record_gpu(started, submitted, signal);
+                if let Some(gpu) = gpu.filter(|gpu| *gpu > period / 2) {
+                    debug!(
+                        target: "pila::frames",
+                        output = name,
+                        gpu_ms = ms(gpu),
+                        period_ms = ms(period),
+                        "slow frame on the GPU"
+                    );
+                }
+                Ok(PostAction::Remove)
+            },
+        );
+        if let Err(err) = inserted {
+            debug!(target: "pila::frames", err = %err.error, "can't watch a frame's fence");
+        }
+    }
+
     /// The frame of `output` recorded next is a client's buffer as it is, on
     /// the primary plane (see the module docs).
     pub fn record_direct_frame(&mut self, output: &Output) {
@@ -498,6 +714,53 @@ mod tests {
         // And start over with the report.
         let report = stats.record(12000 * MS, MS).expect("due after 5 s");
         assert_eq!((report.frames, report.direct), (1, 0));
+    }
+
+    #[test]
+    fn a_frames_gpu_time_runs_from_its_submission_to_its_fence() {
+        // Begun at 100, submitted at 102, the GPU done at 105.
+        assert_eq!(gpu_time(100 * MS, 102 * MS, 105 * MS, None), Some(3 * MS));
+        // Done before the submission ended: no time past it.
+        assert_eq!(
+            gpu_time(100 * MS, 102 * MS, 101 * MS, None),
+            Some(Duration::ZERO)
+        );
+        // A fence that signaled before the frame began is an earlier frame's.
+        assert_eq!(gpu_time(100 * MS, 102 * MS, 99 * MS, None), None);
+        // So is the very fence measured last (the primary plane kept its
+        // buffer), even if it signaled after this frame began.
+        assert_eq!(gpu_time(100 * MS, 102 * MS, 101 * MS, Some(101 * MS)), None);
+        assert_eq!(
+            gpu_time(100 * MS, 102 * MS, 104 * MS, Some(101 * MS)),
+            Some(2 * MS)
+        );
+    }
+
+    #[test]
+    fn gpu_times_are_reported_with_the_frames_and_the_last_fence_is_kept() {
+        let mut stats = FrameStats::default();
+        stats.record(Duration::ZERO, MS);
+        assert_eq!(stats.record_gpu(Duration::ZERO, MS, 3 * MS), Some(2 * MS));
+        stats.record(1000 * MS, MS);
+        assert_eq!(
+            stats.record_gpu(1000 * MS, 1001 * MS, 1005 * MS),
+            Some(4 * MS)
+        );
+        // The same fence again measures nothing.
+        assert_eq!(stats.record_gpu(2000 * MS, 2001 * MS, 1005 * MS), None);
+        let report = stats.record(5000 * MS, MS).expect("due after 5 s");
+        assert_eq!(report.gpu_frames, 2);
+        assert_eq!((report.gpu_avg, report.gpu_max), (3 * MS, 4 * MS));
+        // A new report starts over, but still knows the last fence.
+        assert_eq!(stats.record_gpu(5000 * MS, 5001 * MS, 1005 * MS), None);
+        let report = stats.record(10_000 * MS, MS).expect("due again");
+        assert_eq!((report.gpu_frames, report.gpu_avg), (0, Duration::ZERO));
+    }
+
+    #[test]
+    fn a_file_that_isnt_a_fence_gives_no_time() {
+        let file = std::fs::File::open("/dev/null").expect("/dev/null");
+        assert_eq!(fence_signaled_at(file.as_fd()), None);
     }
 
     #[test]

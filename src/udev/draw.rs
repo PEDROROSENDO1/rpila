@@ -16,6 +16,7 @@ use smithay::{
 };
 
 use crate::capture::{copy_frame, Source};
+use crate::frame_stats::GpuFrame;
 
 /// The idle callback queued by `UdevData::queue_redraw`.
 pub(super) fn render_all(state: &mut Pila) {
@@ -198,6 +199,7 @@ fn draw(
         blur,
         capture,
         cursor_theme,
+        clock,
         ..
     } = state;
     let Some(Backend::Udev(data)) = backend else {
@@ -267,6 +269,8 @@ fn draw(
     let mut nothing_new = false;
     // The frame is a client's buffer as it is, on the primary plane.
     let mut direct = false;
+    // What the GPU drew, to measure its time (`frame_stats.rs`).
+    let mut gpu = None;
     let clear = render::clear_color(scene);
     // A fullscreen game that asks for it gets its frames shown at once, torn
     // (`tearing.rs`): an asynchronous page flip, which Smithay makes only when
@@ -287,6 +291,7 @@ fn draw(
                     match &result.primary_element {
                         PrimaryPlaneElement::Swapchain(element) => {
                             surface.swapchain_format = Some(element.buffer().format());
+                            gpu = GpuFrame::new(&element.sync, now, clock.now().into());
                         }
                         // Looked up only when the plane changes to it.
                         PrimaryPlaneElement::Element(element) if !surface.direct => {
@@ -337,7 +342,12 @@ fn draw(
                 .collect();
             drm_output
                 .render_frame(lent, &elements, clear, flags, presentation)
-                .map(|result| (result.states, result.is_empty))
+                .map(|result| {
+                    if let PrimaryPlaneElement::Swapchain(element) = &result.primary_element {
+                        gpu = GpuFrame::new(&element.sync, now, clock.now().into());
+                    }
+                    (result.states, result.is_empty)
+                })
                 .map_err(|err| format!("{err:?}"))
         }
     };
@@ -491,6 +501,9 @@ fn draw(
                 state.record_direct_frame(&output);
             }
             state.record_frame(&output, cpu);
+            if let Some(gpu) = gpu {
+                state.watch_gpu(&output, gpu);
+            }
         }
     } else if nothing_new {
         state.record_idle_frame(&output, started.elapsed());

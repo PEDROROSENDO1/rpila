@@ -193,11 +193,15 @@ fn redraw(
         backend,
         blur,
         cursor_theme,
+        clock,
         ..
     } = state;
     let Some(Backend::Winit(backend)) = backend.as_mut() else {
         return false;
     };
+    let started = clock.now().into();
+    // What the GPU drew, to measure its time (`frame_stats.rs`).
+    let mut gpu = None;
     // Age 0 makes the damage tracker redraw everything. The frame that
     // confirms a session lock must not keep anything of the unlocked screen.
     let age = if full_redraw || lock_pending || !make_surface_current(backend) {
@@ -228,7 +232,14 @@ fn redraw(
                 &elements,
                 render::clear_color(scene),
             ) {
-                Ok(result) => (result.damage.cloned(), Some(result.states)),
+                Ok(result) => {
+                    gpu = crate::frame_stats::GpuFrame::new(
+                        &result.sync,
+                        started,
+                        clock.now().into(),
+                    );
+                    (result.damage.cloned(), Some(result.states))
+                }
                 Err(err) => {
                     error!(?err, "render failed");
                     (None, None)
@@ -249,6 +260,9 @@ fn redraw(
     // Single output: one locked frame on screen means everything is covered.
     if lock_pending && submitted {
         state.confirm_lock();
+    }
+    if let Some(gpu) = gpu.filter(|_| submitted) {
+        state.watch_gpu(output, gpu);
     }
 
     let cursor_surface = input.cursor_wl_surface();

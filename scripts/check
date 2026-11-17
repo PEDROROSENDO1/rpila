@@ -646,7 +646,8 @@ if [ -z "$stats" ]; then
     fail "frame statistics were logged"
 else
     # A field older logs lack (`late`) sums to 0.
-    sum() { { grep -o "$1=[0-9]*" <<<"$stats" || true; } | cut -d= -f2 | awk '{ s += $1 } END { print s + 0 }'; }
+    # A whole field: `frames=` isn't `gpu_frames=`.
+    sum() { { grep -oE "(^| )$1=[0-9]*" <<<"$stats" || true; } | cut -d= -f2 | awk '{ s += $1 } END { print s + 0 }'; }
     missed=$(sum missed)
     late=$(sum late)
     frames=$(sum frames)
@@ -681,6 +682,33 @@ if [ -n "$stats" ]; then
     }' <<<"$stats" | while read -r output count cpu rate; do
         info "redraws with nothing new on $output: $count (${rate}/s), ${cpu} ms of CPU in all"
     done
+fi
+
+# The GPU's part of each frame (`gpu_frames`, `gpu_avg_ms`, `gpu_max_ms` in the
+# frame statistics: from its submission to the GPU finishing it, by its native
+# fence; `frame_stats.rs`), per output: on top of the CPU time, what a frame
+# needs to be ready for its vblank. Reported, not judged (no budget yet).
+if [ -n "$stats" ]; then
+    gpu=$(awk '{
+        o = ""; n = a = m = 0
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^output=/) { o = substr($i, 8); gsub(/"/, "", o) }
+            if ($i ~ /^gpu_frames=/) n = substr($i, 12)
+            if ($i ~ /^gpu_avg_ms=/) a = substr($i, 12)
+            if ($i ~ /^gpu_max_ms=/) m = substr($i, 12) + 0
+        }
+        count[o] += n; total[o] += n * a; if (m > worst[o]) worst[o] = m
+    } END {
+        for (o in count) if (count[o] > 0)
+            printf "%s %d %.2f %.2f\n", o, count[o], total[o] / count[o], worst[o]
+    }' <<<"$stats")
+    if [ -n "$gpu" ]; then
+        while read -r output count average worst; do
+            info "GPU per frame on $output: ${average} ms on average, worst ${worst} ms ($count frames timed)"
+        done <<<"$gpu"
+    elif grep -q 'GPU time not measured' "$log"; then
+        info "GPU time not measured: frames came with no native fence (software rendering gives none)"
+    fi
 fi
 
 # The event loop's own work after each iteration (`loop` in the frame

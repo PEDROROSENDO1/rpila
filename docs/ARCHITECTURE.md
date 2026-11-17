@@ -477,8 +477,17 @@ Key flows and invariants:
   (`Pila::after_frames`, captures left out), which runs as often as input and clients bring
   events, not once per frame, is a `loop` line (`record_loop`): iterations, those that did all
   of the housekeeping, and its CPU time, summed and worst; `state_json` has the totals
-  (`event_loop`). `scripts/check` judges these lines and reports the idle redraws per output
-  and the loop's work.
+  (`event_loop`). The GPU's part of a frame is timed apart, every backend alike: the frame's
+  sync point, if the renderer gives it a native fence (`GpuFrame::new`, the swapchain's on bare
+  metal; none for direct scanout, nor on software rendering, logged once), is watched by an
+  event source (`Pila::watch_gpu`), and once ready its signal time, the kernel's stamp read with
+  `SYNC_IOC_FILE_INFO` (`fence_signaled_at`), less the time the frame was submitted is its GPU
+  time (`gpu_frames`, `gpu_avg_ms`, `gpu_max_ms`; one over half the period is logged on its own):
+  its own GPU work and whatever the GPU had queued before it. A fence older than the frame, or
+  the one measured last (Smithay hands back the last frame's when the primary plane had nothing
+  to draw), is an earlier frame's and measures nothing (`gpu_time`). Headless waits for the GPU
+  anyway (its CPU time includes it), nested and bare metal never do. `scripts/check` judges these
+  lines and reports the idle redraws per output, the GPU time per output and the loop's work.
 - **Pointer grabs** (`grabs/move_grab.rs`, `grabs/resize_grab.rs`): Mod+drag installs the
   move/resize grab *before* the press is
   forwarded, so the client never sees that click. Move/resize grabs show their own cursor

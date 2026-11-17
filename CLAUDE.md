@@ -183,7 +183,9 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   over 1.5 periods; the host decides when frames show); `pila::frames=trace` logs every
   frame. The first frame after an output is set up (connected, powered on, a new mode, back
   from another VT: swapchain and modeset) is a cost of setting it up, logged on its own and
-  not counted. Screen captures, which build frames of their own after the outputs', are
+  not counted. The GPU's part of a frame (`gpu_avg_ms`, `gpu_max_ms`: from its submission to
+  its native fence signaling, not waited for; none on software rendering) is logged with the
+  rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. Screen captures, which build frames of their own after the outputs', are
   logged apart (`captures`), held to the same budget (`scripts/check` streams one, as a
   screen share does: `scripts/capture-stream`). The event loop's own work after each
   iteration (`after_frames`: taskbars, IPC, the `Space`), paced by events rather than
