@@ -157,8 +157,15 @@ impl X11 {
         id
     }
 
-    /// An override-redirect window (a menu) at (x, y).
+    /// An override-redirect window (a menu) at (x, y), typed as toolkits
+    /// type their menus (`_NET_WM_WINDOW_TYPE_POPUP_MENU`).
     fn menu(&self, at: (i16, i16), size: (u16, u16)) -> u32 {
+        self.override_redirect(at, size, Some("_NET_WM_WINDOW_TYPE_POPUP_MENU"))
+    }
+
+    /// An override-redirect window at (x, y) of window type `kind`, or of
+    /// none (a launcher like dmenu), selecting key presses.
+    fn override_redirect(&self, at: (i16, i16), size: (u16, u16), kind: Option<&str>) -> u32 {
         let id = self.conn.generate_id().unwrap();
         self.conn
             .create_window(
@@ -174,9 +181,16 @@ impl X11 {
                 0,
                 &CreateWindowAux::new()
                     .background_pixel(0x00ff00)
-                    .override_redirect(1),
+                    .override_redirect(1)
+                    .event_mask(EventMask::KEY_PRESS | EventMask::FOCUS_CHANGE),
             )
             .unwrap();
+        if let Some(kind) = kind {
+            let (property, kind) = (self.atom("_NET_WM_WINDOW_TYPE"), self.atom(kind));
+            self.conn
+                .change_property32(PropMode::REPLACE, id, property, AtomEnum::ATOM, &[kind])
+                .unwrap();
+        }
         self.conn.map_window(id).unwrap();
         self.conn.flush().unwrap();
         id
@@ -924,6 +938,114 @@ fn an_override_redirect_window_goes_where_x_puts_it_and_isnt_switched_to() {
     let state = pila.settle();
     assert!(state["switch"].is_null(), "only one switchable window");
     pila.key_release("Super");
+}
+
+/// A launcher like dmenu: an override-redirect window with no menu type
+/// that grabs the keyboard on the root window. X only gets keys while one of
+/// Xwayland's surfaces has the keyboard, so the launcher takes it from the
+/// Wayland window that had it, and gives it back when it closes (issue #5).
+#[test]
+fn an_x11_launcher_takes_the_keyboard_from_a_wayland_window() {
+    use x11rb::protocol::xproto::GrabMode;
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let client = pila.client();
+    let _w = client.window("w").create();
+    pila.wait_focus("w");
+    let grabbed = x
+        .conn
+        .grab_keyboard(
+            true,
+            x.root,
+            x11rb::CURRENT_TIME,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+        )
+        .unwrap()
+        .reply()
+        .unwrap();
+    assert_eq!(grabbed.status, x11rb::protocol::xproto::GrabStatus::SUCCESS);
+    let launcher = x.override_redirect((0, 0), (400, 30), None);
+    pila.wait("the launcher", |s| {
+        s["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w["override_redirect"] == true)
+    });
+    pila.settle();
+    pila.key("a");
+    // X keycode = evdev + 8: a is 38.
+    x.wait_event(
+        "the key",
+        |e| matches!(e, Event::KeyPress(k) if k.detail == 38),
+    );
+    x.conn.ungrab_keyboard(x11rb::CURRENT_TIME).unwrap();
+    x.conn.unmap_window(launcher).unwrap();
+    x.conn.flush().unwrap();
+    pila.wait_focus("w");
+}
+
+/// A launcher mapped while the session is locked leaves the keyboard with
+/// the lock surface.
+#[test]
+fn an_x11_launcher_doesnt_take_the_keyboard_while_locked() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let locker = pila.client();
+    let lock = locker.lock_session();
+    let surf = locker.lock_surface(&lock, "HEADLESS-1", [0, 0, 255, 255]);
+    locker.wait_surface_configured(surf);
+    locker.wait_logged("lock", "Locked");
+    pila.wait("locked", |s| {
+        s["locked"] == true && s["lock_pending"] == false
+    });
+    x.override_redirect((0, 0), (400, 30), None);
+    pila.wait("the launcher", |s| {
+        s["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w["override_redirect"] == true)
+    });
+    assert_eq!(pila.settle()["keyboard_focus"], "lock");
+}
+
+/// An X11 menu (override-redirect, typed as one) leaves the keyboard where
+/// it is: its app's own window keeps it.
+#[test]
+fn an_x11_menu_leaves_the_keyboard_where_it_is() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let client = pila.client();
+    let _w = client.window("w").create();
+    pila.wait_focus("w");
+    for kind in [
+        "_NET_WM_WINDOW_TYPE_POPUP_MENU",
+        "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
+        "_NET_WM_WINDOW_TYPE_TOOLTIP",
+        "_NET_WM_WINDOW_TYPE_COMBO",
+    ] {
+        x.override_redirect((0, 0), (100, 30), Some(kind));
+    }
+    pila.wait("the menus", |s| {
+        s["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|w| w["override_redirect"] == true)
+            .count()
+            == 4
+    });
+    pila.stays("the focus on w", Duration::from_millis(300), |s| {
+        s["focused"] == "w"
+    });
 }
 
 #[test]

@@ -51,7 +51,10 @@ use smithay::{
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
     xwayland::{
-        xwm::{Reorder, ResizeEdge as X11ResizeEdge, WmWindowProperty, XwmId},
+        xwm::{
+            Reorder, ResizeEdge as X11ResizeEdge, WmInputModel, WmWindowProperty, WmWindowType,
+            XwmId,
+        },
         X11Surface, X11Wm, XWayland, XWaylandDisplay, XWaylandEvent, XwmHandler,
     },
 };
@@ -806,6 +809,28 @@ impl XWaylandKeyboardGrabHandler for Pila {
     }
 }
 
+/// Whether an override-redirect window gets the keyboard when it's mapped:
+/// one with no menu-like window type (a launcher like dmenu, which grabs the
+/// keyboard in X) that takes input. Menus, tooltips and the like don't, as
+/// in wlroots (`wlr_xwayland_surface_override_redirect_wants_focus`).
+fn override_redirect_takes_keyboard(surface: &X11Surface) -> bool {
+    let menu_like = matches!(
+        surface.window_type(),
+        Some(
+            WmWindowType::Combo
+                | WmWindowType::Dnd
+                | WmWindowType::DropdownMenu
+                | WmWindowType::Menu
+                | WmWindowType::Notification
+                | WmWindowType::PopupMenu
+                | WmWindowType::Splash
+                | WmWindowType::Tooltip
+                | WmWindowType::Utility
+        )
+    );
+    !menu_like && surface.input_model() != WmInputModel::None
+}
+
 /// Whether `surface`'s app holds an X11 keyboard grab on `seat`.
 pub fn has_keyboard_grab(seat: &Seat<Pila>, surface: &WlSurface) -> bool {
     seat.user_data().get::<XWaylandGrab>().is_some_and(|slot| {
@@ -882,8 +907,21 @@ impl XwmHandler for Pila {
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         // Menus and tooltips: exactly where X put them, on top, unfocused.
         let location = surface.last_configure().loc;
-        self.map_window(Window::new_x11_window(surface), location, false);
+        let takes_keyboard = override_redirect_takes_keyboard(&surface);
+        self.map_window(Window::new_x11_window(surface.clone()), location, false);
         self.queue_redraw();
+        // A launcher (dmenu) grabs the keyboard in X, which only gets keys
+        // while one of Xwayland's surfaces has it: it gets the keyboard, out
+        // of the focus history, and `unmapped_window` gives it back. Not
+        // over the lock screen or a layer surface's exclusive keyboard.
+        if takes_keyboard && !self.is_locked() && self.exclusive_layer().is_none() {
+            debug!(
+                class = surface.class(),
+                "X11 override-redirect window takes the keyboard"
+            );
+            self.dismiss_popup_grab();
+            self.set_keyboard_focus(Some(surface.into()), SERIAL_COUNTER.next_serial());
+        }
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {

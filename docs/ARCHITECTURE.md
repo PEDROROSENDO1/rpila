@@ -1141,7 +1141,12 @@ Key flows and invariants:
   was configured to, is `X11Surface::last_configure()`; `geometry()` is only its visible
   area within its buffer (minus `_GTK_FRAME_EXTENTS`). A window that maps hidden (Smithay
   turns `WM_HINTS` IconicState into `_NET_WM_STATE_HIDDEN`) is minimized, not focused, by
-  `place_new_window_with`. Override-redirect windows (menus, tooltips) go where X puts them. X11 maximize/fullscreen go through `set_fill_state`
+  `place_new_window_with`. Override-redirect windows (menus, tooltips) go where X puts them, unfocused, except one
+  with no menu-like window type that takes input (`override_redirect_takes_keyboard`, as in
+  wlroots): a launcher like dmenu grabs the keyboard in X, which only gets keys while an
+  Xwayland surface has the Wayland keyboard, so it gets the keyboard (not over the lock screen
+  or an exclusive layer surface, and out of the focus history) and `unmapped_window` gives it
+  back. X11 maximize/fullscreen go through `set_fill_state`
   (`_NET_WM_STATE` + a direct configure); resize grabs configure X11 windows per motion.
   Selections are bridged both ways (`SelectionHandler` in `handlers/mod.rs`, XwmHandler
   selection methods); only a focused X11 app may read. The idle check's timer and the wait

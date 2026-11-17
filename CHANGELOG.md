@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **X11 launchers like dmenu get the keyboard:** an override-redirect window with no menu-like
+  window type (dmenu, which grabs the keyboard in X) now takes the keyboard when it opens, even
+  from a Wayland window, and gives it back when it closes; before, X never saw the keys unless an
+  X11 window had the focus. Menus, tooltips and the like still leave the keyboard where it is.
+  Reported in issue #5.
+
 ## 0.6.1 (2026-11-17)
 
 - **Less latency on a TTY:** while the screen is steady, each frame is drawn as close to the
