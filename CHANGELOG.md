@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **`default-bindings = false`** leaves out every default binding and gesture, so only the
+  config's own are left: for a scheme of one's own, or Pila as a login screen's compositor
+  (greetd), where Mod+Return would otherwise open a terminal before anyone logs in. Switching
+  VTs stays. Asked for in discussion #6.
 - **X11 launchers like dmenu get the keyboard:** an override-redirect window with no menu-like
   window type (dmenu, which grabs the keyboard in X) now takes the keyboard when it opens, even
   from a Wayland window, and gives it back when it closes; before, X never saw the keys unless an

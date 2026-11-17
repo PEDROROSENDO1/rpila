@@ -1231,6 +1231,7 @@ struct ConfigFile {
     launcher: Option<String>,
     autostart: Vec<String>,
     keyboard: KeyboardConfig,
+    default_bindings: Option<bool>,
     bindings: BTreeMap<String, BindingFile>,
     gestures: BTreeMap<String, String>,
     output: Vec<OutputFile>,
@@ -1761,7 +1762,10 @@ impl Config {
         // Defaults first, then the user's: a user binding replaces a default
         // one for the same combo, and "none" removes it. Mod+N and
         // Mod+Shift+N only exist for the workspaces there are (up to 9), so
-        // the other digits still reach the apps.
+        // the other digits still reach the apps. `default-bindings = false`
+        // leaves out every default, gestures included: only the user's are
+        // left (a greeter's compositor, a scheme of one's own).
+        let with_defaults = file.default_bindings.unwrap_or(true);
         let mut bindings: Vec<Binding> = Vec::new();
         let workspace_bindings: Vec<(String, String)> = (1..=workspaces.min(9))
             .flat_map(|n| {
@@ -1776,7 +1780,9 @@ impl Config {
                 .iter()
                 .map(|(k, a)| (k.as_str(), a.as_str())),
         );
-        let defaults = defaults.map(|(k, a)| (k, a, false));
+        let defaults = defaults
+            .map(|(k, a)| (k, a, false))
+            .filter(|_| with_defaults);
         let user = file
             .bindings
             .iter()
@@ -1804,7 +1810,10 @@ impl Config {
 
         // Same for gestures.
         let mut gestures: Vec<(Gesture, Action)> = Vec::new();
-        let defaults = DEFAULT_GESTURES.iter().map(|&(g, a)| (g, a));
+        let defaults = DEFAULT_GESTURES
+            .iter()
+            .map(|&(g, a)| (g, a))
+            .filter(|_| with_defaults);
         let user = file.gestures.iter().map(|(g, a)| (g.as_str(), a.as_str()));
         for (written, action) in defaults.chain(user) {
             let gesture = Gesture::parse(written)?;
@@ -2553,6 +2562,28 @@ mod tests {
         assert!(Config::from_toml("[shadow]\nsize = 65", &no_env).is_err());
         assert!(Config::from_toml("[shadow]\nsize = -1", &no_env).is_err());
         assert!(Config::from_toml("[shadow]\noffset = [0, 65]", &no_env).is_err());
+    }
+
+    #[test]
+    fn default_bindings_false_leaves_only_the_users() {
+        let config = Config::from_toml(
+            "default-bindings = false\n[bindings]\n\"Mod+x\" = \"close\"\n\
+             [gestures]\n\"swipe-3-up\" = \"maximize\"\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(config.bindings.len(), 1);
+        assert_eq!(config.bindings[0].action, Action::CloseFocused);
+        assert_eq!(config.gestures.len(), 1);
+        let alt = mods(false, true, false, false);
+        assert_eq!(config.action_for(Keysym::Return, &alt), None);
+        assert_eq!(config.action_for(Keysym::_1, &alt), None);
+        // `true` is the default.
+        let all = Config::from_toml("default-bindings = true", &no_env).unwrap();
+        assert_eq!(
+            all.bindings,
+            Config::from_toml("", &no_env).unwrap().bindings
+        );
     }
 
     #[test]

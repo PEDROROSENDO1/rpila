@@ -533,6 +533,36 @@ fn the_tap_follows_mod_and_can_be_rebound_or_removed() {
     assert_eq!(runs(&mut pila), 1);
 }
 
+/// `default-bindings = false` (a greeter's compositor, a scheme of one's
+/// own): Pila's default bindings are gone, Mod+M and Mod+Return reach the
+/// app and the tapped Mod starts nothing; the user's own still work.
+#[test]
+fn default_bindings_false_leaves_only_the_users_bindings() {
+    let (mut pila, client, _, _) = one_window(&format!(
+        "default-bindings = false\n{STAYING_LAUNCHER}terminal = \"exec sleep 600\"\n\
+         [bindings]\n\"Mod+x\" = \"maximize\"\n"
+    ));
+    pila.combo("Super+m");
+    pila.combo("Super+Return");
+    pila.key("Super");
+    // m (50) reached the app: Pila didn't take it.
+    client.wait("m", |s| {
+        s.events.iter().any(|e| {
+            *e == common::client::Ev::Key {
+                key: 50,
+                pressed: true,
+            }
+        })
+    });
+    let state = pila.settle();
+    assert_eq!(window_in(&state, "a").unwrap()["maximized"], false);
+    assert_eq!(runs(&mut pila), 0, "nothing was started");
+    pila.combo("Super+x");
+    pila.wait("maximized", |s| {
+        window_in(s, "a").unwrap()["maximized"] == true
+    });
+}
+
 #[test]
 fn spawned_commands_get_the_session_environment() {
     let mut pila = TestPila::start_with(Options {

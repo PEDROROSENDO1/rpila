@@ -384,6 +384,11 @@ prints what's wrong.
 "Mod+J" = "none"          # remove a default binding
 ```
 
+`default-bindings = false` (at the top of the file, before any table) leaves out every default
+binding and gesture: only yours are left. That suits a scheme of your own, or Pila as the
+compositor of a login screen (greetd), where Mod+Return would otherwise open a terminal before
+anyone has logged in. Switching to another VT (Ctrl+Alt+F1 ...) isn't a binding, and stays.
+
 A binding runs once each time its keys are pressed. Written as a table with `repeat = true`, as
 the volume key above, it runs again while the key is held, after `repeat-delay` and at
 `repeat-rate` (`[keyboard]`), until the key is released or another is pressed. Only a key can
