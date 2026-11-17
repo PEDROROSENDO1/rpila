@@ -103,6 +103,46 @@ fn up_starts_from_the_bottom_and_all_workspaces_runs() {
     assert!(menu(&state).is_null());
 }
 
+/// "Close" asks the app to close; a toggle that's on (here "Always on top")
+/// is marked at its row's end, where an item that's off has nothing.
+#[test]
+fn close_runs_and_a_toggle_thats_on_is_marked() {
+    let (mut pila, client, a, geometry) = one_window();
+    open_from_title_bar(&mut pila, geometry);
+    for _ in 0..3 {
+        pila.key("Down");
+    }
+    pila.wait("Always on top picked", |s| menu(s)["hover"] == 2);
+    pila.key("Return");
+    pila.wait("on top", |s| {
+        window_in(s, "a").unwrap()["always_on_top"] == true
+    });
+
+    let state = open_from_title_bar(&mut pila, geometry);
+    assert_eq!(
+        menu(&state)["checked"],
+        json!([false, false, true, false, false])
+    );
+    // The mark: 8 pixels square, 12 from the row's right end.
+    let (x, _, w, _) = rect(&menu(&state)["geometry"]);
+    let mark_x = (x + w - 12 - 4) as f64;
+    let (_, on_y) = row(&state, 2);
+    let (_, off_y) = row(&state, 3);
+    pila.settle();
+    let (on, off) = (pila.pixel(mark_x, on_y), pila.pixel(mark_x, off_y));
+    assert_ne!(
+        on, off,
+        "no mark: {on:?} on the checked row, {off:?} off it"
+    );
+
+    let (cx, cy) = row(&state, 4);
+    pila.move_to(cx, cy);
+    pila.wait("Close under the pointer", |s| menu(s)["hover"] == 4);
+    pila.click("left");
+    client.wait("the close request", |s| s.windows[a.0].close_requested);
+    pila.wait("closed", |s| menu(s).is_null());
+}
+
 #[test]
 fn a_click_outside_the_window_menu_closes_it_and_reaches_nothing() {
     let (mut pila, _client, _a, geometry) = one_window();
