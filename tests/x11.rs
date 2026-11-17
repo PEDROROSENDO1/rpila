@@ -637,6 +637,10 @@ fn net_wm_state_requests_maximize_and_fullscreen() {
     // X is told the new geometry directly.
     let geometry = x.conn.get_geometry(id).unwrap().reply().unwrap();
     assert_eq!((geometry.width, geometry.height), (1280, 800));
+    x.net_wm_state(id, false, &["_NET_WM_STATE_FULLSCREEN"]);
+    pila.wait("out of fullscreen", |s| {
+        x11_window(s, "XApp").is_some_and(|w| w["fullscreen"] == false && w["geometry"]["w"] == 300)
+    });
 }
 
 #[test]
@@ -690,6 +694,29 @@ fn an_iconify_request_minimizes() {
     pila.combo("Super+Tab");
     pila.wait("back", |s| {
         x11_window(s, "XApp").unwrap()["minimized"] == false
+    });
+}
+
+/// A minimized X11 window that asks for NormalState (`WM_CHANGE_STATE` 1,
+/// as an app raising itself from a tray icon does) comes back.
+#[test]
+fn a_normal_state_request_restores_a_minimized_x11_window() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    x.root_message(id, "WM_CHANGE_STATE", [3, 0, 0, 0, 0]);
+    pila.wait("minimized", |s| {
+        x11_window(s, "XApp").unwrap()["minimized"] == true
+    });
+    x.root_message(id, "WM_CHANGE_STATE", [1, 0, 0, 0, 0]);
+    pila.wait("back and focused", |s| {
+        x11_window(s, "XApp").is_some_and(|w| w["minimized"] == false && w["mapped"] == true)
+            && s["keyboard_focus"]
+                .as_str()
+                .is_some_and(|f| f.contains("XApp"))
     });
 }
 
@@ -1074,13 +1101,19 @@ fn clipboard_from_wayland_to_x11(x11_first: bool) {
     let id = x.window("XApp", (300, 200), 0xff0000);
     pila.wait_focus("XApp");
     x.wait_event("focus in", |e| matches!(e, Event::FocusIn(_)));
-    let clipboard = x.atom("CLIPBOARD");
+    assert_eq!(x11_reads(&x, id, "CLIPBOARD"), "to X");
+}
+
+/// The text the X11 window `id` reads from `selection` (`CLIPBOARD` or
+/// `PRIMARY`) as UTF8_STRING, asking again until there is some.
+fn x11_reads(x: &X11, id: u32, selection: &str) -> String {
+    let selection = x.atom(selection);
     let utf8 = x.atom("UTF8_STRING");
     let property = x.atom("PILA_TEST");
     let started = Instant::now();
-    let text = loop {
+    loop {
         x.conn
-            .convert_selection(id, clipboard, utf8, property, x11rb::CURRENT_TIME)
+            .convert_selection(id, selection, utf8, property, x11rb::CURRENT_TIME)
             .unwrap();
         x.conn.flush().unwrap();
         x.wait_event("SelectionNotify", |e| {
@@ -1093,94 +1126,161 @@ fn clipboard_from_wayland_to_x11(x11_first: bool) {
             .reply()
             .unwrap();
         if !reply.value.is_empty() {
-            break String::from_utf8_lossy(&reply.value).to_string();
+            return String::from_utf8_lossy(&reply.value).to_string();
         }
         x.events.borrow_mut().clear();
-        assert!(started.elapsed() < TIMEOUT, "no clipboard for X");
+        assert!(started.elapsed() < TIMEOUT, "no selection for X");
         std::thread::sleep(Duration::from_millis(50));
-    };
-    assert_eq!(text, "to X");
+    }
 }
 
 #[test]
 fn the_clipboard_goes_from_x11_to_a_wayland_client() {
-    use x11rb::protocol::xproto::{SelectionNotifyEvent, SELECTION_NOTIFY_EVENT};
     let mut pila = TestPila::start();
     let Some(x) = X11::connect(&mut pila) else {
         return;
     };
     let id = x.window("XApp", (300, 200), 0xff0000);
     pila.wait_focus("XApp");
-    let clipboard = x.atom("CLIPBOARD");
-    let utf8 = x.atom("UTF8_STRING");
-    let targets = x.atom("TARGETS");
-    x.conn
-        .set_selection_owner(id, clipboard, x11rb::CURRENT_TIME)
-        .unwrap();
-    x.conn.flush().unwrap();
+    let answering = X11Selection::own(x, id, "CLIPBOARD", "from X");
 
     use wayland_client::protocol::wl_data_device_manager::WlDataDeviceManager;
     let reader = pila.client();
     let manager: WlDataDeviceManager = reader.bind("wl_data_device_manager", 3);
     let _device = manager.get_data_device(&reader.seat(), &reader.qh, "device".into());
-    // The X app answers selection requests from a thread while the Wayland
-    // client reads.
-    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let answering = {
-        let done = done.clone();
-        std::thread::spawn(move || {
-            while !done.load(std::sync::atomic::Ordering::Relaxed) {
-                while let Some(event) = x.conn.poll_for_event().unwrap() {
-                    let Event::SelectionRequest(request) = event else {
-                        continue;
-                    };
-                    if request.target == targets {
-                        x.conn
-                            .change_property32(
-                                PropMode::REPLACE,
-                                request.requestor,
-                                request.property,
-                                AtomEnum::ATOM,
-                                &[targets, utf8],
-                            )
-                            .unwrap();
-                    } else {
-                        x.conn
-                            .change_property8(
-                                PropMode::REPLACE,
-                                request.requestor,
-                                request.property,
-                                request.target,
-                                b"from X",
-                            )
-                            .unwrap();
-                    }
-                    let notify = SelectionNotifyEvent {
-                        response_type: SELECTION_NOTIFY_EVENT,
-                        sequence: 0,
-                        time: request.time,
-                        requestor: request.requestor,
-                        selection: request.selection,
-                        target: request.target,
-                        property: request.property,
-                    };
-                    x.conn
-                        .send_event(false, request.requestor, EventMask::NO_EVENT, notify)
-                        .unwrap();
-                    x.conn.flush().unwrap();
-                }
-                std::thread::sleep(Duration::from_millis(5));
-            }
-        })
-    };
     reader.window("reader").create();
     pila.wait_focus("reader");
     reader.wait("an offer", |s| s.data_offer.is_some());
     let offer = reader.lock().data_offer.clone().unwrap();
     let text = reader.receive(|fd| offer.receive("text/plain;charset=utf-8".into(), fd));
-    done.store(true, std::sync::atomic::Ordering::Relaxed);
-    let _ = answering.join();
+    drop(answering);
     assert_eq!(text, "from X");
+}
+
+/// An X11 app owning `selection` with `text` (UTF8_STRING), answering
+/// requests for it from a thread while a Wayland client reads; until
+/// dropped.
+struct X11Selection {
+    done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl X11Selection {
+    fn own(x: X11, id: u32, selection: &str, text: &'static str) -> Self {
+        use x11rb::protocol::xproto::{SelectionNotifyEvent, SELECTION_NOTIFY_EVENT};
+        let selection = x.atom(selection);
+        let utf8 = x.atom("UTF8_STRING");
+        let targets = x.atom("TARGETS");
+        x.conn
+            .set_selection_owner(id, selection, x11rb::CURRENT_TIME)
+            .unwrap();
+        x.conn.flush().unwrap();
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let thread = {
+            let done = done.clone();
+            std::thread::spawn(move || {
+                while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                    while let Some(event) = x.conn.poll_for_event().unwrap() {
+                        let Event::SelectionRequest(request) = event else {
+                            continue;
+                        };
+                        if request.target == targets {
+                            x.conn
+                                .change_property32(
+                                    PropMode::REPLACE,
+                                    request.requestor,
+                                    request.property,
+                                    AtomEnum::ATOM,
+                                    &[targets, utf8],
+                                )
+                                .unwrap();
+                        } else {
+                            x.conn
+                                .change_property8(
+                                    PropMode::REPLACE,
+                                    request.requestor,
+                                    request.property,
+                                    request.target,
+                                    text.as_bytes(),
+                                )
+                                .unwrap();
+                        }
+                        let notify = SelectionNotifyEvent {
+                            response_type: SELECTION_NOTIFY_EVENT,
+                            sequence: 0,
+                            time: request.time,
+                            requestor: request.requestor,
+                            selection: request.selection,
+                            target: request.target,
+                            property: request.property,
+                        };
+                        x.conn
+                            .send_event(false, request.requestor, EventMask::NO_EVENT, notify)
+                            .unwrap();
+                        x.conn.flush().unwrap();
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            })
+        };
+        X11Selection {
+            done,
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for X11Selection {
+    fn drop(&mut self) {
+        self.done.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// The primary selection (middle-click paste) goes from an X11 app to a
+/// Wayland one, and from a Wayland app to an X11 one, as the clipboard does.
+#[test]
+fn the_primary_selection_goes_between_x11_and_wayland() {
+    use wayland_protocols::wp::primary_selection::zv1::client::zwp_primary_selection_device_manager_v1::ZwpPrimarySelectionDeviceManagerV1;
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    let answering = X11Selection::own(x, id, "PRIMARY", "selected in X");
+
+    let wayland = pila.client();
+    let manager: ZwpPrimarySelectionDeviceManagerV1 =
+        wayland.bind("zwp_primary_selection_device_manager_v1", 1);
+    let device = manager.get_device(&wayland.seat(), &wayland.qh, "primary".into());
+    wayland.window("wayland").create();
+    pila.wait_focus("wayland");
+    wayland.wait("a primary offer", |s| s.primary_offer.is_some());
+    let offer = wayland.lock().primary_offer.clone().unwrap();
+    let text = wayland.receive(|fd| offer.receive("text/plain;charset=utf-8".into(), fd));
+    drop(answering);
+    assert_eq!(text, "selected in X");
+
+    // Back the other way, to a new X11 client.
+    let source = manager.create_source(
+        &wayland.qh,
+        common::protocols::SourceText {
+            tag: "primary_source".into(),
+            text: "selected in Wayland".into(),
+        },
+    );
+    source.offer("text/plain;charset=utf-8".into());
+    device.set_selection(Some(&source), wayland.last_serial());
+    wayland.flush();
+    wayland.roundtrip();
+    let x = X11::connect(&mut pila).unwrap();
+    let id = x.window("XReader", (300, 200), 0x00ff00);
+    pila.wait_focus("XReader");
+    x.wait_event("focus in", |e| matches!(e, Event::FocusIn(_)));
+    assert_eq!(x11_reads(&x, id, "PRIMARY"), "selected in Wayland");
 }
 
 #[test]
