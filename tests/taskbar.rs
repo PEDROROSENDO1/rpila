@@ -200,6 +200,54 @@ fn handles_report_titles_states_and_outputs() {
     assert!(!has_state(&last_state(&taskbar, &a), ACTIVATED));
 }
 
+/// A window's new title or app id reaches a taskbar listed it already
+/// (Waybar's and Noctalia's taskbars show the title of a browser's page
+/// as it changes), each followed by `done`.
+#[test]
+fn a_new_title_and_app_id_reach_the_taskbar() {
+    let mut pila = TestPila::start();
+    let app = pila.client();
+    let a = app.window("a").create();
+    pila.wait_focus("a");
+    let taskbar = pila.client();
+    let _manager: ZwlrForeignToplevelManagerV1 =
+        taskbar.bind("zwlr_foreign_toplevel_manager_v1", 3);
+    taskbar.flush();
+    let handle = handle(&taskbar, "a");
+    let id = wayland_client::Proxy::id(&handle);
+    let after = |s: &common::client::Shared, event: &str| {
+        let events: Vec<&str> = s
+            .log
+            .iter()
+            .filter(|l| l.object == id)
+            .map(|l| l.event.as_str())
+            .collect();
+        events
+            .iter()
+            .position(|e| *e == event)
+            .is_some_and(|i| events[i..].contains(&"Done"))
+    };
+
+    app.request(a, |t| t.set_title("a page".into()));
+    taskbar.wait("the new title, then done", |s| {
+        after(s, "Title { title: \"a page\" }")
+    });
+    app.request(a, |t| t.set_app_id("org.example.Renamed".into()));
+    taskbar.wait("the new app id, then done", |s| {
+        after(s, "AppId { app_id: \"org.example.Renamed\" }")
+    });
+    // Sent once each: a commit that changes neither sends them again.
+    app.request(a, |t| t.set_title("a page".into()));
+    pila.settle();
+    taskbar.roundtrip();
+    let titles = taskbar
+        .events_of(&handle)
+        .into_iter()
+        .filter(|e| e.starts_with("Title"))
+        .count();
+    assert_eq!(titles, 2, "{:?}", taskbar.events_of(&handle));
+}
+
 #[test]
 fn activate_focuses_a_window() {
     let (mut pila, _app, taskbar) = taskbar_with(&["a", "b"]);
