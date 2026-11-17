@@ -173,7 +173,8 @@ fn prepare(state: &mut Pila, id: OutputId) -> Option<Ready> {
 
 /// Whether `id`'s frame waits to be drawn its margin before the next vblank
 /// (`render_late.rs`); if so, a timer draws it then. One held already waits
-/// until its moment, and is let through from then on.
+/// until its moment, and is let through from then on, or at once if the scene
+/// stopped being steady meanwhile (`render_late::still_held`).
 fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) -> bool {
     let enabled = state.config.render_late;
     let animating = state.animating();
@@ -193,23 +194,31 @@ fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) 
     let Some(surface) = data.outputs.get_mut(&id) else {
         return false;
     };
-    if let Some(hold) = surface.render_at {
-        return now < hold.at;
-    }
     // A game that tears wants its frames at once; with adaptive sync the
     // flip makes the vblank; a lock waits for its frame; the first frame
     // after a modeset starts a new grid; while Pila animates, or a window or
     // layer surface that appeared or changed size settles, apps are busy on
     // the GPU as recent frames don't foretell (and an animation of Pila's
     // shows at the same vblank either way).
-    if !enabled
-        || lock_pending
-        || surface.first_frame
-        || surface.torn
-        || surface.presented_variable
-        || animating
-        || settling
-    {
+    let steady = enabled
+        && !lock_pending
+        && !surface.first_frame
+        && !surface.torn
+        && !surface.presented_variable
+        && !animating
+        && !settling;
+    if let Some(hold) = surface.render_at {
+        if render_late::still_held(hold, now, steady) {
+            return true;
+        }
+        // Its moment, or let go: drawn now (and not as held if let go, since
+        // it isn't drawn its margin before the vblank).
+        if now < hold.at {
+            surface.render_at = None;
+        }
+        return false;
+    }
+    if !steady {
         return false;
     }
     let period = crate::frame_stats::refresh_period(&surface.output);

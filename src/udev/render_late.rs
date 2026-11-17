@@ -205,6 +205,12 @@ fn push(window: &mut VecDeque<Duration>, took: Duration) {
     window.push_back(took);
 }
 
+/// Whether a frame held until `hold` still waits at `now`, `steady` whether
+/// the scene still lets frames be held (`draw::hold_late`).
+pub(super) fn still_held(hold: Hold, now: Duration, steady: bool) -> bool {
+    steady && now < hold.at
+}
+
 /// Whether a window or layer surface appeared, or a window changed size
 /// (`Pila::start_settling`, at `since`), too recently at `now` for a frame to
 /// be held.
@@ -403,6 +409,20 @@ mod tests {
         assert!(settling(Some(1000 * MS), 1000 * MS));
         assert!(settling(Some(1000 * MS), 1000 * MS + SETTLING - MS));
         assert!(!settling(Some(1000 * MS), 1000 * MS + SETTLING));
+    }
+
+    /// Seen on a TTY on battery: a frame held in a steady scene, then a
+    /// blurred window opened while it waited; drawn at its moment with the
+    /// window and a new backdrop, it came late.
+    #[test]
+    fn a_held_frame_is_let_go_once_the_scene_isnt_steady() {
+        let hold = Hold {
+            at: 110 * MS,
+            vblank: 116 * MS,
+        };
+        assert!(still_held(hold, 105 * MS, true));
+        assert!(!still_held(hold, 110 * MS, true));
+        assert!(!still_held(hold, 105 * MS, false));
     }
 
     #[test]

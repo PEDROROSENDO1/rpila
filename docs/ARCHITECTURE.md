@@ -284,7 +284,8 @@ Key flows and invariants:
   margin before the next vblank (`render-late`, on by default; `udev/render_late.rs`,
   `draw::hold_late`): `OutputSurface::render_at` holds the output and a timer
   (`schedule_late_render`) draws it then, so what clients and input bring meanwhile makes that
-  vblank. The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
+  vblank; a held frame is let go at once if the scene stops being steady meanwhile (see below:
+  `render_late::still_held`; a window opening while it waited made it late). The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
   `prepare` to the later of the commit queued and the GPU's fence, which `Pila::watch_gpu` reports
   through `Backend::gpu_done`), plus the other outputs' worst (drawn first, they hold it up), plus
   `render_late::SLACK`, never under half a period (`MIN_MARGIN_DIVISOR`: leaner margins, and
