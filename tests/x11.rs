@@ -13,8 +13,8 @@ use x11rb::{
     connection::Connection,
     protocol::{
         xproto::{
-            AtomEnum, ClientMessageEvent, ConnectionExt, CreateWindowAux, EventMask, PropMode,
-            WindowClass,
+            AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt, CreateWindowAux,
+            EventMask, PropMode, WindowClass,
         },
         Event,
     },
@@ -1415,4 +1415,108 @@ fn an_x11_keyboard_grab_doesnt_keep_the_focus() {
     pila.wait("b maximized", |s| {
         window_in(s, "b").is_some_and(|w| w["maximized"] == true)
     });
+}
+
+/// An X11 app resizing its own window (`ConfigureWindow`, as xterm does for
+/// an escape sequence or a game for a new resolution): the size is the
+/// app's, the place stays Pila's.
+#[test]
+fn an_x11_window_can_resize_itself() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    let (gx, gy, ..) = rect(&pila.window("XApp")["geometry"]);
+    x.conn
+        .configure_window(
+            id,
+            &ConfigureWindowAux::new().x(5).y(5).width(500).height(350),
+        )
+        .unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("resized where it was", |s| {
+        x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == (gx, gy, 500, 350))
+    });
+    let started = Instant::now();
+    while x.conn.get_geometry(id).unwrap().reply().unwrap().width != 500 {
+        assert!(started.elapsed() < TIMEOUT, "X wasn't told the new size");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Press the left button at (x, y), on an X11 window, and wait for the app
+/// to see it.
+fn press_on_x11(pila: &mut TestPila, x: &X11, at: (i64, i64)) {
+    let presses = |x: &X11| {
+        x.events
+            .borrow()
+            .iter()
+            .filter(|e| matches!(e, Event::ButtonPress(_)))
+            .count()
+    };
+    x.pump();
+    let before = presses(x);
+    pila.move_to(at.0 as f64, at.1 as f64);
+    pila.press("left");
+    let started = Instant::now();
+    loop {
+        x.pump();
+        if presses(x) > before {
+            break;
+        }
+        assert!(started.elapsed() < TIMEOUT, "X11: no button press");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// An X11 app with a title bar or handles of its own (Electron, Chrome,
+/// Steam) hands a drag of them to the window manager with
+/// `_NET_WM_MOVERESIZE` while the button is held: Pila moves or resizes the
+/// window until it's released, from the edge the app named.
+#[test]
+fn an_x11_app_can_start_a_move_or_resize_of_its_window() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    let (gx, gy, gw, gh) = rect(&pila.window("XApp")["geometry"]);
+    // `_NET_WM_MOVERESIZE`: x_root, y_root, direction, button, source (an app).
+    let drag = |pila: &mut TestPila, at: (i64, i64), direction: u32, by: (f64, f64)| {
+        press_on_x11(pila, &x, at);
+        x.root_message(
+            id,
+            "_NET_WM_MOVERESIZE",
+            [at.0 as u32, at.1 as u32, direction, 1, 1],
+        );
+        let kind = if direction == 8 { "move" } else { "resize" };
+        pila.wait(kind, |s| s["pointer"]["grab"] == kind);
+        pila.move_by(by.0, by.1);
+    };
+    let geometry_is = |pila: &mut TestPila, what: &str, want: (i64, i64, i64, i64)| {
+        pila.wait(what, |s| {
+            x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == want)
+        });
+        pila.release("left");
+        pila.wait("the grab ends", |s| s["pointer"]["grabbed"] == false);
+    };
+
+    // Moved (direction 8), by the top of the window.
+    drag(&mut pila, (gx + 50, gy + 10), 8, (60.0, 40.0));
+    let (gx, gy) = (gx + 60, gy + 40);
+    geometry_is(&mut pila, "moved", (gx, gy, gw, gh));
+    // Resized from the bottom right corner (4): the top left stays.
+    drag(&mut pila, (gx + gw - 5, gy + gh - 5), 4, (50.0, 30.0));
+    let (gw, gh) = (gw + 50, gh + 30);
+    geometry_is(&mut pila, "resized from the bottom right", (gx, gy, gw, gh));
+    // From the top left corner (0): the bottom right stays.
+    drag(&mut pila, (gx + 5, gy + 5), 0, (-30.0, -20.0));
+    geometry_is(
+        &mut pila,
+        "resized from the top left",
+        (gx - 30, gy - 20, gw + 30, gh + 20),
+    );
 }
