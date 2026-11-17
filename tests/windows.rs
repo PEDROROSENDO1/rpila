@@ -58,6 +58,35 @@ fn a_window_asking_for_client_side_gets_it() {
     assert_eq!(client.with_window(window, |w| w.server_side), Some(false));
 }
 
+/// A window that asked for client-side decorations and then unsets the mode
+/// leaves the choice to Pila, which draws its title bar again.
+#[test]
+fn unsetting_the_decoration_mode_gets_server_side() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client
+        .window("a")
+        .decorations(Decorations::AskClient)
+        .create();
+    pila.wait_window("a");
+    client.wait("client side", |s| {
+        s.windows[window.0].server_side == Some(false)
+    });
+    client.with_window(window, |w| {
+        w.decoration
+            .as_ref()
+            .expect("a decoration object")
+            .unset_mode();
+    });
+    client.flush();
+    client.wait("server side", |s| {
+        s.windows[window.0].server_side == Some(true)
+    });
+    pila.wait("Pila's title bar", |s| {
+        window_in(s, "a").is_some_and(|w| w["title_bar"] == true && w["ssd"] == true)
+    });
+}
+
 #[test]
 fn server_side_decorations_are_confirmed() {
     let mut pila = TestPila::start();
