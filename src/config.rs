@@ -1071,7 +1071,7 @@ fn toml_error(text: &str, err: &toml::de::Error) -> String {
 }
 
 /// `transform` in `[[output]]`: wl_output's names.
-fn parse_transform(text: &str) -> Result<Transform, String> {
+pub(crate) fn parse_transform(text: &str) -> Result<Transform, String> {
     Ok(match text {
         "normal" => Transform::Normal,
         "90" => Transform::_90,

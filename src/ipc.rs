@@ -774,3 +774,31 @@ impl Pila {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use smithay::utils::Transform;
+
+    /// `outputs` names a transform as `[[output]]` does: each name reads
+    /// back as the transform it came from.
+    #[test]
+    fn transform_names_are_the_configs() {
+        for transform in [
+            Transform::Normal,
+            Transform::_90,
+            Transform::_180,
+            Transform::_270,
+            Transform::Flipped,
+            Transform::Flipped90,
+            Transform::Flipped180,
+            Transform::Flipped270,
+        ] {
+            let name = super::transform_name(transform);
+            assert_eq!(
+                crate::config::parse_transform(name),
+                Ok(transform),
+                "{name}"
+            );
+        }
+    }
+}
