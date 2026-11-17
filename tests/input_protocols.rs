@@ -7,7 +7,7 @@ mod common;
 use std::time::Duration;
 
 use common::client::Ev;
-use common::protocols::{keymap_of, virtual_keyboard};
+use common::protocols::{keymap_of, virtual_keyboard, LayerSpec};
 use common::*;
 use wayland_client::protocol::wl_pointer::WlPointer;
 use wayland_protocols::{
@@ -257,6 +257,75 @@ fn a_locked_pointer_follows_the_clients_hint_within_its_window() {
     });
 }
 
+/// A layer surface with the keyboard (a full-screen overlay, a game's
+/// launcher) can lock the pointer too, and its cursor hint moves Pila's
+/// pointer from the layer surface's own origin, kept on it.
+#[test]
+fn a_layer_surface_can_lock_the_pointer_and_hint_where_it_is() {
+    use wayland_protocols_wlr::layer_shell::v1::client::{
+        zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::KeyboardInteractivity,
+    };
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let (overlay, _layer) = client.layer_surface(
+        "overlay",
+        &LayerSpec {
+            layer: Layer::Overlay,
+            keyboard: KeyboardInteractivity::Exclusive,
+            size: (300, 200),
+            ..LayerSpec::default()
+        },
+        [255, 0, 0, 255],
+    );
+    client.wait_surface_configured(overlay);
+    let state = pila.wait("the overlay with the keyboard", |s| {
+        s["keyboard_focus"] == "layer:overlay"
+    });
+    let geometry = |s: &Value| {
+        s["layers"]
+            .as_array()
+            .and_then(|l| l.iter().find(|l| l["namespace"] == "overlay"))
+            .map(|l| rect(&l["geometry"]))
+    };
+    let state = if geometry(&state).is_some_and(|g| g.2 > 0) {
+        state
+    } else {
+        pila.wait("its size", |s| geometry(s).is_some_and(|g| g.2 > 0))
+    };
+    let (x, y, w, h) = geometry(&state).unwrap();
+    assert_eq!((w, h), (300, 200));
+    pila.move_to((x + 10) as f64, (y + 10) as f64);
+    client.wait("pointer enter", |s| {
+        s.pointer_name.as_deref() == Some("overlay")
+    });
+
+    let constraints: ZwpPointerConstraintsV1 = client.bind("zwp_pointer_constraints_v1", 1);
+    let surface = client.wl_surface_of(overlay);
+    let locked = constraints.lock_pointer(
+        &surface,
+        &pointer(&client),
+        None,
+        Lifetime::Persistent,
+        &client.qh,
+        "locked".into(),
+    );
+    client.flush();
+    client.wait_logged("locked", "Locked");
+    let at = |s: &Value| (s["pointer"]["x"].as_f64(), s["pointer"]["y"].as_f64());
+    locked.set_cursor_position_hint(120.0, 80.0);
+    surface.commit();
+    client.flush();
+    pila.wait("the pointer at the hint", |s| {
+        at(s) == (Some((x + 120) as f64), Some((y + 80) as f64))
+    });
+    locked.set_cursor_position_hint(5000.0, -20.0);
+    surface.commit();
+    client.flush();
+    pila.wait("the pointer kept on the overlay", |s| {
+        at(s) == (Some((x + w - 1) as f64), Some(y as f64))
+    });
+}
+
 #[test]
 fn switching_to_an_empty_workspace_releases_a_locked_pointer() {
     let mut pila = TestPila::start();
@@ -435,7 +504,7 @@ fn an_inhibitor_only_counts_while_its_surface_has_focus() {
 /// the target is offered it while the pointer is over it, gets the drop and
 /// reads the text.
 #[test]
-fn a_drag_reaches_another_window_and_drops() {
+fn a_drag_reaches_another_window_follows_the_pointer_and_drops() {
     use wayland_client::protocol::wl_data_device_manager::{DndAction, WlDataDeviceManager};
     let mut pila = TestPila::start();
     let source_client = pila.client();
@@ -480,6 +549,10 @@ fn a_drag_reaches_another_window_and_drops() {
     target_client.flush();
     // (Smithay never sends the source `wl_data_source.target`.)
     target_client.roundtrip();
+    // Moving over it: the target follows where the drag is, in its own
+    // coordinates, to show where it would drop.
+    pila.move_by(-20.0, -15.0);
+    target_client.wait_logged("dnd", &format!("x: {}.0, y: {}.0", tw - 28, th - 23));
     pila.release("left");
     target_client.wait_logged("dnd", "Drop");
     let text = target_client.receive(|fd| offer.receive("text/plain".into(), fd));
