@@ -257,6 +257,33 @@ fn a_window_closed_maximized_comes_back_maximized() {
     wait_geometry(&mut pila, MOVED);
 }
 
+/// A window that opened maximized and never floated has no place to save,
+/// only its state: it comes back maximized all the same.
+#[test]
+fn a_window_that_never_floated_comes_back_maximized() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let session = client.session(None, "session");
+    let window = client
+        .window("a")
+        .size(400, 300)
+        .maximized()
+        .before_commit(|toplevel| {
+            let _: XdgToplevelSessionV1 =
+                session.add_toplevel(toplevel, "main".into(), &client.qh, "toplevel".into());
+        })
+        .create();
+    pila.wait_focus("a");
+    wait_geometry(&mut pila, (0, 28, 1280, 772));
+    client.roundtrip();
+    close(&mut pila, &client, window);
+    restore(&client, &session, "main");
+    pila.wait("back maximized", |s| {
+        window_in(s, "a")
+            .is_some_and(|w| w["maximized"] == true && rect(&w["geometry"]) == (0, 28, 1280, 772))
+    });
+}
+
 #[test]
 fn a_window_closed_fullscreen_comes_back_fullscreen() {
     let (mut pila, client, session, window) = moved_in_session();
