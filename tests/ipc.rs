@@ -902,8 +902,8 @@ fn subscribing_to_something_unknown_says_so() {
 }
 
 #[test]
-fn pila_msg_subscribe_prints_events_as_they_come() {
-    let pila = TestPila::start();
+fn pila_msg_subscribe_prints_events_as_they_come_until_pila_quits() {
+    let mut pila = TestPila::start();
     let mut child = Command::new(env!("CARGO_BIN_EXE_pila"))
         .args(["msg", "subscribe", "workspaces"])
         .env_remove("PILA_SOCKET")
@@ -926,8 +926,11 @@ fn pila_msg_subscribe_prints_events_as_they_come() {
         assert!(out.read_line(&mut line).unwrap() > 0, "{seen}");
         seen.push_str(&line);
     }
-    child.kill().unwrap();
-    let _ = child.wait();
+    // Pila quitting ends it, cleanly.
+    action(&pila, &["quit"]);
+    assert!(pila.wait_exit().success());
+    let status = child.wait().unwrap();
+    assert!(status.success(), "{status}");
 }
 
 fn layout_names(layouts: &Value) -> Vec<String> {
