@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 (2026-11-17)
 
 - **Less latency on a TTY:** while the screen is steady, each frame is drawn as close to the
   monitor's refresh as it safely can be, rather than right after the last one, so what apps draw
@@ -16,9 +16,9 @@
   work, from its submission to its fence signaling, without waiting for it (`gpu_avg_ms`,
   `gpu_max_ms`; every frame's at trace level), and on a TTY the frames' latency, how many were
   drawn late, how far before the refresh and how long before it they were ready; `pila-check`
-  reports them per monitor (`PILA_CHECK_RENDER_LATE=false`
-  compares a run without it). Its count of frames no longer counts them twice once a log has
-  the GPU's.
+  reports them per monitor (`PILA_CHECK_RENDER_LATE=false` compares a run without it). Its count
+  of frames no longer counts them twice once a log has the GPU's, and `pila-check --nested` no
+  longer counts a refresh as missed when the host it runs in renders late.
 - **Smithay moved forward** (1 commit, to 33323a9; Pila's fork rebased on it, the revision 0.6.0
   pins kept by its tag `rev-12a26c10`): apps from before wl_keyboard version 7, Xwayland among
   them, get a keymap that ends in a NUL byte, as they read it as a C string; without it they
