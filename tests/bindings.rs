@@ -231,6 +231,46 @@ fn mod_left_and_right_snap_to_halves_and_again_restores() {
     client.wait_configure(window, "untiled", |c| !c.has(states::TILED_RIGHT));
 }
 
+/// A maximized or fullscreen window snaps out of that state: the app is told
+/// it's no longer maximized or fullscreen, and undoing the snap brings back
+/// the size it had before it was maximized.
+#[test]
+fn a_maximized_or_fullscreen_window_snaps_out_of_it() {
+    for (fill, field, state) in [
+        ("Super+m", "maximized", states::MAXIMIZED),
+        ("Super+f", "fullscreen", states::FULLSCREEN),
+    ] {
+        let (mut pila, client, window, before) = one_window("");
+        pila.combo(fill);
+        pila.wait(field, |s| {
+            let w = window_in(s, "a").unwrap();
+            w[field] == true && w["geometry"]["w"] == 1280
+        });
+        client.wait_configure(window, field, |c| c.has(state));
+        pila.combo("Super+Left");
+        pila.wait("snapped left", |s| {
+            let w = window_in(s, "a").unwrap();
+            w["snapped"] == "left" && w[field] == false && w["geometry"]["w"] == 640
+        });
+        assert_eq!(
+            geometry_of(&mut pila, "a"),
+            (0, BAR, 640, 800 - BAR),
+            "{field}"
+        );
+        let c = client.wait_configure(window, "tiled", |c| c.has(states::TILED_LEFT));
+        assert!(!c.has(state), "{field}: still {field} in {c:?}");
+        pila.combo("Super+Left");
+        pila.wait("unsnapped", |s| {
+            window_in(s, "a").unwrap()["snapped"].is_null()
+        });
+        pila.wait("its size from before", |s| {
+            window_in(s, "a").unwrap()["geometry"]["w"] == 400
+        });
+        assert_eq!(geometry_of(&mut pila, "a"), before, "{field}");
+        assert_eq!(pila.window("a")[field], false, "{field}");
+    }
+}
+
 #[test]
 fn mod_down_undoes_a_snap() {
     let (mut pila, _client, _, before) = one_window("");
