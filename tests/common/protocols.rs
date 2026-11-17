@@ -904,6 +904,16 @@ impl Client {
         positioner
     }
 
+    /// Move `popup` to `placement` (`xdg_popup.reposition`, as GTK 4 moves a
+    /// popover); pila answers with `repositioned` carrying `token`, then a
+    /// configure.
+    pub fn reposition_popup(&self, popup: &XdgPopup, placement: &Placement, token: u32) {
+        let positioner = self.positioner(placement);
+        popup.reposition(&positioner, token);
+        positioner.destroy();
+        self.flush();
+    }
+
     /// A popup of `parent`'s window (`Ok`) or of a popup or layer surface
     /// (`Err`), optionally grabbing input (with the last input serial).
     pub fn popup(

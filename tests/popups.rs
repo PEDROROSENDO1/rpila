@@ -85,6 +85,37 @@ fn a_popup_goes_where_its_positioner_says() {
     );
 }
 
+/// `xdg_popup.reposition`, as GTK 4 moves a popover that stays open: the
+/// popup is told it was repositioned (the client's token), configured at its
+/// new place and shown there.
+#[test]
+fn a_popup_can_be_repositioned() {
+    let (mut pila, client, window, (x, y, ..)) = window_at_its_place();
+    let (menu, popup) = client.popup("menu", Ok(window), &Placement::default(), false, BLUE);
+    assert_eq!(client.wait_surface_configured(menu), (10, 10, 100, 80));
+    pila.wait("the popup", |s| mapped_popup(s, "a"));
+
+    let moved = Placement {
+        size: (120, 90),
+        anchor_rect: (60, 40, 1, 1),
+        ..Placement::default()
+    };
+    client.reposition_popup(&popup, &moved, 7);
+    client.wait_logged("popup:menu", "Repositioned { token: 7 }");
+    client.wait("configured at its new place", |s| {
+        s.surfaces[menu.0].configures.last() == Some(&(60, 40, 120, 90))
+    });
+    let state = pila.wait("shown there", |s| {
+        popup_of(s, "a").is_some_and(|p| rect(&p["geometry"]) == (x + 60, y + 40, 120, 90))
+    });
+    assert!(mapped_popup(&state, "a"));
+    pila.settle();
+    assert_eq!(
+        pila.pixel((x + 170) as f64, (y + 120) as f64),
+        [0, 0, 255, 255]
+    );
+}
+
 #[test]
 fn a_popup_slides_back_onto_the_output_when_allowed() {
     let (_pila, client, window, (x, ..)) = window_at_its_place();
