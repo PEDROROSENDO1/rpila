@@ -583,3 +583,26 @@ fn locking_stops_a_repeating_binding() {
     std::thread::sleep(std::time::Duration::from_millis(400));
     assert_eq!(runs(&pila), stopped, "the binding ran on while locked");
 }
+
+/// An output that changes while locked (here its scale) has its lock surface
+/// sized to it again: one left at the old size would leave part of the
+/// screen uncovered, or hang off it.
+#[test]
+fn a_lock_surface_follows_its_output_changing_while_locked() {
+    let mut pila = TestPila::start();
+    let locker = pila.client();
+    let lock = locker.lock_session();
+    let surf = locker.lock_surface(&lock, "HEADLESS-1", LOCK_COLOR);
+    assert_eq!(locker.wait_surface_configured(surf), (0, 0, 1280, 800));
+    locker.wait_logged("lock", "Locked");
+    pila.wait("locked", |s| s["locked"] == true);
+
+    pila.write_config("[[output]]\nname = \"HEADLESS-1\"\nscale = 2\n");
+    locker.wait("the new size", |s| {
+        s.surfaces[surf.0]
+            .configures
+            .last()
+            .is_some_and(|c| (c.2, c.3) == (640, 400))
+    });
+    assert_eq!(pila.state()["locked"], true);
+}
