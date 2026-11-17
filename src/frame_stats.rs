@@ -56,7 +56,8 @@
 //! how many frames were measured (`gpu_frames`: none without native fences,
 //! and direct scanout draws nothing) and their GPU time, average and worst; a
 //! frame whose GPU time alone takes more than half the period is logged on its
-//! own. Not judged: there's no budget for it (yet).
+//! own, and at trace level every frame's (`GPU done`). Not judged: there's no
+//! budget for it (yet).
 //!
 //! On bare metal two more: how many frames were held to be drawn close to
 //! their vblank (`held`, `udev/render_late.rs`), and the latency of the frames
@@ -648,7 +649,8 @@ impl Pila {
                 };
                 let stats = state.frame_stats.entry(name.clone()).or_default();
                 let gpu = stats.record_gpu(started, submitted, signal);
-                if gpu.is_some() {
+                if let Some(gpu) = gpu {
+                    tracing::trace!(target: "pila::frames", output = name, gpu_us = gpu.as_micros() as u64, "GPU done");
                     if let Some(backend) = &mut state.backend {
                         backend.gpu_done(&output, started, signal);
                     }

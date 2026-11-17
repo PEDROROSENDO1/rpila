@@ -494,7 +494,8 @@ Key flows and invariants:
   metal; none for direct scanout, nor on software rendering, logged once), is watched by an
   event source (`Pila::watch_gpu`), and once ready its signal time, the kernel's stamp read with
   `SYNC_IOC_FILE_INFO` (`fence_signaled_at`), less the time the frame was submitted is its GPU
-  time (`gpu_frames`, `gpu_avg_ms`, `gpu_max_ms`; one over half the period is logged on its own):
+  time (`gpu_frames`, `gpu_avg_ms`, `gpu_max_ms`; one over half the period is logged on its own,
+  and every frame's at trace level, `GPU done`):
   its own GPU work and whatever the GPU had queued before it. A fence older than the frame, or
   the one measured last (Smithay hands back the last frame's when the primary plane had nothing
   to draw), is an earlier frame's and measures nothing (`gpu_time`). Headless waits for the GPU
