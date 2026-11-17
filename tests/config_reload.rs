@@ -184,6 +184,21 @@ fn an_invalid_keymap_keeps_the_current_one() {
     client.wait("close request", |s| s.windows[a.0].close_requested);
 }
 
+/// A layout xkbcommon can't build at startup (a typo) leaves Pila with the
+/// default keymap rather than no keyboard, and says so on screen.
+#[test]
+fn an_invalid_keymap_at_startup_falls_back_to_the_default_one() {
+    let mut pila = TestPila::with_config("[keyboard]\nlayout = \"no-such-layout\"\n");
+    pila.wait_log("invalid keyboard config; using the default keymap");
+    pila.wait_log("summary=\"Keyboard layout not found\"");
+    assert!(pila.log().contains("no-such-layout"), "{}", pila.log_tail());
+    let client = pila.client();
+    let a = client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+q");
+    client.wait("close request", |s| s.windows[a.0].close_requested);
+}
+
 #[test]
 fn the_mod_key_changes_on_reload() {
     let mut pila = TestPila::start();
