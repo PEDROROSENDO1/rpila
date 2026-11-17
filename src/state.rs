@@ -181,6 +181,10 @@ pub struct Pila {
     pub slide_pool: crate::workspace_slide::SlidePool,
     /// Each output's frame statistics, by name (`frame_stats.rs`).
     pub frame_stats: HashMap<String, crate::frame_stats::FrameStats>,
+    /// When a window or layer surface last appeared or a window drew itself
+    /// at a new size (`Pila::start_settling`; monotonic): frames aren't held
+    /// to render late while its app settles.
+    pub settling_since: Option<std::time::Duration>,
     /// The screen captures' frames (`frame_stats.rs`, `Pila::record_capture`).
     pub capture_stats: crate::frame_stats::FrameStats,
     /// The event loop's own work after each iteration (`frame_stats.rs`,
@@ -566,6 +570,7 @@ impl Pila {
             cursor_theme: crate::cursor::CursorTheme::load(),
             slide_pool: Default::default(),
             frame_stats: HashMap::new(),
+            settling_since: None,
             capture_stats: Default::default(),
             loop_stats: Default::default(),
             space: Space::default(),

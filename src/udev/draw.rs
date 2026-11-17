@@ -177,6 +177,7 @@ fn prepare(state: &mut Pila, id: OutputId) -> Option<Ready> {
 fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) -> bool {
     let enabled = state.config.render_late;
     let animating = state.animating();
+    let settling = render_late::settling(state.settling_since, now);
     let Some(Backend::Udev(data)) = &mut state.backend else {
         return false;
     };
@@ -197,22 +198,24 @@ fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) 
     }
     // A game that tears wants its frames at once; with adaptive sync the
     // flip makes the vblank; a lock waits for its frame; the first frame
-    // after a modeset starts a new grid; the first of an animation brings
-    // what recent frames don't foretell.
-    let starts_animating = animating && !surface.animated;
+    // after a modeset starts a new grid; while Pila animates, or a window or
+    // layer surface that appeared or changed size settles, apps are busy on
+    // the GPU as recent frames don't foretell (and an animation of Pila's
+    // shows at the same vblank either way).
     if !enabled
         || lock_pending
         || surface.first_frame
         || surface.torn
         || surface.presented_variable
-        || starts_animating
+        || animating
+        || settling
     {
         return false;
     }
     let period = crate::frame_stats::refresh_period(&surface.output);
     let at = surface
         .render_timing
-        .margin(now, others)
+        .margin(now, others, period)
         .and_then(|margin| render_late::render_at(surface.last_vblank_time, now, period, margin));
     let Some(hold) = at else {
         return false;
@@ -254,7 +257,6 @@ fn draw(
 
     let direct_scanout = state.config.direct_scanout;
     let flags = frame_flags(direct_scanout);
-    let animating = state.animating();
     let Pila {
         backend,
         blur,
@@ -307,7 +309,6 @@ fn draw(
     let request = surface.request.take();
     // Held to be drawn now, its margin before the vblank (`render_late.rs`).
     let held = surface.render_at.take();
-    surface.animated = animating;
     // How long before its vblank a held frame was ready, if it is already.
     let mut spare = None;
 

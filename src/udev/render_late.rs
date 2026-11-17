@@ -19,15 +19,23 @@
 //! client's buffer as it is (direct scanout) are kept apart from those drawn,
 //! and the margin is the worst of either: leaving direct scanout, the first
 //! frame drawn again would otherwise get the margin of a buffer handed over.
-//! The first frame of an animation isn't held (`draw::hold_late`): it brings
-//! what's new (a window's textures, its backdrop, an app starting up on the
-//! same GPU), which recent frames don't foretell. A frame that still shows
-//! late after being held turns it off for that output for `BACKOFF`.
+//! A frame that still shows late after being held turns it off for that
+//! output for `BACKOFF`.
 //!
 //! What it leaves is measured: for each held frame, its margin and how long
 //! before the vblank it aimed at it was ready (`spare`), both in the frame
 //! statistics (`frame_stats.rs`): the smallest spare says how much the margin
 //! could shrink.
+//!
+//! Frames are held only in a steady scene (`draw::hold_late`): not while
+//! Pila animates, nor for `SETTLING` after a window or layer surface appears
+//! or a window draws itself at a new size (`settling`, `Pila::start_settling`,
+//! animated or not). Then apps are busy on the GPU as no frame of Pila's
+//! foretells: a terminal starting up (shaders, glyphs) made a held frame take
+//! 9.4 ms on the GPU on battery, one redrawing itself maximized and a game
+//! closing after flooding the GPU made held frames late on a single monitor,
+//! all with the margin above. An animation of Pila's shows at the same
+//! vblank either way: holding gains nothing there.
 //!
 //! Not for a frame that can't be measured or has no vblank to aim at: before
 //! any frame was measured, after a composited frame with no native fence to
@@ -45,6 +53,20 @@ const WINDOW: usize = 128;
 /// On top of the worst frame: the timer waking up late, the commit's way
 /// through the kernel before the vblank.
 pub(super) const SLACK: Duration = Duration::from_micros(1500);
+
+/// How long after a window or layer surface appears, or a window changes
+/// size, no frame is held (`settling`): its app starting up or drawing
+/// everything anew shares the GPU for a few frames, as no frame of Pila's
+/// foretells.
+const SETTLING: Duration = Duration::from_millis(300);
+
+/// The margin is never less than the period divided by this: half a period.
+/// With one output, the worst of its own recent frames plus `SLACK` (4-5 ms
+/// on the author's laptop) let apps busy on the GPU in a steady scene (a
+/// shell's panel animating itself, its new blurred popup) make a held frame
+/// late on battery; two outputs had 7.7-8.3 ms and none. Half a period keeps
+/// that, and the latency it gained.
+const MIN_MARGIN_DIVISOR: u32 = 2;
 
 /// A hold shorter than this isn't worth a timer: drawn at once.
 const SHORTEST_HOLD: Duration = Duration::from_micros(500);
@@ -163,12 +185,15 @@ impl RenderTiming {
     }
 
     /// How long before a vblank to draw for it at `now`, given the worst of
-    /// the other outputs (`others`); `None`: don't hold.
-    pub fn margin(&self, now: Duration, others: Duration) -> Option<Duration> {
+    /// the other outputs (`others`), on an output whose refresh lasts
+    /// `period`: never less than `period / MIN_MARGIN_DIVISOR`. `None`: don't
+    /// hold.
+    pub fn margin(&self, now: Duration, others: Duration, period: Duration) -> Option<Duration> {
         if self.unmeasurable || self.backoff_until.is_some_and(|until| now < until) {
             return None;
         }
-        Some(self.worst()? + others + SLACK)
+        let floor = period / MIN_MARGIN_DIVISOR;
+        Some((self.worst()? + others + SLACK).max(floor))
     }
 }
 
@@ -178,6 +203,13 @@ fn push(window: &mut VecDeque<Duration>, took: Duration) {
         window.pop_front();
     }
     window.push_back(took);
+}
+
+/// Whether a window or layer surface appeared, or a window changed size
+/// (`Pila::start_settling`, at `since`), too recently at `now` for a frame to
+/// be held.
+pub(super) fn settling(since: Option<Duration>, now: Duration) -> bool {
+    since.is_some_and(|at| now.saturating_sub(at) < SETTLING)
 }
 
 /// How long before the vblank at `aim` a frame held for it was ready, at
@@ -259,7 +291,10 @@ mod tests {
     fn the_margin_is_the_worst_recent_frame_plus_the_others_and_slack() {
         let mut timing = RenderTiming::default();
         // Nothing measured yet: not held.
-        assert_eq!(timing.margin(Duration::ZERO, Duration::ZERO), None);
+        assert_eq!(
+            timing.margin(Duration::ZERO, Duration::ZERO, Duration::ZERO),
+            None
+        );
         // A composited frame: ready when its fence signals, if that's after
         // its commit.
         timing.queued(100 * MS, 101 * MS, Waits::Fence, None);
@@ -275,8 +310,22 @@ mod tests {
         // Direct scanout: ready once queued.
         timing.queued(400 * MS, 402 * MS, Waits::Nothing, None);
         assert_eq!(
-            timing.margin(500 * MS, 2 * MS),
+            timing.margin(500 * MS, 2 * MS, Duration::ZERO),
             Some(3 * MS + 2 * MS + SLACK)
+        );
+    }
+
+    #[test]
+    fn the_margin_is_never_under_half_a_period() {
+        let mut timing = RenderTiming::default();
+        timing.queued(Duration::ZERO, MS, Waits::Nothing, None);
+        // 1 ms + slack is under half of 16.7 ms: half a period.
+        assert_eq!(timing.margin(MS, Duration::ZERO, PERIOD), Some(PERIOD / 2));
+        // A worse frame sets it past that.
+        timing.queued(100 * MS, 109 * MS, Waits::Nothing, None);
+        assert_eq!(
+            timing.margin(200 * MS, Duration::ZERO, PERIOD),
+            Some(9 * MS + SLACK)
         );
     }
 
@@ -297,10 +346,13 @@ mod tests {
         let mut timing = RenderTiming::default();
         timing.queued(Duration::ZERO, MS, Waits::Nothing, None);
         timing.queued(20 * MS, 21 * MS, Waits::Unknown, None);
-        assert_eq!(timing.margin(40 * MS, Duration::ZERO), None);
+        assert_eq!(timing.margin(40 * MS, Duration::ZERO, Duration::ZERO), None);
         timing.queued(40 * MS, 41 * MS, Waits::Fence, None);
         timing.gpu_done(40 * MS, 42 * MS);
-        assert_eq!(timing.margin(60 * MS, Duration::ZERO), Some(2 * MS + SLACK));
+        assert_eq!(
+            timing.margin(60 * MS, Duration::ZERO, Duration::ZERO),
+            Some(2 * MS + SLACK)
+        );
     }
 
     #[test]
@@ -342,13 +394,32 @@ mod tests {
         assert_eq!(timing.worst(), Some(3 * MS));
     }
 
+    /// Seen on a TTY, on battery: a blurred terminal opening, its second
+    /// frame held by the usual margin took 9.4 ms on the GPU (the terminal's
+    /// own start-up work queued first) and came late.
+    #[test]
+    fn nothing_is_held_while_a_new_surface_settles() {
+        assert!(!settling(None, 1000 * MS));
+        assert!(settling(Some(1000 * MS), 1000 * MS));
+        assert!(settling(Some(1000 * MS), 1000 * MS + SETTLING - MS));
+        assert!(!settling(Some(1000 * MS), 1000 * MS + SETTLING));
+    }
+
     #[test]
     fn a_held_frame_shown_late_stops_holding_for_a_while() {
         let mut timing = RenderTiming::default();
         timing.queued(Duration::ZERO, MS, Waits::Nothing, None);
         timing.showed_late(100 * MS);
-        assert_eq!(timing.margin(100 * MS, Duration::ZERO), None);
-        assert_eq!(timing.margin(100 * MS + BACKOFF - MS, Duration::ZERO), None);
-        assert!(timing.margin(100 * MS + BACKOFF, Duration::ZERO).is_some());
+        assert_eq!(
+            timing.margin(100 * MS, Duration::ZERO, Duration::ZERO),
+            None
+        );
+        assert_eq!(
+            timing.margin(100 * MS + BACKOFF - MS, Duration::ZERO, Duration::ZERO),
+            None
+        );
+        assert!(timing
+            .margin(100 * MS + BACKOFF, Duration::ZERO, Duration::ZERO)
+            .is_some());
     }
 }

@@ -287,14 +287,17 @@ Key flows and invariants:
   vblank. The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
   `prepare` to the later of the commit queued and the GPU's fence, which `Pila::watch_gpu` reports
   through `Backend::gpu_done`), plus the other outputs' worst (drawn first, they hold it up), plus
-  `render_late::SLACK` (leaner margins left an app starting up on the same GPU making held frames
-  late: the module docs); frames that were a
+  `render_late::SLACK`, never under half a period (`MIN_MARGIN_DIVISOR`: leaner margins, and
+  one output's alone, left apps busy on the same GPU making held frames late: the module docs); frames that were a
   client's buffer as it is are kept apart and the worst of either counts, so the first frame
   drawn after direct scanout isn't given a handed-over buffer's margin. Nothing is held before a frame was measured, after a composited frame with
   no fence, with a vblank older than a second (the rounded refresh drifts), after a torn frame
-  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset, the first of
-  an animation (`OutputSurface::animated`: it brings new textures, a backdrop, an app starting on
-  the same GPU, which recent frames don't foretell) or while a lock waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
+  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset, while Pila
+  animates, for 300 ms after a window or layer surface appears or a window draws itself at a new
+  size (`Pila::start_settling`, from `animate_open`, `layer_committed` and `geometry_committed`'s
+  `DrawnSize`, animated or not: `render_late::settling`; apps are busy on the GPU then, as recent
+  frames don't foretell, and an animation of Pila's shows at the same vblank either way) or while
+  a lock waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
   output for two seconds. A held frame counts as on its way for missed refreshes
   (`back_to_back`). A frame that fails
   at the DRM level (render or queue: no DRM master yet after a VT switch, a monitor beyond

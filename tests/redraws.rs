@@ -4,7 +4,11 @@
 
 mod common;
 
+use common::protocols::LayerSpec;
 use common::*;
+use wayland_protocols_wlr::layer_shell::v1::client::{
+    zwlr_layer_shell_v1::Layer, zwlr_layer_surface_v1::Anchor,
+};
 
 /// Two outputs side by side, B right of A, both faster than 60 Hz.
 fn two_fast_outputs() -> TestPila {
@@ -428,4 +432,48 @@ fn the_last_partial_column_of_a_scaled_output_is_checked_as_drawn() {
                 .as_str()
                 .is_some_and(|f| f.contains("edge"))
     });
+}
+
+/// When a window or layer surface last appeared or a window drew at a new
+/// size (`state_json`'s `settling_us`), if one has.
+fn settling(state: &Value) -> Option<u64> {
+    state["settling_us"].as_u64()
+}
+
+/// A window or layer surface shown for the first time, or a window drawn at a
+/// new size, marks the moment (its app is likely busy on the GPU: on bare
+/// metal no frame is held to render late for a while after,
+/// `udev/render_late.rs`); drawing at the same size, moving the pointer and
+/// clicking don't.
+#[test]
+fn a_window_appearing_or_drawn_at_a_new_size_starts_settling() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    assert_eq!(settling(&pila.settle()), None);
+    let window = client.window("a").size(400, 300).create();
+    pila.wait_window("a");
+    let opened = settling(&pila.wait("noted", |s| settling(s).is_some()));
+    for _ in 0..3 {
+        client.draw(window, None);
+        client.roundtrip();
+    }
+    pila.move_to(100.0, 100.0);
+    pila.click_at(200.0, 200.0);
+    assert_eq!(settling(&pila.settle()), opened, "same size, nothing new");
+    client.request(window, |t| t.set_maximized());
+    pila.wait("maximized", |s| {
+        window_in(s, "a").is_some_and(|w| w["maximized"] == true)
+    });
+    let resized = settling(&pila.wait("the new size noted", |s| settling(s) > opened));
+    client.layer_surface(
+        "bar",
+        &LayerSpec {
+            layer: Layer::Top,
+            anchor: Anchor::Top | Anchor::Left | Anchor::Right,
+            size: (0, 30),
+            ..LayerSpec::default()
+        },
+        [255, 0, 0, 255],
+    );
+    pila.wait("the bar's appearing noted", |s| settling(s) > resized);
 }

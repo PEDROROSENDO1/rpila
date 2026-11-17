@@ -647,7 +647,6 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             render_at: None,
             queued_held: false,
             torn: false,
-            animated: false,
         },
     );
     if !enabled {

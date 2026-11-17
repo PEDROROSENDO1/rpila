@@ -405,6 +405,11 @@ fn app_id(window: &Window) -> String {
 #[derive(Default)]
 struct LayerShown(std::cell::Cell<bool>);
 
+/// The size a window's client last drew at (`committed_size`), to tell when
+/// it draws at a new one (`Pila::geometry_committed`).
+#[derive(Default)]
+struct DrawnSize(std::cell::Cell<smithay::utils::Size<i32, Logical>>);
+
 /// Fade a layer surface out while its content is still there: when its
 /// client takes the buffer away (pre-commit) or the surface is destroyed
 /// (`layer_destroyed` comes first when the client destroys the role; a dead
@@ -498,7 +503,17 @@ impl Pila {
 
     /// `window` was just mapped: fade it in.
     pub fn animate_open(&mut self, window: &Window) {
+        self.start_settling();
         self.appear(window, AnimationKind::WindowOpen, Style::Open);
+    }
+
+    /// A window or layer surface was just shown for the first time, or a
+    /// window drew itself at a new size (animated or not): its app is likely
+    /// busy on the GPU for a few frames (starting up, drawing everything
+    /// anew), so frames aren't held to render late for a while
+    /// (`udev/render_late.rs`).
+    pub fn start_settling(&mut self) {
+        self.settling_since = Some(self.clock.now().into());
     }
 
     /// A minimized `window` was just put back: the reverse of minimizing.
@@ -966,6 +981,12 @@ impl Pila {
             return;
         }
         let size = committed_size(window);
+        // A new size, drawn anew: its app is busy on the GPU for a while.
+        let drawn = window.user_data().get_or_insert(DrawnSize::default);
+        let before = drawn.0.replace(size);
+        if !before.is_empty() && !size.is_empty() && before != size {
+            self.start_settling();
+        }
         let now = self.animation_time();
         let Some(resizing) = self
             .animations
@@ -1018,6 +1039,7 @@ impl Pila {
         if shown.0.replace(has_buffer) || !has_buffer {
             return;
         }
+        self.start_settling();
         let now = self.animation_time();
         let from = self.layer_visibility(layer, now).unwrap_or(0.0);
         self.forget_layer_animations(layer);

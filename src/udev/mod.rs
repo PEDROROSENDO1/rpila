@@ -344,9 +344,6 @@ struct OutputSurface {
     /// The last frame shown was torn (`tearing.rs`): not held, a game that
     /// tears wants its frames at once.
     torn: bool,
-    /// An animation ran when it was last drawn: the first frame of one
-    /// isn't held (`render_late.rs`).
-    animated: bool,
 }
 
 /// A redraw asked for with something new to show (`OutputSurface::request`).

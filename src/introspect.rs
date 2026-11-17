@@ -389,6 +389,9 @@ impl Pila {
                 "entries": self.blur.stats().2,
             },
             "capture": { "textures": self.capture.texture_count() },
+            // When a window or layer surface last appeared or a window drew
+            // at a new size, in monotonic microseconds (`Pila::start_settling`).
+            "settling_us": self.settling_since.map(|at| at.as_micros() as u64),
             "event_loop": {
                 "iterations": self.loop_stats.total.0,
                 "housekeeping": self.loop_stats.total.1,

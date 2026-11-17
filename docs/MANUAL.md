@@ -660,8 +660,10 @@ than right after the last one: what an app draws and where the pointer goes in t
 make that refresh, a refresh sooner than otherwise (less latency in games with vsync on, video,
 scrolling). How close follows how long the last few seconds of frames took, CPU and GPU, plus
 some room; if a frame comes late anyway, Pila draws at once on that monitor for a couple of
-seconds. Not while a game tears, nor with adaptive sync. `render-late = false` in the
-configuration turns it off.
+seconds. It does so only while the screen is steady: not during Pila's animations, nor for a
+moment after a window or panel opens or a window changes size (its app busy on the GPU), nor
+while a game tears or with adaptive sync. `render-late = false` in the configuration turns it
+off.
 
 ## Window and layer rules
 

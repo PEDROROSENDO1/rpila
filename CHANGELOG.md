@@ -2,15 +2,15 @@
 
 ## Unreleased
 
-- **Less latency on a TTY:** each frame is drawn as close to the monitor's refresh as it safely
-  can be, rather than right after the last one, so what apps draw and where the pointer goes in
-  the meantime still make that refresh. How close follows how long the last few seconds of
-  frames took, CPU and GPU, and a frame that comes late anyway makes Pila draw at once on that
-  monitor for two seconds; not while a game tears, nor with adaptive sync, nor for the first
-  frame of an animation, and leaving a fullscreen window shown as it is keeps the margin of
-  frames Pila draws. On the author's
-  laptop with an external monitor, from a redraw asked for to the refresh that showed it: 25.8
-  to 19.7 ms on the laptop's screen, 28.5 to 20.1 ms on the monitor, no refresh missed.
+- **Less latency on a TTY:** while the screen is steady, each frame is drawn as close to the
+  monitor's refresh as it safely can be, rather than right after the last one, so what apps draw
+  and where the pointer goes in the meantime still make that refresh. How close follows how long
+  the last few seconds of frames took, CPU and GPU, and is never under half a refresh; a frame
+  that comes late anyway makes Pila draw at once on that monitor for two seconds. Not during
+  Pila's animations, nor for a moment after a window or panel opens or a window changes size (its
+  app is busy on the GPU then), nor while a game tears or with adaptive sync. On the author's
+  laptop with an external monitor, from a redraw asked for to the refresh that showed it: 25.8 to
+  21.3 ms on the laptop's screen, 28.5 to 21.7 ms on the monitor, no refresh missed.
   `render-late = false` turns it off.
 - **The frame statistics time the GPU too** (`RUST_LOG=pila::frames=debug`): each frame's GPU
   work, from its submission to its fence signaling, without waiting for it (`gpu_avg_ms`,
