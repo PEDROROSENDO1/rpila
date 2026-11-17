@@ -640,6 +640,9 @@ Apps that ask for every key while they have the focus (virtual machines, remote 
 keyboard-shortcuts-inhibit, or an X11 app that grabs the keyboard) get Pila's bindings and
 touchpad gestures too, all but the one that quits Pila. Clicking another window always gets out.
 
+X11 launchers like dmenu (`launcher = "dmenu_run"`) get the keyboard when they open, even over a
+Wayland window, and give it back when they close; X11 menus and tooltips leave it where it is.
+
 A rule turns off the window animations for Steam games:
 
 ```toml
