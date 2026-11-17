@@ -285,6 +285,25 @@ fn mod_down_undoes_a_snap() {
     assert_eq!(geometry_of(&mut pila, "a"), before);
 }
 
+/// Moving a snapped window with the keyboard takes it out of the snap: it
+/// gets its size from before back, its corner moved from where it was.
+#[test]
+fn mod_shift_arrows_unsnap_a_snapped_window_where_it_is() {
+    let (mut pila, client, window, (_, _, w, h)) = one_window("");
+    pila.combo("Super+Left");
+    pila.wait("snapped left", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["snapped"] == "left" && a["geometry"]["w"] == 640
+    });
+    assert_eq!(geometry_of(&mut pila, "a"), (0, BAR, 640, 800 - BAR));
+    pila.combo("Super+Shift+Right");
+    pila.wait("unsnapped, moved by 40", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["snapped"].is_null() && rect(&a["geometry"]) == (40, BAR, w, h)
+    });
+    client.wait_configure(window, "untiled", |c| !c.has(states::TILED_LEFT));
+}
+
 #[test]
 fn mod_shift_arrows_move_by_40() {
     let (mut pila, _client, _, (x, y, w, h)) = one_window("");
