@@ -86,6 +86,21 @@ impl Backend {
         }
     }
 
+    /// The GPU finished, at `signal`, the frame of `output` whose drawing
+    /// started at `started` (`frame_stats::GpuFrame`): bare metal times its
+    /// frames by it to render late (`udev/render_late.rs`).
+    pub fn gpu_done(
+        &mut self,
+        output: &Output,
+        started: std::time::Duration,
+        signal: std::time::Duration,
+    ) {
+        match self {
+            Backend::Udev(data) => data.gpu_done(output, started, signal),
+            Backend::Winit(_) | Backend::Headless(_) => {}
+        }
+    }
+
     /// Ask for a new frame on every output.
     pub fn queue_redraw(&mut self) {
         match self {

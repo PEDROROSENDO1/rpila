@@ -643,6 +643,10 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             redraw_content: crate::redraw::Content::Maybe,
             request: None,
             queued_request: None,
+            render_timing: Default::default(),
+            render_at: None,
+            queued_held: false,
+            torn: false,
         },
     );
     if !enabled {

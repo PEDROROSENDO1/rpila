@@ -57,6 +57,12 @@
 //! and direct scanout draws nothing) and their GPU time, average and worst; a
 //! frame whose GPU time alone takes more than half the period is logged on its
 //! own. Not judged: there's no budget for it (yet).
+//!
+//! On bare metal two more: how many frames were held to be drawn close to
+//! their vblank (`held`, `udev/render_late.rs`), and the latency of the frames
+//! with something new: from the first redraw asked for with it (a client's
+//! commit, input, an animation) to the vblank that showed it, average and
+//! worst (`latency_avg_ms`, `latency_max_ms`).
 
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::time::Duration;
@@ -87,6 +93,10 @@ pub struct FrameStats {
     gpu_frames: u32,
     gpu_total: Duration,
     gpu_max: Duration,
+    held: u32,
+    latency_frames: u32,
+    latency_total: Duration,
+    latency_max: Duration,
     /// When the GPU last finished one of its frames (`gpu_time`), kept
     /// across reports.
     last_gpu_signal: Option<Duration>,
@@ -117,6 +127,14 @@ pub struct Report {
     pub gpu_frames: u32,
     pub gpu_avg: Duration,
     pub gpu_max: Duration,
+    /// Frames held to be drawn close to their vblank (bare metal), counted
+    /// in `frames` too.
+    pub held: u32,
+    /// From a redraw asked for to the vblank that showed it (bare metal):
+    /// how many, average and worst.
+    pub latency_frames: u32,
+    pub latency_avg: Duration,
+    pub latency_max: Duration,
 }
 
 impl FrameStats {
@@ -169,6 +187,13 @@ impl FrameStats {
                 .checked_div(self.gpu_frames)
                 .unwrap_or_default(),
             gpu_max: self.gpu_max,
+            held: self.held,
+            latency_frames: self.latency_frames,
+            latency_avg: self
+                .latency_total
+                .checked_div(self.latency_frames)
+                .unwrap_or_default(),
+            latency_max: self.latency_max,
         };
         *self = Self {
             start: Some(now),
@@ -213,6 +238,19 @@ impl FrameStats {
     /// A frame was shown at once, torn.
     pub fn torn(&mut self) {
         self.torn += 1;
+    }
+
+    /// The frame about to be recorded was held to be drawn close to its
+    /// vblank.
+    pub fn held(&mut self) {
+        self.held += 1;
+    }
+
+    /// A frame was shown `latency` after the redraw that asked for it.
+    pub fn latency(&mut self, latency: Duration) {
+        self.latency_frames += 1;
+        self.latency_total += latency;
+        self.latency_max = self.latency_max.max(latency);
     }
 }
 
@@ -478,6 +516,10 @@ fn log_report(output: &str, report: &Report) {
         gpu_frames = report.gpu_frames,
         gpu_avg_ms = ms(report.gpu_avg),
         gpu_max_ms = ms(report.gpu_max),
+        held = report.held,
+        latency_frames = report.latency_frames,
+        latency_avg_ms = ms(report.latency_avg),
+        latency_max_ms = ms(report.latency_max),
         "frames"
     );
 }
@@ -594,7 +636,8 @@ impl Pila {
             submitted,
         } = frame;
         let name = output.name();
-        let period = refresh_period(output);
+        let output = output.clone();
+        let period = refresh_period(&output);
         let inserted = self.loop_handle.insert_source(
             Generic::new(fence, Interest::READ, Mode::OneShot),
             move |_, fence, state| {
@@ -605,6 +648,11 @@ impl Pila {
                 };
                 let stats = state.frame_stats.entry(name.clone()).or_default();
                 let gpu = stats.record_gpu(started, submitted, signal);
+                if gpu.is_some() {
+                    if let Some(backend) = &mut state.backend {
+                        backend.gpu_done(&output, started, signal);
+                    }
+                }
                 if let Some(gpu) = gpu.filter(|gpu| *gpu > period / 2) {
                     debug!(
                         target: "pila::frames",
@@ -626,6 +674,21 @@ impl Pila {
     /// the primary plane (see the module docs).
     pub fn record_direct_frame(&mut self, output: &Output) {
         self.frame_stats.entry(output.name()).or_default().direct();
+    }
+
+    /// The frame of `output` recorded next was held to be drawn close to its
+    /// vblank (`udev/render_late.rs`).
+    pub fn record_held_frame(&mut self, output: &Output) {
+        self.frame_stats.entry(output.name()).or_default().held();
+    }
+
+    /// A frame of `output` was shown `latency` after the redraw that asked
+    /// for it (see the module docs).
+    pub fn record_latency(&mut self, output: &Output, latency: Duration) {
+        self.frame_stats
+            .entry(output.name())
+            .or_default()
+            .latency(latency);
     }
 
     /// A frame of `output` was shown at once, torn (`tearing.rs`).
@@ -755,6 +818,22 @@ mod tests {
         assert_eq!(stats.record_gpu(5000 * MS, 5001 * MS, 1005 * MS), None);
         let report = stats.record(10_000 * MS, MS).expect("due again");
         assert_eq!((report.gpu_frames, report.gpu_avg), (0, Duration::ZERO));
+    }
+
+    #[test]
+    fn held_frames_and_latencies_are_reported_with_the_frames() {
+        let mut stats = FrameStats::default();
+        stats.held();
+        stats.record(Duration::ZERO, MS);
+        stats.latency(10 * MS);
+        stats.record(1000 * MS, MS);
+        stats.latency(20 * MS);
+        let report = stats.record(5000 * MS, MS).expect("due after 5 s");
+        assert_eq!((report.frames, report.held), (3, 1));
+        assert_eq!(report.latency_frames, 2);
+        assert_eq!((report.latency_avg, report.latency_max), (15 * MS, 20 * MS));
+        let report = stats.record(10_000 * MS, MS).expect("due again");
+        assert_eq!((report.held, report.latency_frames), (0, 0));
     }
 
     #[test]

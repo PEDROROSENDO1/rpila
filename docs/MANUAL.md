@@ -655,6 +655,14 @@ nothing but it changes on that monitor (the pointer moving over it waits for the
 TTY, when the graphics driver takes it. With vsync on in the game, nothing tears. `tearing = false`
 in the configuration turns it off for every game.
 
+On a TTY Pila draws each frame as close to the monitor's next refresh as it safely can, rather
+than right after the last one: what an app draws and where the pointer goes in the meantime still
+make that refresh, a refresh sooner than otherwise (less latency in games with vsync on, video,
+scrolling). How close follows how long the last few seconds of frames took, CPU and GPU, plus
+some room; if a frame comes late anyway, Pila draws at once on that monitor for a couple of
+seconds. Not while a game tears, nor with adaptive sync. `render-late = false` in the
+configuration turns it off.
+
 ## Window and layer rules
 
 Rules change how particular windows or panels behave. A `[[window-rule]]` matches windows by

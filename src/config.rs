@@ -1240,6 +1240,7 @@ struct ConfigFile {
     other_gpus: Option<bool>,
     direct_scanout: Option<bool>,
     tearing: Option<bool>,
+    render_late: Option<bool>,
     shadow: ShadowFile,
     colors: ColorsFile,
     animations: AnimationsFile,
@@ -1578,6 +1579,9 @@ pub struct Config {
     /// game with vsync off) has its frames shown at once, torn, rather than at
     /// the next vblank (`tearing.rs`). On unless turned off.
     pub tearing: bool,
+    /// Whether a frame is drawn as close to its vblank as it safely can be,
+    /// for less latency (`udev/render_late.rs`). On unless turned off.
+    pub render_late: bool,
     pub shadow: ShadowConfig,
     pub colors: Colors,
     /// Which animations play and how long they last (`animation.rs`).
@@ -1871,6 +1875,7 @@ impl Config {
             other_gpus: file.other_gpus.unwrap_or(false),
             direct_scanout: file.direct_scanout.unwrap_or(true),
             tearing: file.tearing.unwrap_or(true),
+            render_late: file.render_late.unwrap_or(true),
             shadow,
             colors,
             animations,
@@ -2600,6 +2605,14 @@ mod tests {
                 .unwrap()
                 .tearing
         );
+    }
+
+    #[test]
+    fn rendering_late_is_on_unless_turned_off() {
+        assert!(Config::from_toml("", &no_env).unwrap().render_late);
+        let config = Config::from_toml("render-late = false", &no_env).unwrap();
+        assert!(!config.render_late);
+        assert!(Config::from_toml("render-late = 0", &no_env).is_err());
     }
 
     #[test]

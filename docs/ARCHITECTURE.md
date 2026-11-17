@@ -280,7 +280,19 @@ Key flows and invariants:
   `SURE_STREAK` redraws in a row found nothing, a bound on a loop of Pila's own requests): if that redraw finds nothing new
   either (`idle_streak`: two in a row, a covered surface's commits paced by its fifo barriers,
   say), it waits too, until the wait is over. An output with a frame in flight (its vblank draws it)
-  or a lock waiting for its frame never waits. A frame that fails
+  or a lock waiting for its frame never waits. Past those waits a frame is drawn late, its
+  margin before the next vblank (`render-late`, on by default; `udev/render_late.rs`,
+  `draw::hold_late`): `OutputSurface::render_at` holds the output and a timer
+  (`schedule_late_render`) draws it then, so what clients and input bring meanwhile makes that
+  vblank. The margin is the worst of the output's last frames' readiness (`RenderTiming`: from
+  `prepare` to the later of the commit queued and the GPU's fence, which `Pila::watch_gpu` reports
+  through `Backend::gpu_done`), plus the other outputs' worst (drawn first, they hold it up), plus
+  `render_late::SLACK`. Nothing is held before a frame was measured, after a composited frame with
+  no fence, with a vblank older than a second (the rounded refresh drifts), after a torn frame
+  (`OutputSurface::torn`), with adaptive sync, for the first frame after a modeset or while a lock
+  waits; a held frame that comes late or misses a refresh (`queued_held`) turns it off for that
+  output for two seconds. A held frame counts as on its way for missed refreshes
+  (`back_to_back`). A frame that fails
   at the DRM level (render or queue: no DRM master yet after a VT switch, a monitor beyond
   the link's bandwidth) blocks only its own output until a per-output timer retries it
   (`recovery.rs`: 100 ms doubling up to 10 s, logged at the 1st, 2nd, 4th… failure, reset by
@@ -486,8 +498,12 @@ Key flows and invariants:
   its own GPU work and whatever the GPU had queued before it. A fence older than the frame, or
   the one measured last (Smithay hands back the last frame's when the primary plane had nothing
   to draw), is an earlier frame's and measures nothing (`gpu_time`). Headless waits for the GPU
-  anyway (its CPU time includes it), nested and bare metal never do. `scripts/check` judges these
-  lines and reports the idle redraws per output, the GPU time per output and the loop's work.
+  anyway (its CPU time includes it), nested and bare metal never do. On bare metal the report
+  also has the frames held to render late (`held`) and the frames' latency, from the first
+  redraw asked for with something new (`OutputSurface::request`) to the vblank that showed it
+  (`latency_frames`, `latency_avg_ms`, `latency_max_ms`). `scripts/check` judges these
+  lines and reports the idle redraws per output, the GPU time and latency per output and the
+  loop's work.
 - **Pointer grabs** (`grabs/move_grab.rs`, `grabs/resize_grab.rs`): Mod+drag installs the
   move/resize grab *before* the press is
   forwarded, so the client never sees that click. Move/resize grabs show their own cursor

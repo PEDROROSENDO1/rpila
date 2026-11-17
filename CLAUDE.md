@@ -185,7 +185,10 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   from another VT: swapchain and modeset) is a cost of setting it up, logged on its own and
   not counted. The GPU's part of a frame (`gpu_avg_ms`, `gpu_max_ms`: from its submission to
   its native fence signaling, not waited for; none on software rendering) is logged with the
-  rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. Screen captures, which build frames of their own after the outputs', are
+  rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. On bare
+  metal frames are drawn late, as close to their vblank as recent frames allow (`render-late`,
+  `udev/render_late.rs`), and their latency (redraw asked → vblank that showed it) is logged
+  and reported too; `PILA_CHECK_RENDER_LATE=false scripts/check` gives the numbers without it. Screen captures, which build frames of their own after the outputs', are
   logged apart (`captures`), held to the same budget (`scripts/check` streams one, as a
   screen share does: `scripts/capture-stream`). The event loop's own work after each
   iteration (`after_frames`: taskbars, IPC, the `Space`), paced by events rather than
@@ -201,7 +204,9 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   surfaces, the wake for a timestamp a client asked for, the frame callbacks a captured
   hidden window gets at its capture client's rate and, on bare metal, the wait of an output
   that just redrew with nothing new until half a period before its next vblank, for the next
-  redraw that may bring nothing either (`udev/draw.rs::idle_wait`: a client committing no
+  redraw that may bring nothing either, and the wait of a frame held to be drawn its margin
+  before the vblank (`udev/render_late.rs`: the vblank paces it, the timer only places it in the
+  period) (`udev/draw.rs::idle_wait`: a client committing no
   new picture (no buffer, or one without damage) in a loop of frame callbacks or fifo
   barriers would make it redraw as fast as it loops; a change
   of Pila's own never waits, a client's new picture once per wait: `redraw::Content`,

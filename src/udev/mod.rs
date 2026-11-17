@@ -78,6 +78,7 @@ mod gpus;
 mod input;
 mod outputs;
 mod recovery;
+mod render_late;
 mod secondary;
 
 use self::{draw::*, gamma::*, input::*, outputs::*, recovery::Recovery};
@@ -331,6 +332,18 @@ struct OutputSurface {
     /// frame in flight: how late it shows is measured (`frame_stats.rs`).
     request: Option<Request>,
     queued_request: Option<Request>,
+    /// What its recent frames took to be ready, for rendering late
+    /// (`render_late.rs`).
+    render_timing: render_late::RenderTiming,
+    /// Held to be drawn then, its margin before the next vblank
+    /// (`render_late.rs`); a timer draws it. Cleared when drawn.
+    render_at: Option<Duration>,
+    /// The frame in flight was held so (`render_at`): if it shows late,
+    /// rendering late backs off.
+    queued_held: bool,
+    /// The last frame shown was torn (`tearing.rs`): not held, a game that
+    /// tears wants its frames at once.
+    torn: bool,
 }
 
 /// A redraw asked for with something new to show (`OutputSurface::request`).
@@ -454,6 +467,37 @@ impl UdevData {
             if let Some(surface) = self.outputs.get_mut(&id) {
                 surface.recovery.retry();
             }
+        }
+    }
+
+    /// Draw `id` at `at` (monotonic), its margin before the next vblank
+    /// (`render_late.rs`, `OutputSurface::render_at`, which `draw::prepare`
+    /// lets through from then on).
+    fn schedule_late_render(&mut self, id: OutputId, at: Duration) {
+        let delay = at.saturating_sub(self.clock.now().into());
+        let inserted =
+            self.loop_handle
+                .insert_source(Timer::from_duration(delay), move |_, _, state| {
+                    if let Some(Backend::Udev(data)) = &mut state.backend {
+                        data.schedule_render();
+                    }
+                    TimeoutAction::Drop
+                });
+        if let Err(err) = inserted {
+            // Without a timer the output would wait for the next redraw
+            // asked for: draw it now instead.
+            warn!(err = %err.error, "can't schedule an output's late render");
+            if let Some(surface) = self.outputs.get_mut(&id) {
+                surface.render_at = None;
+            }
+        }
+    }
+
+    /// The GPU finished, at `signal`, the frame of `output` whose drawing
+    /// started at `started` (`frame_stats::GpuFrame`), for rendering late.
+    pub fn gpu_done(&mut self, output: &Output, started: Duration, signal: Duration) {
+        if let Some(surface) = self.outputs.values_mut().find(|s| s.output == *output) {
+            surface.render_timing.gpu_done(started, signal);
         }
     }
 

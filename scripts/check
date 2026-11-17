@@ -42,6 +42,8 @@
 # PILA_CHECK_RUST_LOG adds RUST_LOG directives to the run's own, to look into
 # something the run shows, e.g. why direct scanout starts and stops:
 #   PILA_CHECK_RUST_LOG=smithay::backend::drm::compositor=trace scripts/check
+# PILA_CHECK_RENDER_LATE=false runs it with `render-late = false`, whatever the
+# base config says, to compare the frames' latency with and without it.
 #
 # pila quits by itself when the scenarios are done (about a minute). On a
 # TTY the base is your config (~/.config/pila/config.toml: monitors,
@@ -459,9 +461,17 @@ if ! $judge_only; then
     # The workload switches among workspaces 1 to 3: the count is the
     # check's, whatever the base config says (top-level keys come first).
     printf 'workspaces = 4\n' >"$config"
+    case "${PILA_CHECK_RENDER_LATE:-}" in
+        '') ;;
+        true | false) printf 'render-late = %s\n' "$PILA_CHECK_RENDER_LATE" >>"$config" ;;
+        *)
+            echo "$name: PILA_CHECK_RENDER_LATE is true or false" >&2
+            exit 2
+            ;;
+    esac
     if [ -n "$base_config" ]; then
         awk '/^[ \t]*\[/ { table = 1; skip = ($0 ~ /^[ \t]*\[(animations\]|\[window-rule\]\]|\[layer-rule\]\])/) }
-             !table && /^[ \t]*workspaces[ \t]*=/ { next }
+             !table && /^[ \t]*(workspaces|render-late)[ \t]*=/ { next }
              !skip' "$base_config" >>"$config"
         echo "Base config: $base_config (without its [animations], rules and workspaces)."
     fi
@@ -708,6 +718,37 @@ if [ -n "$stats" ]; then
         done <<<"$gpu"
     elif grep -q 'GPU time not measured' "$log"; then
         info "GPU time not measured: frames came with no native fence (software rendering gives none)"
+    fi
+fi
+
+# The frames' latency on bare metal (`latency_*` in the frame statistics: from
+# the first redraw asked for with something new to the vblank that showed it),
+# and how many frames were held to be drawn close to their vblank (`held`:
+# `render-late`, `udev/render_late.rs`), per output. Reported, not judged: it
+# depends on what the scenarios ask for when; compare runs with
+# PILA_CHECK_RENDER_LATE=false.
+if [ -n "$stats" ] && grep -q 'backend=Udev' "$log"; then
+    awk '{
+        o = ""; f = h = n = a = m = 0
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^output=/) { o = substr($i, 8); gsub(/"/, "", o) }
+            if ($i ~ /^frames=/) f = substr($i, 8)
+            if ($i ~ /^held=/) h = substr($i, 6)
+            if ($i ~ /^latency_frames=/) n = substr($i, 16)
+            if ($i ~ /^latency_avg_ms=/) a = substr($i, 16)
+            if ($i ~ /^latency_max_ms=/) m = substr($i, 16) + 0
+        }
+        frames[o] += f; held[o] += h; count[o] += n; total[o] += n * a
+        if (m > worst[o]) worst[o] = m
+    } END {
+        for (o in count) if (count[o] > 0)
+            printf "%s %d %.2f %.2f %d %d\n", o, count[o], total[o] / count[o], worst[o], held[o], frames[o]
+    }' <<<"$stats" | while read -r output count average worst held frames; do
+        info "latency on $output: ${average} ms on average, worst ${worst} ms ($count frames); $held of $frames frames held to render late"
+    done
+    backoffs=$(grep -c 'render late: a held frame came late' "$log" || true)
+    if [ "$backoffs" -gt 0 ]; then
+        info "render late backed off $backoffs times (a held frame came late)"
     fi
 fi
 

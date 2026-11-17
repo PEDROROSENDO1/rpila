@@ -146,7 +146,13 @@ fn prepare(state: &mut Pila, id: OutputId) -> Option<Ready> {
     {
         return None;
     }
-    let output = surface.output.clone();
+    if hold_late(state, id, now, lock_pending) {
+        return None;
+    }
+    let Some(Backend::Udev(data)) = &state.backend else {
+        return None;
+    };
+    let output = data.outputs.get(&id)?.output.clone();
     let output_geo = state.space.output_geometry(&output)?;
 
     let started = std::time::Instant::now();
@@ -163,6 +169,52 @@ fn prepare(state: &mut Pila, id: OutputId) -> Option<Ready> {
         lock_pending,
         cpu: started.elapsed(),
     })
+}
+
+/// Whether `id`'s frame waits to be drawn its margin before the next vblank
+/// (`render_late.rs`); if so, a timer draws it then. One held already waits
+/// until its moment, and is let through from then on.
+fn hold_late(state: &mut Pila, id: OutputId, now: Duration, lock_pending: bool) -> bool {
+    let enabled = state.config.render_late;
+    let Some(Backend::Udev(data)) = &mut state.backend else {
+        return false;
+    };
+    // The worst of the other outputs' frames: one drawn first holds this one
+    // up (they share the event loop and the GPU).
+    let others = data
+        .outputs
+        .iter()
+        .filter(|(other, surface)| **other != id && surface.drm_output.is_some())
+        .filter_map(|(_, surface)| surface.render_timing.worst())
+        .max()
+        .unwrap_or_default();
+    let Some(surface) = data.outputs.get_mut(&id) else {
+        return false;
+    };
+    if let Some(at) = surface.render_at {
+        return now < at;
+    }
+    // A game that tears wants its frames at once; with adaptive sync the
+    // flip makes the vblank; a lock waits for its frame; the first frame
+    // after a modeset starts a new grid.
+    if !enabled || lock_pending || surface.first_frame || surface.torn || surface.presented_variable
+    {
+        return false;
+    }
+    let period = crate::frame_stats::refresh_period(&surface.output);
+    let at = surface
+        .render_timing
+        .margin(now, others)
+        .and_then(|margin| render_late::render_at(surface.last_vblank_time, now, period, margin));
+    let Some(at) = at else {
+        return false;
+    };
+    surface.render_at = Some(at);
+    if let Some(request) = surface.request.as_mut() {
+        request.held = true;
+    }
+    data.schedule_late_render(id, at);
+    true
 }
 
 /// Draw `ready` from `input` (`Pila::frame_input`, shared by the outputs of a
@@ -244,6 +296,8 @@ fn draw(
     surface.redraw_needed = false;
     surface.redraw_content = crate::redraw::Content::Maybe;
     let request = surface.request.take();
+    // Held to be drawn now, its margin before the vblank (`render_late.rs`).
+    let held = surface.render_at.take().is_some();
 
     let mut elements = Vec::new();
     if pointer_here {
@@ -381,6 +435,17 @@ fn draw(
                 match drm_output.queue_frame(Some(feedback)) {
                     Ok(()) => {
                         surface.frame_pending = true;
+                        surface.queued_held = held;
+                        // What it took to be ready, once its GPU work is
+                        // done too (`render_late.rs`).
+                        let waits = if direct {
+                            render_late::Waits::Nothing
+                        } else if gpu.is_some() {
+                            render_late::Waits::Fence
+                        } else {
+                            render_late::Waits::Unknown
+                        };
+                        surface.render_timing.queued(now, clock.now().into(), waits);
                         // Going to a client's buffer or back is a change of
                         // the plane's that the kernel checks anew, in the
                         // test Smithay makes while rendering and in the
@@ -432,6 +497,9 @@ fn draw(
         surface.lock_frame = LockFrame::None;
     }
     let queued = surface.frame_pending;
+    if held {
+        surface.back_to_back = back_to_back_after_held(surface.back_to_back, queued);
+    }
     let wait_over = surface.idle_until.is_none_or(|until| now >= until);
     surface.idle_streak = idle_streak(surface.idle_streak, nothing_new, queued, wait_over);
     surface.idle_until = nothing_new.then(|| {
@@ -499,6 +567,9 @@ fn draw(
         } else {
             if direct {
                 state.record_direct_frame(&output);
+            }
+            if held {
+                state.record_held_frame(&output);
             }
             state.record_frame(&output, cpu);
             if let Some(gpu) = gpu {
@@ -585,6 +656,20 @@ pub(super) fn frame_finish(
             "late frame: asked for, drawn, shown"
         );
     }
+    // A frame held to be drawn late (`render_late.rs`) that still came late:
+    // that output draws at once for a while.
+    if std::mem::take(&mut surface.queued_held) && (late > 0 || missed > 0) {
+        surface.render_timing.showed_late(now.into());
+        debug!(
+            target: "pila::frames",
+            output = surface.output.name(),
+            "render late: a held frame came late; drawing at once for a while"
+        );
+    }
+    surface.torn = torn;
+    // From the first redraw asked for with something new to the vblank that
+    // showed it (`frame_stats.rs`, latency).
+    let latency = request.map(|r| shown.saturating_sub(r.at));
     surface.last_vblank = metadata.is_some().then_some(seq);
     // The time of a torn flip isn't a vblank's: the grid the next vblank is
     // reckoned from (`idle_until`, `commit_pacing`) stays the last one's.
@@ -641,6 +726,9 @@ pub(super) fn frame_finish(
     let missed = u32::try_from(missed).unwrap_or(u32::MAX).max(late);
     state.record_missed(&output, missed);
     state.record_late(&output, late);
+    if let Some(latency) = latency {
+        state.record_latency(&output, latency);
+    }
     if torn {
         state.record_torn_frame(&output);
     }
@@ -651,7 +739,10 @@ pub(super) fn frame_finish(
     let animating = state.animating();
     if let Some(Backend::Udev(data)) = &mut state.backend {
         if let Some(surface) = data.outputs.get_mut(&id) {
-            surface.back_to_back = back_to_back(animating, surface.frame_pending);
+            // A frame held to be drawn late (`render_late.rs`) is on its
+            // way too.
+            let on_its_way = surface.frame_pending || surface.render_at.is_some();
+            surface.back_to_back = back_to_back(animating, on_its_way);
         }
     }
 }
@@ -721,11 +812,19 @@ fn idle_streak(streak: u32, nothing_new: bool, queued: bool, wait_over: bool) ->
 }
 
 /// Whether the next frame on an output follows the one just shown with no pause
-/// meant: an animation runs, and this output has a frame on its way. One that
+/// meant: an animation runs, and this output has a frame on its way (queued,
+/// or held to be drawn late: `render_late.rs`). One that
 /// has nothing new while another output animates just rests, and its idle
 /// vblanks aren't missed refreshes.
 fn back_to_back(animating: bool, frame_queued: bool) -> bool {
     animating && frame_queued
+}
+
+/// Whether an output is still back to back (`back_to_back`) once a frame held
+/// to be drawn late (`render_late.rs`) was drawn, `queued` or not.
+/// A hold isn't a frame: one that found nothing new leaves it resting.
+fn back_to_back_after_held(back_to_back: bool, queued: bool) -> bool {
+    back_to_back && queued
 }
 
 /// Refreshes missed from the vblank `last` that showed a frame to `seq` that
@@ -887,6 +986,21 @@ mod tests {
         assert!(!back_to_back(true, false));
         // 240 vblanks later something changes, with another animation running.
         assert_eq!(missed_refreshes(1000, 1241, back_to_back(true, false)), 0);
+    }
+
+    /// Seen on bare metal: DP-1 had a redraw held to render late while eDP-1
+    /// animated, the held redraw found nothing new, and DP-1 rested for 4 s:
+    /// its next frame counted 240 missed refreshes.
+    #[test]
+    fn a_held_redraw_that_finds_nothing_new_leaves_the_output_resting() {
+        // At its vblank, with a redraw held and an animation elsewhere.
+        let held = back_to_back(true, true);
+        assert!(held);
+        // Drawn, nothing new: no frame queued, the output rests.
+        let after = back_to_back_after_held(held, false);
+        assert_eq!(missed_refreshes(1000, 1241, after), 0);
+        // A frame queued: it stays back to back.
+        assert!(back_to_back_after_held(held, true));
     }
 
     #[test]
