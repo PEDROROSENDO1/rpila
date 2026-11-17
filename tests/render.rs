@@ -362,6 +362,21 @@ fn a_blur_keeps_to_the_clients_region() {
     assert_eq!(pila.pixel(636.0, 495.0), [255, 0, 0, 255]);
 }
 
+/// A client that destroys its background effect object loses the blur at
+/// its next commit: what's behind is sharp again.
+#[test]
+fn destroying_the_background_effect_takes_the_blur_away() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    halves_and_a_glass(&mut pila, &client, "glass");
+    let (surface, effect) = set_blur_region(&mut pila, &client, Surf(2), &[(0, 0, 200, 200)]);
+    wait_mixed(&mut pila, 636.0, 400.0);
+    effect.destroy();
+    surface.commit();
+    client.flush();
+    pila.wait_pixel(636.0, 400.0, [255, 0, 0, 255]);
+}
+
 /// A red wallpaper and a glass on both outputs, as a shell does.
 fn glasses_on_two_outputs(config: &str) -> (TestPila, Client) {
     let mut pila = TestPila::start_with(Options {
