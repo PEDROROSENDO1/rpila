@@ -49,7 +49,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # without waiting for a release (0.7.0 is from June 2025). Move `rev` forward
 # on purpose, with a full test run and a bare-metal check.
 #
-# From Pila's fork for now, branch `pila`: Smithay's fd8e3f50 (2026-11-14) plus
+# From Pila's fork for now, branch `pila`: Smithay's 33323a91 (2026-11-16) plus
 # what it lacks, each kept until Smithay has it:
 # - a text cursor with no width (GTK's) is kept, so input methods' candidate
 #   windows go next to it
@@ -68,7 +68,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # `https://github.com/Smithay/smithay.git` once it has them.
 [dependencies.smithay]
 git = "https://github.com/igalmarino/smithay.git"
-rev = "12a26c10f2df789cd2d18c20af1386da65ba51da"
+rev = "3e1f459aaf943f93b324a9a03fc39b244ac8a13e"
 default-features = false
 features = [
     "backend_winit",

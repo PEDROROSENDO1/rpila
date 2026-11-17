@@ -1026,3 +1026,27 @@ fn activation_brings_a_window_from_another_workspace_or_minimized() {
     let state = pila.wait_focus("target");
     assert_eq!(state["workspace"], 3);
 }
+
+/// A client from before wl_keyboard 7 maps the keymap file with write
+/// access, so it gets a plain file (not the sealed one) and reads the keymap
+/// in it as a C string: the file ends in a NUL, counted in the size (a fix of
+/// Smithay's, 33323a91).
+#[test]
+fn an_older_client_gets_a_keymap_that_ends_in_nul() {
+    let pila = TestPila::start();
+    let client = pila.client();
+    for version in [1, 6, 7, 9] {
+        let tag = format!("keyboard-v{version}");
+        let _keyboard = client.keyboard_at_seat_version(version, &tag);
+        client.wait_logged(&tag, "Keymap");
+        let keymap = client
+            .logged(&tag)
+            .into_iter()
+            .find(|e| e.starts_with("Keymap"))
+            .unwrap();
+        assert!(
+            keymap.contains("nul_terminated=true"),
+            "v{version}: {keymap}"
+        );
+    }
+}

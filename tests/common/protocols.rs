@@ -13,8 +13,10 @@ use wayland_client::{
         wl_data_device_manager::WlDataDeviceManager,
         wl_data_offer::WlDataOffer,
         wl_data_source::{self, WlDataSource},
+        wl_keyboard::{self, WlKeyboard},
         wl_output::WlOutput,
         wl_region::WlRegion,
+        wl_seat::WlSeat,
         wl_subcompositor::WlSubcompositor,
         wl_subsurface::WlSubsurface,
         wl_surface::WlSurface,
@@ -660,6 +662,16 @@ impl Client {
             .unwrap_or_else(|| panic!("pila offers no {interface}"))
     }
 
+    /// A keyboard of wl_seat bound at `version`, as an older client binds it;
+    /// its events are logged with `tag`.
+    pub fn keyboard_at_seat_version(&self, version: u32, tag: &str) -> WlKeyboard {
+        let seat: WlSeat = self.bind("wl_seat", version);
+        assert_eq!(seat.version(), version, "pila offers an older wl_seat");
+        let keyboard = seat.get_keyboard(&self.qh, tag.to_string());
+        self.flush();
+        keyboard
+    }
+
     /// Multiply `surface`'s alpha by `multiplier` (wp-alpha-modifier), from
     /// its next commit.
     pub fn fade(&self, surface: &WlSurface, multiplier: f64) {
@@ -1255,6 +1267,38 @@ pub fn read_pixel(file: &std::fs::File, width: i32, x: i32, y: i32) -> [u8; 3] {
 // --- xdg-session-management -----------------------------------------------------
 
 logged!(XdgSessionManagerV1, XdgSessionV1);
+logged!(WlSeat);
+
+/// A keyboard of a seat bound apart (`Client::keyboard_at_seat_version`):
+/// its events logged, the keymap as what a client would map of it.
+impl Dispatch<WlKeyboard, String> for Handler {
+    fn event(
+        state: &mut Self,
+        proxy: &WlKeyboard,
+        event: wl_keyboard::Event,
+        tag: &String,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let text = match event {
+            wl_keyboard::Event::Keymap { fd, size, .. } => {
+                use std::os::unix::fs::FileExt;
+                let mut data = vec![0; size as usize];
+                let read = std::fs::File::from(fd).read_at(&mut data, 0).unwrap_or(0);
+                data.truncate(read);
+                // xkbcommon reads it as a C string (`xkb_keymap_new_from_string`
+                // on the mapping, as most clients do): it must end in a NUL
+                // within `size`.
+                format!(
+                    "Keymap size={size} read={read} nul_terminated={}",
+                    data.last() == Some(&0)
+                )
+            }
+            other => format!("{other:?}"),
+        };
+        log(state, tag, proxy.id(), text);
+    }
+}
 logged!(
     wayland_protocols::wp::commit_timing::v1::client::wp_commit_timing_manager_v1::WpCommitTimingManagerV1,
     wayland_protocols::wp::commit_timing::v1::client::wp_commit_timer_v1::WpCommitTimerV1,

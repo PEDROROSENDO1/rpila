@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Smithay moved forward** (1 commit, to 33323a9; Pila's fork rebased on it, the revision 0.6.0
+  pins kept by its tag `rev-12a26c10`): apps from before wl_keyboard version 7, Xwayland among
+  them, get a keymap that ends in a NUL byte, as they read it as a C string; without it they
+  could read past its end.
 - **Window events say where windows are:** `pila msg subscribe` windows events now carry `x`,
   `y`, `width` and `height`, as `pila msg windows` does, so a taskbar can order windows by
   position without asking again. A window being dragged or resized with the pointer keeps the
