@@ -621,6 +621,58 @@ fn a_drop_nobody_accepts_is_cancelled_and_clicks_work_again() {
 
 /// A drag's icon follows the pointer while it lasts, over the windows, and
 /// goes with the drop.
+/// A drag that ends some other way than a release (here the session locked
+/// in the middle of it) is cancelled: the source hears it and its icon is
+/// gone once the screen is back.
+#[test]
+fn locking_cancels_a_drag_and_takes_its_icon_away() {
+    use wayland_client::protocol::wl_data_device_manager::{DndAction, WlDataDeviceManager};
+    const ICON: [u8; 4] = [255, 255, 0, 255]; // magenta
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let window = client.window("source").size(400, 300).create();
+    let state = pila.wait_focus("source");
+    let (x, y, ..) = rect(&window_in(&state, "source").unwrap()["geometry"]);
+    pila.move_to(x as f64 + 50.0, y as f64 + 50.0);
+    pila.press("left");
+    client.wait("the press", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::Button { pressed: true, .. }))
+    });
+    let source = client.data_source("drag", "dragged text");
+    source.set_actions(DndAction::Copy);
+    let manager: WlDataDeviceManager = client.bind("wl_data_device_manager", 3);
+    let device = manager.get_data_device(&client.seat(), &client.qh, "src".into());
+    let icon = client.painted_surface(ICON, (20, 20));
+    let serial = client.last_serial();
+    device.start_drag(Some(&source), &client.surface(window), Some(&icon), serial);
+    client.flush();
+    pila.move_to(x as f64 + 150.0, y as f64 + 120.0);
+    client.roundtrip();
+    pila.settle();
+    assert_eq!(
+        pila.pixel(x as f64 + 160.0, y as f64 + 130.0),
+        [255, 0, 255, 255]
+    );
+
+    let locker = pila.client();
+    let lock = locker.lock_session();
+    let _surface = locker.lock_surface(&lock, "HEADLESS-1", [255, 10, 20, 30]);
+    locker.wait_logged("lock", "Locked");
+    client.wait_logged("drag", "Cancelled");
+    lock.unlock_and_destroy();
+    locker.flush();
+    pila.wait("unlocked", |s| s["locked"] == false);
+    pila.release("left");
+    pila.settle();
+    assert_ne!(
+        pila.pixel(x as f64 + 160.0, y as f64 + 130.0),
+        [255, 0, 255, 255],
+        "the drag's icon stayed on screen"
+    );
+}
+
 #[test]
 fn a_drag_shows_its_icon_under_the_pointer() {
     use wayland_client::protocol::wl_data_device_manager::{DndAction, WlDataDeviceManager};
