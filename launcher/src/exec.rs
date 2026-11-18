@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// What `pila-launcher` was asked to do.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Args {
-    /// The terminal for apps with `Terminal=true` (else `$TERMINAL`).
+    /// The terminal for apps with `Terminal=true` (else `pick_terminal`'s).
     pub terminal: Option<String>,
 }
 
@@ -21,7 +21,9 @@ background; running it again shows or hides that one. In Pila, set
 Options:
   --terminal COMMAND  Run apps that ask for a terminal (Terminal=true in
                       their .desktop file) in COMMAND, as COMMAND -e ...
-                      (default: $TERMINAL)
+                      (default: $TERMINAL, else the first installed of
+                      kitty, foot, alacritty, ghostty, wezterm, konsole,
+                      gnome-terminal and xterm, as Pila picks its own)
   -h, --help          Show this help
   -V, --version       Show the version
 ";
@@ -141,6 +143,51 @@ pub fn clean_exec(exec: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Terminals tried in order with no `--terminal` and no `$TERMINAL`: the
+/// list Pila tries for its own (`config::TERMINALS`), kitty first.
+pub const TERMINALS: &[&str] = &[
+    "kitty",
+    "foot",
+    "alacritty",
+    "ghostty",
+    "wezterm",
+    "konsole",
+    "gnome-terminal",
+    "xterm",
+];
+
+/// The terminal for apps with `Terminal=true`: `given` (`--terminal`), else
+/// `from_env` (`$TERMINAL`), else the first of `TERMINALS` that
+/// `installed` finds; `None` if there's none.
+pub fn pick_terminal(
+    given: Option<&str>,
+    from_env: Option<&str>,
+    installed: impl Fn(&str) -> bool,
+) -> Option<String> {
+    given
+        .or(from_env)
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            TERMINALS
+                .iter()
+                .find(|t| installed(t))
+                .map(|t| t.to_string())
+        })
+}
+
+/// Whether `program` is an executable file in a `PATH` directory.
+pub fn in_path(program: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| {
+        std::fs::metadata(dir.join(program))
+            .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+    })
+}
+
 /// The shell command running `exec` (an `Exec` line) in `terminal`.
 pub fn in_terminal(terminal: &str, exec: &str) -> String {
     // foot and kitty ignore `-e`; xterm, alacritty and most others need it.
@@ -171,6 +218,28 @@ mod tests {
         assert_eq!(args(&["--version"]), Err(Exit::Version));
         assert!(matches!(args(&["--terminal"]), Err(Exit::Error(_))));
         assert!(matches!(args(&["--quit"]), Err(Exit::Error(_))));
+    }
+
+    #[test]
+    fn kitty_is_the_default_terminal() {
+        let all = |_: &str| true;
+        assert_eq!(pick_terminal(None, None, all).as_deref(), Some("kitty"));
+        // Where kitty isn't, the next installed, as Pila does.
+        let no_kitty = |t: &str| t != "kitty";
+        assert_eq!(pick_terminal(None, None, no_kitty).as_deref(), Some("foot"));
+        assert_eq!(pick_terminal(None, None, |_| false), None);
+        // --terminal, then $TERMINAL, come first.
+        assert_eq!(
+            pick_terminal(Some("foot"), Some("xterm"), all).as_deref(),
+            Some("foot")
+        );
+        assert_eq!(
+            pick_terminal(None, Some("xterm"), all).as_deref(),
+            Some("xterm")
+        );
+        assert_eq!(pick_terminal(None, Some(""), all).as_deref(), Some("kitty"));
+        // The same list as Pila's.
+        assert_eq!(TERMINALS[0], "kitty");
     }
 
     #[test]

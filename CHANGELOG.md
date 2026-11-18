@@ -4,9 +4,9 @@
 
 - **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`
   files) with their icons, searched as you type; Return or a click starts one, Escape closes
-  it. Opt-in: `launcher = "pila-launcher"` makes Mod+D and tapping Mod open it (`--terminal`
-  for apps that run in one). It stays in the background after the first use, so it opens at
-  once; input methods such as fcitx5 type into it. Written with iced, rendered in software: it
+  it. Opt-in: `launcher = "pila-launcher"` makes Mod+D and tapping Mod open it (apps that run
+  in a terminal start in kitty, or `--terminal` names another). It stays in the background
+  after the first use, so it opens at once; input methods such as fcitx5 type into it. Written with iced, rendered in software: it
   needs no new library, and the packages include it.
 - **`pila-bar`, a bar of Pila's own:** on every monitor, the workspaces (a click or the wheel
   switches), the focused window's title and a clock in your language. Opt-in: add `pila-bar` to

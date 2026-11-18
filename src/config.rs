@@ -2982,6 +2982,18 @@ mod tests {
     }
 
     #[test]
+    fn pila_launcher_tries_the_same_terminals() {
+        // Its own copy (`launcher/src/exec.rs`: it shares no code with Pila).
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/launcher/src/exec.rs");
+        let source = std::fs::read_to_string(path).unwrap();
+        let list: String = TERMINALS.iter().map(|t| format!("    {t:?},\n")).collect();
+        assert!(
+            source.contains(&format!("pub const TERMINALS: &[&str] = &[\n{list}];")),
+            "launcher/src/exec.rs's TERMINALS isn't {TERMINALS:?}"
+        );
+    }
+
+    #[test]
     fn example_config_is_valid() {
         if let Err(err) = Config::from_toml(EXAMPLE, &no_env) {
             panic!("config.example.toml: {err}");

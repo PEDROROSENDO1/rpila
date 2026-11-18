@@ -454,11 +454,12 @@ one selected; the arrows, Tab and Page Up/Down move the selection, and Escape or
 closes it. Turn it on with
 
 ```toml
-launcher = "pila-launcher --terminal foot"
+launcher = "pila-launcher"
 ```
 
-`--terminal` is for apps that run in a terminal (`Terminal=true`, such as htop); without it,
-`$TERMINAL`. The first Mod+D starts it, and it then stays in the background, so it opens at
+Apps that run in a terminal (`Terminal=true`, such as htop) start in kitty, or the first installed
+of the terminals Pila itself tries for `terminal` where kitty isn't; `$TERMINAL`, or
+`--terminal COMMAND` (`launcher = "pila-launcher --terminal foot"`), picks another. The first Mod+D starts it, and it then stays in the background, so it opens at
 once afterwards. Its layer surface's namespace is `pila-launcher`, for a `[[layer-rule]]`. It
 shows the icons apps install in the `hicolor` theme or `pixmaps`, not those of your icon theme.
 Input methods such as fcitx5 type into its search field.

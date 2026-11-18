@@ -443,12 +443,13 @@ fn data_dirs() -> Vec<PathBuf> {
 /// launcher's goes), reaped on a thread when it ends.
 fn start(app: &App, terminal: Option<&str>) {
     let command = if app.terminal {
-        let from_env = std::env::var("TERMINAL").ok().filter(|t| !t.is_empty());
-        match terminal.map(str::to_string).or(from_env) {
+        let from_env = std::env::var("TERMINAL").ok();
+        match exec::pick_terminal(terminal, from_env.as_deref(), exec::in_path) {
             Some(terminal) => exec::in_terminal(&terminal, &app.exec),
             None => {
                 eprintln!(
-                    "pila-launcher: {} runs in a terminal: pass --terminal or set TERMINAL",
+                    "pila-launcher: {} runs in a terminal, and none is installed: \
+                     pass --terminal or set TERMINAL",
                     app.name
                 );
                 return;

@@ -18,16 +18,17 @@
 # GNOME grabs Super while Pila runs inside it).
 # mod = "super"                  # (default on a TTY; alt nested)
 
-# Mod+Return, and what starts when there's no autostart. Unset, the first
-# installed of kitty, foot, alacritty, ghostty, wezterm, konsole,
-# gnome-terminal and xterm.
+# Mod+Return, and what starts when there's no autostart. Unset, kitty, or
+# where it isn't installed the first installed of foot, alacritty, ghostty,
+# wezterm, konsole, gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
 # Mod+D and tapping Mod alone. Unset, they do nothing. pila-launcher,
-# installed with Pila, lists the installed apps, searched as you type
-# (--terminal for apps that run in one; default $TERMINAL). Any other
-# launcher works too, such as fuzzel.
-# launcher = "pila-launcher --terminal foot"   # e.g.
+# installed with Pila, lists the installed apps, searched as you type; apps
+# that run in a terminal start in kitty (--terminal COMMAND for another; the
+# others as for `terminal` where kitty isn't installed). Any other launcher
+# works too, such as fuzzel.
+# launcher = "pila-launcher"       # e.g.
 
 # Commands run at startup instead of the terminal (`pila -c` overrides them).
 # X11 apps among them start Xwayland as they connect. Unset, the terminal.

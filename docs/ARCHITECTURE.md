@@ -713,8 +713,10 @@ Key flows and invariants:
   `icons::find` in hicolor and pixmaps, PNG or SVG); hiding removes it. `apps::rank` orders
   the matches (name prefix, word prefix, name substring, then generic name, keywords,
   command). An app starts through `/bin/sh -c` with its field codes removed
-  (`exec::clean_exec`), `Terminal=true` ones in `--terminal` or `$TERMINAL`
-  (`exec::in_terminal`), reaped on a thread. iced_layershell speaks text-input-v3, so input
+  (`exec::clean_exec`), `Terminal=true` ones in a terminal (`exec::in_terminal`): `--terminal`,
+  `$TERMINAL`, else the first installed of `exec::TERMINALS`, kitty first
+  (`exec::pick_terminal`; a copy of `config::TERMINALS`, which a test keeps equal); reaped on
+  a thread. iced_layershell speaks text-input-v3, so input
   methods type into the search field. Its pure parts have unit tests in the crate;
   `scripts/apps launcher` drives the real thing on a headless Pila.
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, opt-in (started from
