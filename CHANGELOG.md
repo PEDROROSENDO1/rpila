@@ -12,6 +12,8 @@
   switches) and a clock in your language (`--bottom`, `--clock FORMAT`). It's the default
   `autostart`. Written with iced like `pila-launcher`, on standard protocols (the layer shell and
   ext-workspace), so it also runs on other compositors; the packages include it.
+- **Title bars' text a size larger:** 14 logical pixels instead of 13, the size of
+  `pila-launcher`'s and `pila-bar`'s text, in the same sans-serif.
 - **No terminal at login:** with no `autostart`, Pila used to open a terminal; it now starts
   `pila-bar` (Mod+Return opens the terminal). Put your terminal in `autostart` to have it back.
   With no `launcher`, Mod+D and tapping Mod now open `pila-launcher`; `launcher = ""` and
