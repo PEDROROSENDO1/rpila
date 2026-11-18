@@ -14,9 +14,10 @@ use std::process::ExitCode;
 use iced::{
     event, mouse,
     widget::{
-        button as button_widget, column, container, image, mouse_area, row, svg, text, Row, Space,
+        button as button_widget, column, container, image, mouse_area, row, stack, svg, text, Row,
+        Space,
     },
-    window, Alignment, Border, Element, Event, Length, Subscription, Task, Theme,
+    window, Alignment, Border, Color, Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_layershell::{
     actions::IcedNewPopupSettings,
@@ -141,6 +142,58 @@ pub fn text_size(height: u32) -> f32 {
 fn tray_icon_size(height: u32) -> f32 {
     (height as f32 * 0.6).round()
 }
+
+/// The pixels a size of `pixels` at the default height takes in a bar
+/// `height` high.
+fn scaled(pixels: f32, height: u32) -> f32 {
+    (pixels * height as f32 / args::DEFAULT_HEIGHT as f32).round()
+}
+
+/// The air around a workspace's block, which the bar's full height would
+/// otherwise fill.
+fn inset(height: u32) -> f32 {
+    scaled(4.0, height)
+}
+
+/// Each side of the battery and the clock, and between the tray's icons and
+/// what's next to them: the same air between every two on the right.
+fn module_padding(height: u32) -> f32 {
+    scaled(12.0, height)
+}
+
+/// Between an icon of the icon font and its text.
+fn icon_gap(height: u32) -> f32 {
+    scaled(6.0, height)
+}
+
+/// An icon of the icon font: a little bigger than the text, whose digits
+/// fill less of their line than a glyph of the icon font does.
+fn glyph_size(height: u32) -> f32 {
+    (text_size(height) * 1.15).round()
+}
+
+/// The widest `clock` can be with other digits: each one a `0`, the widest
+/// in proportional fonts, so the clock keeps its place as the time changes.
+fn clock_placeholder(clock: &str) -> String {
+    clock
+        .chars()
+        .map(|c| if c.is_ascii_digit() { '0' } else { c })
+        .collect()
+}
+
+/// `shown`, as wide as `widest`: drawn over an invisible `widest`, from its
+/// start.
+fn steady<'a>(
+    shown: iced::widget::Text<'a>,
+    widest: iced::widget::Text<'a>,
+) -> Element<'a, Message> {
+    let line = |t: iced::widget::Text<'a>| t.wrapping(text::Wrapping::None).line_height(LINE);
+    stack![line(widest).color(Color::TRANSPARENT), line(shown)].into()
+}
+
+/// The text and icons' line: as high as their size, centered in the bar,
+/// rather than a taller line box each font places its glyphs in its own way.
+const LINE: text::LineHeight = text::LineHeight::Relative(1.0);
 
 pub fn run(args: Args) -> ExitCode {
     // One connection for iced_layershell and the desktop thread: the
@@ -507,23 +560,38 @@ impl Bar {
             .width(Length::Fill)
             .height(Length::Fill)
             .clip(true);
-        let time = text(&self.clock)
-            .wrapping(text::Wrapping::None)
-            .color(st.text_bright);
+        let height = self.height;
+        let padding = module_padding(height);
+        let gap = icon_gap(height);
+        // An icon of the icon font, at its size, on the text's line.
+        let glyph = |icons: glyphs::IconFont, glyph: char| {
+            text(glyph.to_string())
+                .font(icons.font)
+                .size(glyph_size(height))
+                .line_height(LINE)
+        };
+        // As wide as the time can be: the time changing doesn't move it.
+        let time = steady(
+            text(&self.clock)
+                .font(style::FONT_STRONG)
+                .color(st.text_bright),
+            text(clock_placeholder(&self.clock)).font(style::FONT_STRONG),
+        );
         // A clock before it, from the icon font, if it has one.
         let clock_icon = self
             .icon_font
-            .and_then(|icons| Some(text(icons.clock?.to_string()).font(icons.font)))
-            .map(|icon| icon.color(st.text));
+            .and_then(|icons| Some(glyph(icons, icons.clock?).color(st.text)));
         let clock = container(
             mouse_area(match clock_icon {
-                Some(icon) => Element::from(row![icon, time].spacing(6).align_y(Alignment::Center)),
-                None => time.into(),
+                Some(icon) => {
+                    Element::from(row![icon, time].spacing(gap).align_y(Alignment::Center))
+                }
+                None => time,
             })
             .on_enter(Message::ClockHover(true))
             .on_exit(Message::ClockHover(false)),
         )
-        .padding([0, 12])
+        .padding([0.0, padding])
         .height(Length::Fill)
         .align_x(Alignment::End)
         .align_y(Alignment::Center)
@@ -542,22 +610,23 @@ impl Bar {
                         } else {
                             color
                         };
-                        text(icon.glyph.to_string())
-                            .font(icons.font)
-                            .color(icon_color)
+                        glyph(icons, icon.glyph).color(icon_color)
                     },
-                    text(format!("{}%", battery.percent)).color(color),
+                    text(format!("{}%", battery.percent))
+                        .line_height(LINE)
+                        .color(color),
                 ]
-                .spacing(6)
+                .spacing(gap)
                 .align_y(Alignment::Center)
                 .into(),
                 None => text(battery.text())
                     .wrapping(text::Wrapping::None)
+                    .line_height(LINE)
                     .color(color)
                     .into(),
             };
             container(shown)
-                .padding([0, 10])
+                .padding([0.0, padding])
                 .height(Length::Fill)
                 .align_y(Alignment::Center)
                 .style(move |_| match low {
@@ -567,9 +636,21 @@ impl Bar {
         });
         // The workspaces on the left; the battery and the clock on the right.
         let mut bar = row![left].height(Length::Fill);
-        let icon_size = tray_icon_size(self.height);
-        for item in &self.tray_items {
-            bar = bar.push(tray_item(item, self.height, icon_size, st));
+        let icon_size = tray_icon_size(height);
+        if !self.tray_items.is_empty() {
+            // The icons' square blocks already leave some air around them:
+            // as much again as the rest of the right side has, not more.
+            let air = (height as f32 - icon_size) / 2.0;
+            let icons = Row::with_children(
+                self.tray_items
+                    .iter()
+                    .map(|item| tray_item(item, height, icon_size, st)),
+            );
+            bar = bar.push(
+                container(icons)
+                    .height(Length::Fill)
+                    .padding([0.0, (padding - air).max(0.0)]),
+            );
         }
         if let Some(battery) = battery {
             bar = bar.push(battery);
@@ -600,9 +681,11 @@ impl Bar {
     }
 }
 
-/// A workspace's button, a square block: the active one in the accent
-/// color, an urgent one in the attention color, the others plain until
-/// hovered.
+/// A workspace's button: a square block inset in a cell as high as the bar
+/// (as wide as it too, for a name of one or two characters), the active one
+/// in the accent color and its name semibold, an urgent one in the
+/// attention color, the others plain until hovered. The air around the
+/// block is the workspace's too.
 fn button<'a>(
     index: usize,
     name: &'a str,
@@ -611,43 +694,57 @@ fn button<'a>(
     height: u32,
     st: Style,
 ) -> Element<'a, Message> {
-    let label = text(name).wrapping(text::Wrapping::None);
+    let font = if active {
+        style::FONT_STRONG
+    } else {
+        style::FONT
+    };
+    // As wide as when active: one becoming active moves none.
+    let label = steady(text(name).font(font), text(name).font(style::FONT_STRONG));
     let block = button_widget(
         container(label)
+            .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center),
     )
     .on_press(Message::Activate(index))
-    .height(Length::Fill);
-    let block = if name.chars().count() <= 2 {
-        block.width(height as f32).padding(0)
-    } else {
-        block.padding([0, 10])
+    .height(Length::Fill)
+    .style(move |_, status| {
+        let hovered = matches!(
+            status,
+            button_widget::Status::Hovered | button_widget::Status::Pressed
+        );
+        let (background, text_color) = if active {
+            (Some(st.accent), st.text_bright)
+        } else if urgent {
+            (Some(st.urgent), st.text_bright)
+        } else if hovered {
+            (Some(st.hover), st.text_bright)
+        } else {
+            (None, st.text_dim)
+        };
+        button_widget::Style {
+            background: background.map(Into::into),
+            text_color,
+            // Square corners.
+            border: Border::default(),
+            ..Default::default()
+        }
+    });
+    let short = name.chars().count() <= 2;
+    let block = match short {
+        true => block.width(Length::Fill).padding(0),
+        false => block.padding([0.0, scaled(8.0, height)]),
     };
-    block
-        .style(move |_, status| {
-            let hovered = matches!(
-                status,
-                button_widget::Status::Hovered | button_widget::Status::Pressed
-            );
-            let (background, text_color) = if active {
-                (Some(st.accent), st.text_bright)
-            } else if urgent {
-                (Some(st.urgent), st.text_bright)
-            } else if hovered {
-                (Some(st.hover), st.text_bright)
-            } else {
-                (None, st.text_dim)
-            };
-            button_widget::Style {
-                background: background.map(Into::into),
-                text_color,
-                // Square corners.
-                border: Border::default(),
-                ..Default::default()
-            }
-        })
+    let cell = container(block).height(Length::Fill).padding(inset(height));
+    let cell = match short {
+        true => cell.width(height as f32),
+        false => cell,
+    };
+    mouse_area(cell)
+        .on_press(Message::Activate(index))
+        .interaction(mouse::Interaction::Pointer)
         .into()
 }
 
@@ -915,6 +1012,29 @@ mod tests {
         assert_eq!(wheel_steps(0.0, Lines { x: 0.0, y: 0.0 }), (0, 0.0));
         // A notch drops what a touchpad left.
         assert_eq!(wheel_steps(30.0, Lines { x: 0.0, y: -1.0 }), (1, 0.0));
+    }
+
+    #[test]
+    fn the_clock_keeps_its_widest() {
+        assert_eq!(clock_placeholder("17:21"), "00:00");
+        assert_eq!(
+            clock_placeholder("Wed 9 Nov, 1:05 pm"),
+            "Wed 0 Nov, 0:00 pm"
+        );
+        assert_eq!(clock_placeholder(""), "");
+    }
+
+    #[test]
+    fn sizes_follow_the_height() {
+        let default = args::DEFAULT_HEIGHT;
+        assert_eq!(inset(default), 4.0);
+        assert_eq!(module_padding(default), 12.0);
+        assert_eq!(icon_gap(default), 6.0);
+        assert_eq!(glyph_size(default), 16.0);
+        assert_eq!(inset(default * 2), 8.0);
+        assert_eq!(module_padding(default * 2), 24.0);
+        // The block stays square in a cell as wide as the bar is high.
+        assert!(inset(40) > inset(default));
     }
 
     #[test]

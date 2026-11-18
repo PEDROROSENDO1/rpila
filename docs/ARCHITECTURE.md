@@ -795,7 +795,13 @@ Key flows and invariants:
   code points in Nerd Fonts), in the accent color while charging (`glyphs::battery`); a clock
   before the clock, Material Design's or else Font Awesome's, if the font has one
   (`IconFont::clock`); none found, the battery and the clock are text alone, never a missing
-  glyph's box. The clock
+  glyph's box. Square everywhere: each workspace is a block inset in a cell as high as the bar
+  (`ui::inset`; the margin clicks too), the active one in the accent color and bold
+  (`style::FONT_STRONG`: bold, not semibold, since iced's text takes another family for a
+  weight the user's font lacks), every label as wide as in bold so none moves; the right side
+  is spaced alone (`ui::module_padding`), and the clock, bold, keeps the width of its text with
+  every digit a `0` (`ui::clock_placeholder`, `ui::steady`), since iced has no tabular figures.
+  Sizes follow `--height` (`ui::scaled`). The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the
   user's `LC_TIME` and wakes the bar only when the text changes; a second one makes the date for
   the clock's tooltip (`--date`). The tooltip shows half a second after the pointer enters the

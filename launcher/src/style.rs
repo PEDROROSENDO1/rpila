@@ -106,11 +106,18 @@ fn parse_hex(text: &str) -> Option<Color> {
     Some(Color::from_rgb8(channel(0)?, channel(2)?, channel(4)?))
 }
 
-/// The one font both use, at one size, regular weight everywhere (the
-/// active and selected stand out by color): the font of Pila's title bars
+/// The one font both use, at one size: the font of Pila's title bars
 /// (`text::FONT_SIZE` in Pila, which a test keeps equal to `TEXT_SIZE`).
+/// Regular weight, but for what pila-bar puts first (`FONT_STRONG`).
 pub const FONT: Font = Font::DEFAULT;
 pub const TEXT_SIZE: f32 = 14.0;
+/// pila-bar's active workspace and clock: bold, which nearly every family
+/// has (iced's text takes a weight the family has, else another family's:
+/// semibold would mean another font where the user's has none).
+pub const FONT_STRONG: Font = Font {
+    weight: iced::font::Weight::Bold,
+    ..FONT
+};
 
 #[cfg(test)]
 mod style_tests {
