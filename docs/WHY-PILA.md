@@ -1,7 +1,8 @@
 # What sets Pila apart
 
 Pila is a stacking Wayland compositor in Rust, on Smithay's main branch, made to host
-layer-shell desktop shells such as [Noctalia](https://noctalia.dev) and Dux Shell. This page
+layer-shell desktops: a bar, launcher and notifications from separate tools, or a full desktop
+shell. This page
 covers its design choices and how it differs from other compositors. Features are in the
 [README](../README.md#features), usage in the [manual](MANUAL.md), and each flow and invariant
 in [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -17,11 +18,6 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
   Plasma, GNOME and COSMIC come with their own shell; labwc keeps Openbox's model and XML
   config; Wayfire is built around Compiz-style plugins. Pila has one TOML file and an IPC
   socket.
-- **Checked against the shells it targets:** `scripts/shells` runs Noctalia and Dux Shell on a
-  headless, sealed-off Pila and drives their IPC through every feature that depends on the
-  compositor (ext-workspace, foreign toplevels, gamma, screencopy, session lock, output
-  management, ...), after any change to those protocols, any Smithay bump and before each
-  release.
 
 ## Performance model
 

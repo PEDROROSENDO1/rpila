@@ -348,8 +348,8 @@ const SESSION_ENV: [&str; 5] = [
 
 /// Other compositors' IPC sockets and markers, which pila's children don't
 /// inherit when it's started from inside another session (nested, or a TTY
-/// run from one of its terminals): shells such as Noctalia and Dux Shell pick
-/// their compositor backend by them, and would drive that compositor.
+/// run from one of its terminals): desktop shells pick their compositor
+/// backend by them, and would drive that compositor.
 const OTHER_COMPOSITORS_ENV: [&str; 11] = [
     "NIRI_SOCKET",
     "SWAYSOCK",

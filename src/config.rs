@@ -2769,7 +2769,7 @@ mod tests {
             animations = false
 
             [[layer-rule]]
-            namespace = "noctalia-*"
+            namespace = "shell-*"
             blur = true
             "#,
             &no_env,
@@ -2778,7 +2778,7 @@ mod tests {
         assert!(!resolve_window(&config.window_rules, "foot", "", "")
             .animates(AnimationKind::WindowOpen));
         assert_eq!(
-            resolve_layer(&config.layer_rules, "noctalia-osd").blur,
+            resolve_layer(&config.layer_rules, "shell-osd").blur,
             Some(true)
         );
         let err = |text| Config::from_toml(text, &no_env).unwrap_err();

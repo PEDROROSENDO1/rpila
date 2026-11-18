@@ -1,5 +1,5 @@
 //! wlr-gamma-control: lets one client per output set the output's gamma
-//! ramps (night light: wlsunset, Noctalia). Bare metal only: the ramps go to
+//! ramps (night light: wlsunset, a desktop shell's). Bare metal only: the ramps go to
 //! the CRTC through the DRM device (`Backend::set_gamma`); nested, every
 //! request fails, as the host owns the display.
 //!

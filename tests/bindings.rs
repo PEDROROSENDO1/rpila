@@ -617,7 +617,7 @@ fn pila_raises_its_open_files_limit_and_spawned_commands_get_the_old_one() {
 
 /// A pila started from inside another compositor's session (nested, or a
 /// TTY run from a terminal there) doesn't pass on that compositor's IPC
-/// sockets: shells such as Noctalia and Dux Shell pick their backend by
+/// sockets: desktop shells pick their backend by
 /// them, and would drive the other compositor instead of pila.
 #[test]
 fn spawned_commands_dont_see_another_compositors_sockets() {

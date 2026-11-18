@@ -518,7 +518,7 @@ fn a_growing_blur_keeps_its_backdrop() {
 
 #[test]
 fn a_fast_growing_blur_gets_room_to_grow() {
-    // Noctalia's control center opening, more than `BLUR_ALLOC_STEP` a frame:
+    // A shell's control center opening, more than `BLUR_ALLOC_STEP` a frame:
     // each time it outgrows its backdrop, the next one has room for more.
     let mut pila = TestPila::with_config(GLASS_RULE);
     let client = pila.client();

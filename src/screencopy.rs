@@ -1,7 +1,7 @@
 //! wlr-screencopy: one-shot copies of an output, or a region of it, into a
 //! client buffer. What screenshot tools and shells built before
-//! ext-image-copy-capture use (Noctalia's region and fullscreen screenshots,
-//! its blurred lock screen); to be dropped once they move to the standard
+//! ext-image-copy-capture use (a shell's region and fullscreen screenshots,
+//! a blurred lock screen); to be dropped once they move to the standard
 //! protocol, which `capture.rs` implements.
 //!
 //! A frame names its output and region at creation; pila answers with the

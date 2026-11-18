@@ -9,8 +9,8 @@ The dev container's git can't push (no credentials): the user pushes `main` from
 and the tag and the release are made on GitHub with `gh`, which is logged in.
 
 0. Checks on what's about to be released, which don't run on every push:
-   `gh workflow run compat.yml`, `scripts/shells` (Noctalia, Dux Shell) and `scripts/apps`
-   (real apps' windows), and wait for all three to pass. Bare-metal numbers come from the user's `scripts/check` on a TTY.
+   `gh workflow run compat.yml` and `scripts/apps`
+   (real apps' windows), and wait for both to pass. Bare-metal numbers come from the user's `scripts/check` on a TTY.
 1. A commit `Release X` with `CHANGELOG.md`, `Cargo.toml`, `Cargo.lock` and `fuzz/Cargo.lock`
    (its own lockfile records Pila's version: `cargo metadata --format-version 1 --manifest-path
    fuzz/Cargo.toml >/dev/null` refreshes only that line, where `cargo update -p pila` moves other

@@ -115,8 +115,8 @@ fn an_output_bound_later_is_entered_by_its_windows() {
 }
 
 /// A window moved to another monitor leaves its old wl_output and enters the
-/// new one: Noctalia and Dux Shell filter their per-monitor taskbars and
-/// docks by these.
+/// new one: desktop shells filter their per-monitor taskbars and docks
+/// by these.
 #[test]
 fn a_window_moved_to_another_output_leaves_the_old_one_and_enters_the_new() {
     let mut pila = TestPila::start_with(Options {
@@ -201,7 +201,7 @@ fn handles_report_titles_states_and_outputs() {
 }
 
 /// A window's new title or app id reaches a taskbar listed it already
-/// (Waybar's and Noctalia's taskbars show the title of a browser's page
+/// (Waybar's and shells' taskbars show the title of a browser's page
 /// as it changes), each followed by `done`.
 #[test]
 fn a_new_title_and_app_id_reach_the_taskbar() {
@@ -392,7 +392,7 @@ fn workspaces_are_listed_with_the_active_one() {
 }
 
 /// pila's workspaces span every monitor: one group holds all the outputs, so
-/// a pager on each monitor (Noctalia, Dux Shell) shows the same workspaces,
+/// a pager on each monitor (a desktop shell's) shows the same workspaces,
 /// a monitor plugged in later included.
 #[test]
 fn the_workspace_group_holds_every_output() {
@@ -509,7 +509,7 @@ fn a_new_workspace_count_adds_and_removes_workspaces() {
 }
 
 /// A minimized window, or one on another workspace, stays on the output it
-/// comes back to: per-monitor taskbars (Noctalia's, by default) keep its icon,
+/// comes back to: per-monitor taskbars keep its icon,
 /// a minimized one's above all.
 #[test]
 fn a_window_off_the_screen_stays_on_its_output() {
@@ -573,7 +573,7 @@ fn a_window_off_the_screen_stays_on_its_output() {
 /// A dock's menu (a grabbing popup of a layer surface) runs an entry, here
 /// minimizing the focused window, and goes away: its grab ends with it. The
 /// next motion moves the pointer (the one that ended the grab used to be
-/// spent on it, so Noctalia's dock lost the click after "Minimise"), and the
+/// spent on it, so a shell's dock lost the click after "Minimise"), and the
 /// keyboard goes back to a window.
 #[test]
 fn a_dock_menu_that_goes_away_leaves_no_grab_behind() {

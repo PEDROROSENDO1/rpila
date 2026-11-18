@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Bare-metal smoke and performance run: real programs (a terminal, xterm, a
-# launcher, Noctalia, grim) drive a real pila (udev on a TTY, or nested)
+# launcher, a bar, grim) drive a real pila (udev on a TTY, or nested)
 # through windows opening and closing, minimize, maximize, workspace
 # switches, a capture, a capture stream and a blurred window, while pila logs its frame
 # statistics. The checks (PASS/FAIL, exit status 1 if any failed): the
-# scenarios finished without a panic, animations ran, Noctalia's surfaces
+# scenarios finished without a panic, animations ran, a bar's surfaces
 # follow a layer rule, grim got a picture, the stream got frames, and the
 # performance pillar holds (no missed refresh, CPU per frame on average within
 # 4 ms, for the outputs' frames and the captures').
@@ -52,7 +52,7 @@
 # rules, four workspaces.
 # Nested there's no base. Programs it uses when installed: kitty or foot
 # (needed), xterm, python3 (minimize, maximize, workspaces, the capture stream), fuzzel
-# (launcher), grim (capture), noctalia and notify-send or gdbus (Noctalia).
+# (launcher), grim (capture), waybar (layer rule).
 set -euo pipefail
 
 # In a checkout (scripts/check) or installed (pila-check): see above.
@@ -311,39 +311,24 @@ if [ "${1:-}" = "--workload" ]; then
         mark "layer end"
     fi
 
-    # A desktop notification: notify-send (package libnotify), else gdbus
-    # (glib2), straight to the notification server's D-Bus interface.
-    notify() {
-        if command -v notify-send >/dev/null; then
-            notify-send -t 2000 "$1" "$2"
-        else
-            gdbus call --session --dest org.freedesktop.Notifications \
-                --object-path /org/freedesktop/Notifications \
-                --method org.freedesktop.Notifications.Notify \
-                pila-check 0 "" "$1" "$2" "[]" "{}" 2000 >/dev/null
-        fi
-    }
-    if ! command -v noctalia >/dev/null; then
-        mark "noctalia skip (noctalia not installed)"
-    elif ! command -v notify-send >/dev/null && ! command -v gdbus >/dev/null; then
-        mark "noctalia skip (neither notify-send nor gdbus to send a notification)"
-    else
-        mark "noctalia begin"
-        noctalia &
-        shell=$!
-        sleep 6
-        if ! notify "pila check" "a notification"; then
-            # No session bus (a container): a panel through Noctalia's own
-            # IPC opens a layer surface just the same.
-            mark "noctalia: sending the notification failed; opening a panel"
-            noctalia msg panel-toggle control-center >/dev/null 2>&1
-            sleep 2
-            noctalia msg panel-toggle control-center >/dev/null 2>&1
-        fi
-        sleep 4
-        stop "$shell"
+    # A bar's layer surfaces under a [[layer-rule]] that turns Pila's
+    # animations off for them. Its own minimal config (a clock), so it
+    # needs no other compositor's modules and no session bus; with no
+    # exclusive zone, as a shell's panels, which Pila would animate.
+    if command -v waybar >/dev/null; then
+        mark "layer-rule begin"
+        bar_dir=$(mktemp -d)
+        printf '{ "layer": "top", "exclusive": false, "modules-right": ["clock"] }\n' >"$bar_dir/config.jsonc"
+        printf '* { font-size: 13px; }\n' >"$bar_dir/style.css"
+        waybar -c "$bar_dir/config.jsonc" -s "$bar_dir/style.css" >/dev/null 2>&1 &
+        bar=$!
+        sleep 3
+        stop "$bar"
+        rm -rf "$bar_dir"
         sleep 1
-        mark "noctalia end"
+        mark "layer-rule end"
+    else
+        mark "layer-rule skip (waybar not installed)"
     fi
 
     # Adaptive sync (--vrr): still on after the monitors power off and on,
@@ -498,7 +483,7 @@ if ! $judge_only; then
 
     # Added by scripts/check.
     [[layer-rule]]
-    namespace = "noctalia-*"
+    namespace = "waybar"
     animations = false
 
     [[window-rule]]
@@ -626,11 +611,11 @@ if ran blur; then
     s=$(section blur)
     has "$s" "a window rule gives a translucent window a backdrop" "blur: allocated"
 fi
-if ran noctalia; then
-    s=$(section noctalia)
-    has "$s" "Noctalia's surfaces match the noctalia-* rule" 'layer rules namespace="noctalia-'
-    has "$s" "the rule turns Pila's animations off for them" 'off by rule what="layer-in" id="noctalia-'
-    lacks "$s" "Pila doesn't animate any of them" 'starts what="layer-[a-z]*" id="noctalia-'
+if ran layer-rule; then
+    s=$(section layer-rule)
+    has "$s" "waybar's surfaces match the waybar rule" 'layer rules namespace="waybar"'
+    has "$s" "the rule turns Pila's animations off for them" 'off by rule what="layer-in" id="waybar"'
+    lacks "$s" "Pila doesn't animate any of them" 'starts what="layer-[a-z]*" id="waybar"'
 fi
 
 # Adaptive sync (--vrr; `udev/outputs.rs`, `udev/draw.rs`): on where a monitor

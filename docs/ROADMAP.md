@@ -6,7 +6,7 @@ projects, and what isn't planned. It changes with each release; the
 
 Last updated for **0.6.1** (2026-11-17). Pila is alpha and a daily driver on its author's
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
-shells (Noctalia, Dux Shell, waybar and friends), bare metal with direct scanout, all covered by
+shells and tools (waybar and friends), bare metal with direct scanout, all covered by
 986 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
 doesn't speak yet.
 

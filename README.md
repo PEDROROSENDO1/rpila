@@ -14,8 +14,9 @@ Windows float and overlap, with server-side title bars, like a classic desktop; 
 launchers, wallpapers and lock screens come from the usual Wayland tools (waybar, fuzzel,
 swaybg, swaylock, ...; [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
-Why Pila: Noctalia and Dux Shell usually run on tiling compositors such as niri or Hyprland;
-Pila gives them a classic desktop of overlapping windows, with subtle animations, blur and a
+Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,
+fuzzel and mako, or a full desktop shell) usually run on tiling compositors such as niri or
+Hyprland; Pila gives them a classic desktop of overlapping windows, with subtle animations, blur and a
 config applied as you save it. labwc keeps the Openbox look and its XML config, Wayfire is
 built around Compiz-style effects, and COSMIC's floating mode comes with the rest of COSMIC. More in
 [What sets Pila apart](https://github.com/igalmarino/pila/blob/main/docs/WHY-PILA.md).
@@ -26,17 +27,13 @@ standard replacement yet (layer shell, screencopy, foreign toplevel management, 
 output management and power management, virtual keyboard, input method) are supported too,
 each to be replaced when an `ext-` version lands.
 
-![Pila in 35 seconds, with Noctalia's bar: windows opening and snapping to halves and quarters, blur behind a translucent terminal, workspaces, and the configuration applied as it's saved](https://raw.githubusercontent.com/igalmarino/pila/main/docs/demo.webp)
-
-Every scene, in a longer video: [Pila in about a minute](https://github.com/user-attachments/assets/56237607-6358-4036-8c08-86ec819a6840).
-
 How to use and set it up is in the [user manual](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md) (and `man pila`).
 
 ## Status
 
 Pila is **alpha**: usable day to day (its author runs it as their only desktop and
 develops it from inside itself), but developed on one machine: an AMD laptop (Mesa, `amdgpu`)
-with an external monitor, on Arch Linux with Noctalia's greeter, and tried from GDM. Testers
+with an external monitor, on Arch Linux with a greetd greeter, and tried from GDM. Testers
 report it working on Intel integrated GPUs, on Debian with SDDM, on NixOS, from LightDM in an
 Arch virtual machine, and on one NVIDIA card (a GTX 1060 with the proprietary driver, on
 NixOS). Other GPUs, distros and setups are exactly what testing is needed for: please
@@ -115,8 +112,8 @@ A short report helps even if everything works:
   the pointer moved by the app it's on (wp-pointer-warp: games, SDL 3), X11 apps that grab the
   keyboard (xwayland-keyboard-grab: virtual machines, remote desktops),
   Vulkan's FIFO presentation (wp-fifo, wp-commit-timing), explicit sync
-  (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full shell
-  such as Noctalia or Dux Shell. Sandboxed apps (Flatpak) don't see the protocols that read the
+  (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full
+  desktop shell. Sandboxed apps (Flatpak) don't see the protocols that read the
   screen or act on other windows and input (wp-security-context).
 - **Input:** keyboard layout, repeat and Num Lock at startup, touchpad and mouse settings (tap, natural scrolling,
   speed, disable while typing, ...), three-finger swipes to switch windows and maximize,
@@ -313,13 +310,13 @@ Host packages for a full session (names are the same on most distros):
 - `grim`, `slurp`: screenshots; Mod+Ctrl+S needs `grim`, Mod+Shift+S both and `wl-clipboard`
 - `xdg-desktop-portal-gtk`: the file chooser and other portals
 - `libnotify` (`libnotify-bin` on Debian, Ubuntu): `notify-send`, which Pila uses to tell you
-  about an invalid config, for instance; a notification daemon must show them (Noctalia, mako, ...)
+  about an invalid config, for instance; a notification daemon must show them (mako, or your shell's, ...)
 - `xdg-utils`: `xdg-open`, which programs such as kitty use to open links and files; without it
   a click on a link does nothing, and says nothing
 - `wl-clipboard`: `wl-copy`, which Mod+Shift+S needs to put a region of the screen on the clipboard;
   without it, that binding does nothing
 - `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
-  lock screen, such as Noctalia, doesn't need it
+  lock screen doesn't need it
 - `pciutils`: `lspci`, with which `pila-report` names the GPU and its driver
 
 ```bash
@@ -333,8 +330,8 @@ sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp 
 Pila draws windows and title bars only; the rest of a desktop comes from the usual Wayland
 tools: a bar (waybar), launcher (fuzzel), notifications (mako), wallpaper (swaybg), lock
 screen and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), all
-started from `autostart`. A full shell such as [Noctalia](https://noctalia.dev) provides all
-of these at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
+started from `autostart`. A full desktop shell provides all of these
+at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
 turns them back on): shells that don't recognize Pila may run `wlr-randr --off` without naming an
 output, which fails.
 

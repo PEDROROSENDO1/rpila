@@ -203,7 +203,7 @@ title = "Video"
 open-fullscreen = true
 
 [[layer-rule]]
-namespace = "noctalia-*"
+namespace = "my-shell-*"
 animations = false
 
 [[layer-rule]]

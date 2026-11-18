@@ -542,13 +542,13 @@ mod tests {
 
     #[test]
     fn wildcards_match_runs_of_anything() {
-        assert!(wildcard_match("noctalia-*", "noctalia-panel"));
-        assert!(wildcard_match("noctalia-*", "noctalia-"));
-        assert!(!wildcard_match("noctalia-*", "noctalia"));
+        assert!(wildcard_match("shell-*", "shell-panel"));
+        assert!(wildcard_match("shell-*", "shell-"));
+        assert!(!wildcard_match("shell-*", "shell"));
         assert!(wildcard_match("*", ""));
         assert!(wildcard_match("launcher", "launcher"));
         assert!(!wildcard_match("launcher", "launcher2"));
-        assert!(wildcard_match("*-panel", "noctalia-panel"));
+        assert!(wildcard_match("*-panel", "shell-panel"));
         assert!(wildcard_match("a*b*c", "a-x-b-y-c"));
         assert!(!wildcard_match("a*b*c", "a-x-c"));
         assert!(!wildcard_match("ab*ba", "aba"));
@@ -656,20 +656,20 @@ mod tests {
     fn layer_rules_match_namespaces() {
         let rules = [
             LayerRule {
-                namespace: Some("noctalia-*".into()),
+                namespace: Some("shell-*".into()),
                 animations: Some(false),
                 blur: None,
             },
             LayerRule {
-                namespace: Some("noctalia-bar-*".into()),
+                namespace: Some("shell-bar-*".into()),
                 animations: None,
                 blur: Some(true),
             },
         ];
-        let bar = resolve_layer(&rules, "noctalia-bar-main");
+        let bar = resolve_layer(&rules, "shell-bar-main");
         assert_eq!(bar.animations, Some(false));
         assert_eq!(bar.blur, Some(true));
-        let panel = resolve_layer(&rules, "noctalia-panel");
+        let panel = resolve_layer(&rules, "shell-panel");
         assert_eq!(panel.blur, None);
         assert_eq!(resolve_layer(&rules, "launcher"), LayerProps::default());
     }

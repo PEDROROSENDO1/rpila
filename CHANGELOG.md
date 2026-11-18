@@ -15,6 +15,10 @@
   from a Wayland window, and gives it back when it closes; before, X never saw the keys unless an
   X11 window had the focus. Menus, tooltips and the like still leave the keyboard where it is.
   Reported in issue #5.
+- **Removed: the shell-specific parts.** `scripts/shells`, the manual's setup guides for
+  particular desktop shells, and the screenshot and demo video (with `scripts/screenshot` and
+  `scripts/demo-video`) are gone; the manual has a generic section on running a full desktop
+  shell instead. `scripts/check`'s layer-rule scenario now runs waybar.
 
 ## 0.6.1 (2026-11-17)
 

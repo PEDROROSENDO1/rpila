@@ -293,8 +293,8 @@ fn popup_grabs_and_moves_are_refused_while_locked() {
 }
 
 /// After unlocking, Qt destroys a lock surface's role object, then commits
-/// the bare surface with no buffer (DMS does it on every unlock): that must
-/// not cost the locker its connection.
+/// the bare surface with no buffer (a Qt locker does it on every unlock):
+/// that must not cost the locker its connection.
 #[test]
 fn a_surface_committed_after_its_lock_surface_is_destroyed_keeps_the_client() {
     let mut pila = TestPila::start();

@@ -21,14 +21,8 @@ ENV TZ="${TZ}" \
 #   - Rust toolchain manager + fast linker
 #   - Smithay build/runtime deps (winit + future DRM/udev/libinput backends)
 #   - Wayland test clients to run inside your compositor
-#   - a machine id: without one D-Bus can't start a session bus, and notify-send
-#     (scripts/check's Noctalia scenario) fails
-#   - ffmpeg: scripts/demo-video encodes the demo video
-#   - what building Noctalia from source takes beyond its package's runtime
-#     dependencies (its BUILDING.md) and its docs formatter (nodejs, npm), for
-#     work on its Pila backend
-#   - labwc and valgrind: checking Noctalia changes on a wlroots compositor
-#     (headless) and its tests for memory errors
+#   - a machine id: without one D-Bus can't start a session bus, and
+#     notify-send fails
 #   - fcitx5 with Rime's pinyin: an input method (input-method-v2) for the IME
 #     tests in scripts/apps; GTK 4, foot and kitty reach it through
 #     text-input-v3. CJK fonts to read its candidates in screenshots:
@@ -44,8 +38,7 @@ RUN pacman -Syu --noconfirm --needed \
         fuzzel waybar swaybg mako libnotify swaylock swayidle wl-clipboard wlr-randr \
         ironbar nwg-panel \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
-        grim slurp wtype wlopm wlsunset noctalia quickshell dux-shell ffmpeg \
-        meson just wireplumber nlohmann-json stb nodejs npm labwc valgrind \
+        grim slurp wtype wlopm wlsunset \
         fcitx5 fcitx5-rime rime-luna-pinyin wqy-microhei noto-fonts-cjk \
     && rm -rf /var/cache/pacman/pkg/* \
     && dbus-uuidgen --ensure=/etc/machine-id

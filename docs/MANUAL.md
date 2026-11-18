@@ -10,7 +10,7 @@
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
 touchpad and monitors. The rest of a desktop (a bar, a launcher, notifications, a wallpaper, a
-lock screen) comes from separate programs, or from a shell such as Noctalia that has them all.
+lock screen) comes from separate programs, or from a desktop shell that has them all.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -224,7 +224,7 @@ monitors: switching to another one changes what every monitor shows. Windows on 
   `wheel-binding-cooldown` under `[input]` sets that time (0 to 1000 ms; 0 counts every notch).
 - On a touchpad, four fingers left go to the next workspace and four fingers right to the
   previous one.
-- Bars and pagers that support ext-workspace, such as Noctalia's, show them and switch between
+- Bars and pagers that support ext-workspace, such as waybar's `ext/workspaces` module, show them and switch between
   them.
 
 A window rule's `open-on-workspace` opens an app's windows on a given workspace.
@@ -416,64 +416,25 @@ Xwayland). Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
 
-**With Noctalia**, one program gives you the bar, launcher, notifications, wallpaper and lock
-screen:
+**A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
+in one program: start it from `autostart`, and point `launcher` at its launcher command so Mod+D
+opens it. If it animates its own panels, turn Pila's animations off for them with a layer rule
+on their namespace:
 
 ```toml
-autostart = ["noctalia"]
-launcher = "noctalia msg panel-toggle launcher"    # Mod+D opens Noctalia's launcher
-
-# Noctalia animates its own panels; without this, Pila animates them as well.
 [[layer-rule]]
-namespace = "noctalia-*"
+namespace = "my-shell-*"
 animations = false
 ```
 
-Noctalia opens its panels on the monitor of the window you're using. Its own monitor off
-(`screen_off`, `dpms-off`) doesn't work on Pila: Noctalia 5.4 runs `wlr-randr --off` without
-naming a monitor. Give its idle behavior Pila's action instead (Settings → Idle, or its
-`[idle.behavior.screen-off]`), with no resume command: any input turns the monitors back on.
-
-```toml
-# In Noctalia's settings file, not Pila's
-[idle.behavior.screen-off]
-timeout = 660
-action = "command"
-command = "pila msg action power-off-monitors"
-```
-
-Its Log out ends the session through logind (`loginctl terminate-session`), which works where
-systemd or elogind runs it. Elsewhere, or to quit Pila directly, set that button's command to
-`pila msg action quit` (Settings → Power → Session panel).
-
-**With Dux Shell** (DankMaterialShell):
-
-```toml
-autostart = ["dms run"]
-launcher = "dms ipc call spotlight toggle"         # Mod+D opens its launcher
-
-# Dux Shell animates its own panels; without this, Pila animates them as well.
-[[layer-rule]]
-namespace = "dms:*"
-animations = false
-
-# Its settings and welcome windows draw their own title bar.
-[[window-rule]]
-app-id = "dev.duxlabs.shell"
-title-bar = false
-```
-
-Dux Shell turns monitors off on idle through the standard protocol, which works as it is. For
-Log out, give its power settings a custom command (`customPowerActionLogout`):
-`pila msg action quit`.
-
-Both shells work on Pila through standard protocols: bar, workspaces, taskbar and dock, launcher,
-notifications, clipboard history, screenshots, night light, display settings and power, idle and
-the lock screen. Neither knows Pila by name yet, so the features they build on a compositor's own
-commands are missing: Dux Shell's overview, window rules and keybinding editor, and switching the
-keyboard layout from either shell's bar (Pila's keyboard settings and `Mod` bindings still work;
-a binding to `switch-layout next` switches layouts).
-`dms doctor` says "No supported Wayland compositor found"; that line is all it means.
+Shells that don't know Pila may turn monitors off on idle with `wlr-randr --off` without naming
+a monitor, which fails; give their idle behavior Pila's action instead,
+`pila msg action power-off-monitors`, with no resume command: any input turns the monitors back
+on. Where a shell's Log out goes through logind (`loginctl terminate-session`), it works where
+systemd or elogind runs it; elsewhere, or to quit Pila directly, set its command to
+`pila msg action quit`. A shell's features built on a compositor's own commands (an overview,
+a keyboard layout switcher) are missing until it knows Pila; Pila's own bindings still work
+(a binding to `switch-layout next` switches layouts).
 
 **With separate tools**, for example:
 
@@ -490,7 +451,7 @@ autostart = [
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
 wl-clipboard (`wl-copy`, `wl-paste`), wtype, wlr-randr and wlopm (monitors), fcitx5 (input
-methods), and the shells Noctalia and Dux Shell; Pila's tests and scripts check most of them.
+methods); Pila's tests and scripts check most of them.
 Tools that use the same protocols should work too, though nobody has tried them yet: clipboard
 managers (ext-data-control) and screen recorders (`wf-recorder`, screencopy).
 
@@ -548,8 +509,8 @@ Programs such as kitty open links with `xdg-open`, from the `xdg-utils` package:
 click on a link does nothing.
 
 **Notifications from Pila** (an invalid configuration, for instance) are sent with
-`notify-send`, from the `libnotify` package, and shown by your notification daemon (Noctalia,
-mako, ...). Without either, they only reach the log.
+`notify-send`, from the `libnotify` package, and shown by your notification daemon (mako,
+your shell's, ...). Without either, they only reach the log.
 
 ## Screenshots and screen sharing
 
@@ -582,7 +543,7 @@ a nested Pila doesn't have it.
 
 ## Locking the screen and idling
 
-Lock screens that use ext-session-lock work: `swaylock`, or your shell's own (Noctalia has one).
+Lock screens that use ext-session-lock work: `swaylock`, or your shell's own.
 While the screen is locked, only the lock screen gets the keyboard and the mouse, and Pila's
 bindings don't run; `Ctrl+Alt+F1` to `F12` still switch virtual terminals.
 
@@ -763,7 +724,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | The play/pause key does nothing | Pila binds no media keys by default: `"XF86AudioPlay" = "spawn playerctl play-pause"` under `[bindings]` (needs `playerctl`), or your shell's command. |
 | `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
-| No notifications from Pila | Install `libnotify` and run a notification daemon (Noctalia, mako). |
+| No notifications from Pila | Install `libnotify` and run a notification daemon (mako, or your shell's). |
 | Screen sharing shows nothing | Install `xdg-desktop-portal-wlr` and `slurp`, and start Pila from the login screen or `pila-session`. |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |

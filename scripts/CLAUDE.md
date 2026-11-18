@@ -1,9 +1,9 @@
 # scripts/check
 
 `scripts/check` drives a real Pila with real programs (a terminal, xterm, fuzzel, grim,
-Noctalia if installed: windows opening and closing, minimize, maximize, workspace switches, a
+waybar if installed: windows opening and closing, minimize, maximize, workspace switches, a
 launcher, a capture, a capture stream, a blurred window, a fullscreen one) and judges the log: the scenarios finished without a panic, animations
-ran (`starts` on `pila::animation`), Noctalia's surfaces follow their layer rule, grim got a
+ran (`starts` on `pila::animation`), waybar's surfaces follow their layer rule, grim got a
 picture, the stream got frames, monitors were identified from their EDID (bare metal), and the
 frame statistics (no missed refresh, frames shown late included, CPU per frame on average within 4 ms, for the outputs'
 frames and, on average over all of them, the captures'; bare metal, if a night light set gamma,
@@ -41,13 +41,14 @@ on rendering; what only eyes can judge (how it looks) is still asked of the user
 # scripts/apps
 
 `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm ...]` runs real apps, one at a time, each
-on a sealed headless Pila (as `scripts/shells`, one 1920x1080 output, with
+on a sealed headless Pila (a temporary HOME and runtime directory and a private D-Bus session bus,
+so it never touches the session it's run from; one 1920x1080 output, with
 `PILA_HEADLESS_CHECK_INVARIANTS`), and drives their windows with real input through the control
 socket: a drag by the title bar (Pila's, or the app's own) and Mod+drag move them exactly as
 far as the pointer, a click on the title bar moves nothing, and maximized or snapped, a drag
 by the title bar brings them back to their size under the pointer; after each step no grab is
-left, the keyboard is on the window and no popup is open. It judges Pila's log as
-`scripts/shells` does and prints PASS/FAIL. Results are in `pila-apps/<app>/`. It's for what
+left, the keyboard is on the window and no popup is open. It judges Pila's log (no
+panic, no client disconnected for a protocol error) and prints PASS/FAIL. Results are in `pila-apps/<app>/`. It's for what
 the synthetic test client can't show, since real apps do things it doesn't (GTK 4 asks to leave
 fullscreen as a drag on its own title bar starts; a bug like that is then reproduced in a test,
 with the GTK-like client of `tests/common/client.rs` where it helps). Run it after changing
@@ -67,55 +68,3 @@ ext-background-effect (the theme is opaque: `blur.entries` in Pila's state tells
 maximizes, and in GTK a context menu opens and Escape closes it with no grab left. The container
 has CJK fonts (wqy-microhei, noto-fonts-cjk): `candidates.png` shows the candidates readable. Run them after changing
 `input_method.rs`, the keyboard path, grabs, popups' drawing or blur, or the Smithay rev.
-
-# scripts/shells
-
-`scripts/shells [noctalia|dms]` runs each desktop shell Pila supports (Noctalia, Dux Shell) on
-a headless Pila with two outputs (one at scale 1.5, named like monitors: Dux Shell's night mode
-leaves out `HEADLESS-*` outputs) and walks its own IPC through every feature that depends on
-the compositor, checking the shell's answers and Pila's state (the control socket) after each
-step: panels, launcher and keyboard, workspaces, taskbar, notifications, clipboard,
-screenshots, gamma, output management and power, the lock screen. It judges Pila's log (no
-panic, no client disconnected for a protocol error) and prints PASS/FAIL, plus NOTE for known
-bugs of a shell (`scripts/shells --judge <dir>` judges an earlier run again). Results,
-screenshots included, are in `pila-shells/<shell>/`: look at them.
-Each run is sealed off (temporary HOME and runtime dir, private D-Bus) so it never touches the
-session it's run from. Run it after changing a protocol a shell uses, after a Smithay bump and
-before a release; a new shell feature that depends on Pila gets a step. Pitfalls: Quickshell's
-IPC exits 0 on a bad call (`step` reads the answer), window bindings act on the window with the
-keyboard (wait for a closing panel to give it back), and a shell animates its own panels away.
-
-# scripts/screenshot
-
-`scripts/screenshot` makes `docs/screenshot.png` (a still for listings and posts; the README
-shows `docs/demo.webp` instead) on a sealed headless Pila (as
-`scripts/shells`), with its default looks: Noctalia's bar on a generated gradient (its first-run
-dialog skipped by its `.setup-complete` marker), GTK Demo with its own title bar, and two kitty
-windows placed by window rules, one translucent with blur over GTK Demo. Redo it when the looks
-or the shells change, and look at it before committing it: no personal data (a sample config,
-no prompt with a user or host name).
-
-# scripts/demo-video
-
-`scripts/demo-video` makes a demo video on a sealed headless Pila (as `scripts/screenshot`: one
-1920x1080 output at scale 1.5, default looks, Noctalia's bar, UTC): `scripts/demo-scenes` plays
-captioned scenes with real input (pointer and Pila's bindings through the control socket, text
-through `wtype`), waiting on Pila's state, never on fixed sleeps for something to happen;
-`scripts/demo-record` records the output at a constant 60 fps (an ext-image-copy-capture client:
-each frame in the tick of its presentation time, ticks with nothing new repeated) into a lossless
-`pila-demo/master.mkv`, and ffmpeg captions it into `pila-demo.mp4` (every scene, 1080p60),
-`pila-demo-short.mp4` (the scenes marked short, 720p, under 10 MB) and the README's
-`docs/demo.webp`: the short one as an animated WebP (1280 px, 30 fps), because GitHub's README
-shows a video still, with controls, never playing by itself or looping. The WebP comes from
-libwebp's animation encoder through `ctypes` (`encode_webp`), not ffmpeg's `libwebp_anim`:
-libwebp 1.6 skips blocks that changed less than a tolerance taken from `quality` since the
-previous *source* frame, so slow fades left stale blocks on the picture; `quality` stays 100 and
-a target PSNR sets the compression (with sharp YUV, for colored text). It's committed (keep it under 5 MB, GitHub's image proxy
-refuses more; the script warns); the mp4 files aren't, they're
-uploaded as GitHub attachments, which stay private until published content (release notes)
-links them: check a link logged out. `--shots` records nothing and takes a
-screenshot per scene (`pila-demo/shots/`), the quick way to check scenes; `--encode` encodes the
-last recording again. It fails when a scene's wait times out, a saved config doesn't load or Pila
-panics, and lists missed refreshes from `pila::frames`. Redo it when the looks, the shells or
-the scenes change, and watch it before publishing it: no personal data. A scene that needs a
-new kind of input or wait gets a helper in `demo-scenes`, not a sleep.

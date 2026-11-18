@@ -37,6 +37,6 @@ echo
 echo "A rule for one of them, in ~/.config/pila/config.toml:"
 echo
 echo "  [[layer-rule]]"
-echo "  namespace = \"$(head -n 1 <<<"$namespaces")\"   # or a pattern, e.g. \"noctalia-*\""
+echo "  namespace = \"$(head -n 1 <<<"$namespaces")\"   # or a pattern, e.g. \"my-shell-*\""
 echo "  blur = true"
 exit "$status"

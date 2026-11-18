@@ -23,9 +23,9 @@ I had never written Rust or a Wayland compositor before Pila. What I do know is 
 system and how to decide what has to be tested before I trust it, so the project depends on
 tests and measurements more than on me reading every line.
 
-I started Pila because I wanted a classic desktop with overlapping windows for Noctalia and Dux
-Shell. Both usually run on tiling compositors, and the stacking compositors I tried didn't work
-with them the way I wanted ([What sets Pila apart](WHY-PILA.md) has the comparison). I also
+I started Pila because I wanted a classic desktop with overlapping windows for layer-shell
+desktop shells. They usually run on tiling compositors, and the stacking compositors I tried
+didn't work with them the way I wanted ([What sets Pila apart](WHY-PILA.md) has the comparison). I also
 wanted a real project to get better at Rust.
 
 ## Who decides
@@ -99,7 +99,7 @@ runs, and its CPU time per frame has to average under 4 ms (a quarter of a 60 Hz
 per output and, on bare metal, how long each frame took from being asked for to being on screen.
 On bare metal the missed refreshes are exact, taken from the DRM vblank sequence. `scripts/check`
 runs a release build through real programs (terminals, xterm, a launcher, screenshots, a screen
-share, blur, a fullscreen app, Noctalia) and fails on a missed refresh or a blown budget.
+share, blur, a fullscreen app, a bar) and fails on a missed refresh or a blown budget.
 Changes to rendering, input or the event loop go through it before they're committed.
 
 Last bare-metal runs, 2026-11-17, with 0.6.1's code, on an AMD Renoir laptop. With an external
@@ -117,12 +117,6 @@ laptop. Pila has been my only desktop since 2026-11-03. I log into it from the g
 develop it from inside, and I've also started it from GDM. Testers have reported it working on Intel GPUs, Debian with SDDM, NixOS,
 LightDM and one NVIDIA card (a GTX 1060). The README lists what nobody has tried yet: newer
 NVIDIA cards, systems without systemd, monitors on a second GPU.
-
-### Shells
-
-`scripts/shells` starts Noctalia and Dux Shell on a sealed-off headless Pila and drives each
-one through its own IPC: panels, launcher, workspaces, taskbar, notifications, clipboard,
-screenshots, gamma, output management and power, lock screen.
 
 ### CI
 
@@ -247,7 +241,7 @@ and `pila-check` prints them, so a tester's run shows whether the margin holds o
 
 Pila takes contributions made with AI help if the pull request says so and the author
 understands what they're sending and answers for it. Other projects decide differently, and I
-follow their rules. Smithay and Dux Shell don't accept AI-written text in issues and pull
+follow their rules. Smithay doesn't accept AI-written text in issues and pull
 requests, so what I post there I write myself.
 
 ## Check it yourself
@@ -255,7 +249,6 @@ requests, so what I post there I write myself.
 ```
 cargo test
 scripts/check --nested    # or scripts/check from a TTY, on real hardware
-scripts/shells
 scripts/coverage
 ```
 

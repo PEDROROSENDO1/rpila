@@ -3,7 +3,7 @@
 integration tests' synthetic client can't show, since real apps do things it
 doesn't (GTK 4 asks to leave fullscreen as a drag on its own title bar starts).
 
-Each app runs alone on a sealed headless Pila (as scripts/shells: a temporary
+Each app runs alone on a sealed headless Pila (a temporary
 HOME, XDG directories, runtime directory and D-Bus session bus), one
 1920x1080 output, with Pila's input invariants on
 (PILA_HEADLESS_CHECK_INVARIANTS: a stuck grab or a lost keyboard is a panic).

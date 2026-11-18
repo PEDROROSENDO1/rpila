@@ -324,8 +324,8 @@ fn a_layer_goes_on_the_output_it_asks_for() {
 }
 
 /// A layer surface that names no output goes on the one under the pointer,
-/// and enters it: Noctalia maps such a surface to learn which monitor is the
-/// current one, and opens its panels there.
+/// and enters it: a shell may map such a surface to learn which monitor is
+/// the current one, and open its panels there.
 #[test]
 fn a_layer_without_an_output_goes_under_the_pointer() {
     let mut pila = TestPila::start_with(Options {
@@ -354,8 +354,8 @@ fn a_layer_without_an_output_goes_under_the_pointer() {
     });
 }
 
-/// A layer surface can change layers (layer-shell v2's set_layer): Noctalia
-/// moves its bar between top and overlay.
+/// A layer surface can change layers (layer-shell v2's set_layer): a shell
+/// may move its bar between top and overlay.
 #[test]
 fn a_layer_surface_moves_to_another_layer() {
     let mut pila = TestPila::start();
@@ -431,7 +431,7 @@ fn layer_surfaces_on_a_removed_output_are_closed() {
 }
 
 /// Qt hides a layer shell window by destroying its role object, then
-/// committing the bare surface with no buffer (DMS's launcher does it each
+/// committing the bare surface with no buffer (a launcher may do it each
 /// time it closes): that must not cost the client its connection.
 #[test]
 fn a_surface_committed_after_its_layer_surface_is_destroyed_keeps_the_client() {

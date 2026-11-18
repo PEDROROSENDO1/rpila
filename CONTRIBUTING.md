@@ -96,7 +96,7 @@ container. (The author's host is Arch, with Pila as its only desktop.)
 - Test clients inside: `foot`, `weston-terminal`, `weston-simple-egl`, `wayland-info`,
   `gtk4-widget-factory` (menus and popovers), `xterm` (X11), and desktop tools to test
   against (`kitty`, `fuzzel`, `waybar`, `swaybg`, `mako`, `swaylock`, `wl-clipboard`, `grim`,
-  `slurp`, `wtype`, `wlr-randr`, `wlopm`, `wlsunset`, `fcitx5`, Noctalia and Dux Shell)
+  `slurp`, `wtype`, `wlr-randr`, `wlopm`, `wlsunset`, `fcitx5`)
 - Claude Code (native install) with auth and history persisted across rebuilds
 
 The container follows the session it's entered from: entered from a Pila session

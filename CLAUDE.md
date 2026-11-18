@@ -12,7 +12,7 @@ and cosmic-comp do: 0.7.0, the last release, is from June 2025; for now from Pil
 ## Environment
 
 - You run inside a dev container (Arch Linux base). The host is Arch Linux; the user logs
-  into Pila itself through Noctalia's greeter (`scripts/install`), and it's the only desktop
+  into Pila itself through a greetd greeter (`scripts/install`), and it's the only desktop
   there: a build that doesn't start leaves no other session to fall back on, so try it with
   `scripts/tty` first.
 - The compositor is developed **nested**: Smithay's winit backend opens it as a window on
@@ -83,7 +83,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `notify-send` (notifications), `swaylock` (session lock), `wl-copy`/`wl-paste`
   (ext-data-control), `grim` + `slurp` (screenshots: ext-image-copy-capture), `wtype`
   (virtual keyboard), `wlr-randr` (output management), `wlopm` (output power), `wlsunset`
-  (gamma); `kitty` (the default terminal); `noctalia` and `dux-shell` (`scripts/shells`);
+  (gamma); `kitty` (the default terminal);
   `fcitx5` with Rime's pinyin (input-method-v2; GTK 4, foot and kitty reach it through
   text-input-v3). X11 (via Xwayland): `xterm`, `xeyes`, `xdpyinfo`.
 - Bare-metal smoke and performance run: `scripts/check --nested` (release build, log in
@@ -95,17 +95,6 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   they follow the pointer and leave no grab; `fcitx5-foot` and `fcitx5-gtk4` type Chinese
   through fcitx5 into a terminal and a GTK text field (`scripts/CLAUDE.md`): after changing
   grabs, decorations, fill states, input or input methods, and before a release.
-- Desktop shells: `scripts/shells [noctalia|dms]` walks Noctalia's and Dux Shell's IPC
-  through every feature that depends on Pila, on a sealed-off headless Pila
-  (`scripts/CLAUDE.md`): after changing a protocol a shell uses, after a Smithay bump and
-  before a release.
-- Screenshot: `scripts/screenshot` remakes `docs/screenshot.png` (a still for listings) on a
-  sealed headless Pila (default looks, Noctalia, sample windows); show it to the user before
-  committing it.
-- Demo video: `scripts/demo-video` records captioned scenes on a sealed headless Pila into
-  `pila-demo.mp4`, `pila-demo-short.mp4` (not committed) and the README's animated
-  `docs/demo.webp` (`--shots` to check the scenes quickly; `scripts/CLAUDE.md`); show them to
-  the user before they're committed or published.
 - Debugging: `WAYLAND_DEBUG=1` on a client for protocol traces, `RUST_LOG=debug` for the
   compositor, `RUST_LOG=pila::frames=debug` for frame times and missed refreshes (see
   "Performance pillar"). To watch an animation frame by frame: `[animations] speed = 4`
@@ -150,7 +139,7 @@ crate, packages, paths, environment variables and anything users type.
 ## Distro policy
 
 Pila must not assume a distro, init system or display manager. This machine is Arch with
-systemd and Noctalia's greeter, but the code and the host-side scripts (`scripts/`,
+systemd and a greetd greeter, but the code and the host-side scripts (`scripts/`,
 `resources/session/`) must also work elsewhere (Debian, Fedora, Void, Alpine, ...),
 including without systemd (elogind or seatd, no per-user D-Bus bus, no journal): check for
 optional tools (`systemd-cat`, `logger`, `dbus-run-session`) and degrade, use
@@ -234,8 +223,8 @@ client copy in `tests/common/` and the XML when a release has them.)
 
 A **wlroots protocol** is accepted when there's no standard equivalent yet and a desktop
 tool the user runs needs it; each is replaced as soon as an `ext-` version lands in
-`wayland-protocols` and Smithay. The accepted ones (all needed by panels/shells such as
-Noctalia): `wlr-layer-shell`, `wlr-screencopy`, `wlr-foreign-toplevel-management`,
+`wayland-protocols` and Smithay. The accepted ones (all needed by panels and
+shells such as waybar): `wlr-layer-shell`, `wlr-screencopy`, `wlr-foreign-toplevel-management`,
 `wlr-gamma-control`, `wlr-output-management`, `wlr-output-power-management` and
 `virtual-keyboard-unstable-v1`; and `input-method-unstable-v2`, which input methods (fcitx5)
 need, until its successor (`xx-input-method`, experimental) lands. Other vendor protocols (KDE,
@@ -329,7 +318,7 @@ the canonical references. Clone `https://github.com/Smithay/smithay` outside `/w
 (e.g. `/tmp`) at the `rev` of the `smithay` dependency in `Cargo.toml` and read them before
 inventing new patterns. Moving `rev` forward is a change of its own: read Smithay's
 `CHANGELOG.md` and log since the old one, run the whole suite, `scripts/check --nested` and
-`scripts/shells`, and have the user check bare metal (`udev/`). While the dependency is Pila's
+`scripts/apps`, and have the user check bare metal (`udev/`). While the dependency is Pila's
 fork (`Cargo.toml` says which rev of Smithay's it is and what it adds), a bump tags the rev
 `main` pinned (`rev-<sha>`, so the releases that pin it keep building) and rebases its
 `pila` branch on the new rev, or goes back to Smithay's own once it has the fixes: each has a
