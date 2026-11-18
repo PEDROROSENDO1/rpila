@@ -16,7 +16,8 @@ too; see [Use of AI](README.md#use-of-ai) for the terms.
 - **No distro assumptions**: the code and the host-side scripts must work without systemd
   (elogind or seatd), on any distro, with configurable install paths.
 - Before sending a change: `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and
-  `cargo test` (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu,
+  `cargo test`, and for the launcher (`launcher/`, a cargo workspace of its own) the same with
+  `--manifest-path launcher/Cargo.toml` (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu,
   Fedora and Nix, with the oldest supported Rust, and `cargo audit` run when dependencies, the
   Nix files, `scripts/install` or `resources/` change, and weekly). Every feature gets
   integration tests (`tests/*.rs`, on a headless Pila; a new test goes into `tests/FEATURES.md`), and unit tests cover pure

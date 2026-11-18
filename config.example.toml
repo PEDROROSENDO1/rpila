@@ -23,8 +23,11 @@
 # gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
-# Mod+D and tapping Mod alone. Unset, they do nothing.
+# Mod+D and tapping Mod alone. Unset, they do nothing. pila-launcher,
+# installed with Pila, lists the installed apps, searched as you type
+# (--terminal for apps that run in one; default $TERMINAL).
 # launcher = "fuzzel"              # e.g.
+# launcher = "pila-launcher --terminal foot"   # e.g.
 
 # Commands run at startup instead of the terminal (`pila -c` overrides them).
 # X11 apps among them start Xwayland as they connect. Unset, the terminal.

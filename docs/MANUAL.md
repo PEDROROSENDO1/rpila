@@ -448,6 +448,21 @@ autostart = [
 ]
 ```
 
+**Pila's own launcher**, `pila-launcher`, installed with Pila: a search over the installed apps
+(their `.desktop` files) with their icons. Type to filter, then Return (or a click) starts the
+one selected; the arrows, Tab and Page Up/Down move the selection, and Escape or Mod+D again
+closes it. Turn it on with
+
+```toml
+launcher = "pila-launcher --terminal foot"
+```
+
+`--terminal` is for apps that run in a terminal (`Terminal=true`, such as htop); without it,
+`$TERMINAL`. The first Mod+D starts it, and it then stays in the background, so it opens at
+once afterwards. Its layer surface's namespace is `pila-launcher`, for a `[[layer-rule]]`. It
+shows the icons apps install in the `hicolor` theme or `pixmaps`, not those of your icon theme.
+Input methods such as fcitx5 type into its search field.
+
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
 wl-clipboard (`wl-copy`, `wl-paste`), wtype, wlr-randr and wlopm (monitors), fcitx5 (input
@@ -730,7 +745,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |
 | Stuck on a locked screen after the locker crashed | See [Locking the screen and idling](#locking-the-screen-and-idling). |
-| `Mod+D` or tapping Mod does nothing | Set `launcher` to your launcher's command. |
+| `Mod+D` or tapping Mod does nothing | Set `launcher` to your launcher's command, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)). |
 | An app needs Mod with the mouse wheel, which switches workspaces | `"Mod+WheelScrollDown" = "none"` and `"Mod+WheelScrollUp" = "none"` under `[bindings]` give it back (nested, Mod is Alt). |
 | Tapping Mod opens the launcher and you don't want it | `"Mod" = "none"` under `[bindings]` (nested, Mod is Alt, so tapping Alt opens it). |
 | A fullscreen window flickers or shows wrong colors | `direct-scanout = false` in the configuration (Pila then draws those frames itself), and report it with `pila-report`'s file. |

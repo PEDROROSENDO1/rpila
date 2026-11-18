@@ -696,6 +696,27 @@ Key flows and invariants:
   opens its next popover on the same surface, and the null commit after the destroy is no
   popup's commit any more, so without it that popover's initial commit read as a hiding one
   and got no configure, while its grab held the app's input.
+- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, opt-in
+  (`launcher = "pila-launcher"`; Mod+D with no `launcher` still does nothing). A separate
+  client written with iced on iced_layershell: it shares no code with Pila and reaches it only
+  through Wayland, as a layer surface (Overlay, no anchor so Pila centers it, exclusive
+  keyboard, namespace `pila-launcher`). A cargo workspace of its own with its own `Cargo.lock`:
+  iced_layershell 0.19.1 doesn't build on the winit beta Smithay pins, and one lock can't hold
+  both (`launcher/Cargo.toml` pins the older beta). It renders with tiny-skia on wl_shm (no
+  GPU), and loads libwayland-client and libxkbcommon at runtime, so it links nothing new.
+  The first run binds a socket in `XDG_RUNTIME_DIR` (`exec::socket_path`, one per Wayland
+  display) and stays as an iced_layershell daemon with no surface while hidden; a later run
+  connects, sends a `Request` (toggle, and `--terminal`) and exits (`launcher/src/main.rs`).
+  Each show creates a new layer surface (`Launcher::request`) and reads the apps again on a
+  thread (`apps::scan`: desktop entries of the XDG data directories, first ID wins,
+  `NoDisplay`/`Hidden`/`OnlyShowIn`/`NotShowIn`/`TryExec`, localized `Name`; icons by
+  `icons::find` in hicolor and pixmaps, PNG or SVG); hiding removes it. `apps::rank` orders
+  the matches (name prefix, word prefix, name substring, then generic name, keywords,
+  command). An app starts through `/bin/sh -c` with its field codes removed
+  (`exec::clean_exec`), `Terminal=true` ones in `--terminal` or `$TERMINAL`
+  (`exec::in_terminal`), reaped on a thread. iced_layershell speaks text-input-v3, so input
+  methods type into the search field. Its pure parts have unit tests in the crate;
+  `scripts/apps launcher` drives the real thing on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its
