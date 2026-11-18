@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 (2026-11-18)
 
 - **The arrows step through halves and quarters:** `Mod+Left` fills the left half, then
   `Mod+Up` or `Mod+Down` takes its top or bottom quarter, `Mod+Right` moves a quarter across,
