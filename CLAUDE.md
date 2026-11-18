@@ -46,9 +46,9 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- Lint: `cargo clippy --all-targets -- -D warnings`
-- CI (`.github/workflows/ci.yml`, every push to `main` and every PR) also runs
-  `cargo fmt --check`, builds with `--locked`, does a staged install and runs
+- CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,
+  then clippy, a release build and the tests with `--locked` (a `Cargo.lock` out of date
+  with `Cargo.toml` fails there, not locally), does a staged install and runs
   `shellcheck --severity=warning --external-sources` on the scripts (and parses the Python
   ones): run that after editing one. `compat.yml` (`rust-version`, Debian, Ubuntu, Fedora, Nix,
   `cargo audit`) runs when dependencies, the Nix files, `scripts/install`(`-paths`) or
@@ -255,14 +255,18 @@ global that exposes or controls other clients, input or outputs must get it too.
 
 ## Architecture
 
+The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
+(`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
+(`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
+
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature
 beyond it has its own module, and `render.rs`, `frame.rs` and `post_render` are shared by
 every backend.
 
 **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes every flow and invariant, a
-section per subsystem. Read a subsystem's section before changing it** (they start with
-its name and module: grep for them). A change to a flow or invariant updates its section
+section per subsystem. Read a subsystem's section before changing it** (each is a bullet
+starting with its bold name and module: `grep -n '^- \*\*' docs/ARCHITECTURE.md` lists them). A change to a flow or invariant updates its section
 in the same commit, and a new feature adds one. A rename updates the docs and comments
 that name the old path too: `docs_names::the_docs_name_only_code_that_exists` fails on a
 file or `module::item` that's gone (only when the name is gone from the whole code: a field
