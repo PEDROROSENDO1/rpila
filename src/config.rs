@@ -1301,20 +1301,37 @@ pub struct Colors {
 impl Default for Colors {
     fn default() -> Self {
         // Neutral dark greys; focus is shown by the bar and icon brightness.
+        // Written as config.example.toml shows them, and made exactly as
+        // `parse_color` makes those.
         Self {
-            bar: [0.184, 0.192, 0.212, 1.0],          // #2f3136
-            bar_inactive: [0.149, 0.153, 0.169, 1.0], // #26272b
-            bar_urgent: [0.541, 0.341, 0.071, 1.0],   // #8a5712
-            icon: [0.875, 0.882, 0.898],              // #dfe1e5
-            icon_inactive: [0.502, 0.514, 0.541],     // #80838a
-            hover: [0.247, 0.259, 0.286],             // #3f4249
-            hover_icon: [0.949, 0.953, 0.961],        // #f2f3f5
-            close_hover: [0.769, 0.169, 0.110],       // #c42b1c
-            close_hover_icon: [1.0, 1.0, 1.0],
-            background: [0.12, 0.13, 0.15, 1.0],   // #1f2126
-            snap_preview: [0.08, 0.14, 0.24, 0.3], // #4477cc4d
+            bar: hex(0x2f3136, 0xff),
+            bar_inactive: hex(0x26272b, 0xff),
+            bar_urgent: hex(0x8a5712, 0xff),
+            icon: rgb(hex(0xdfe1e5, 0xff)),
+            icon_inactive: rgb(hex(0x80838a, 0xff)),
+            hover: rgb(hex(0x3f4249, 0xff)),
+            hover_icon: rgb(hex(0xf2f3f5, 0xff)),
+            close_hover: rgb(hex(0xc42b1c, 0xff)),
+            close_hover_icon: rgb(hex(0xffffff, 0xff)),
+            background: hex(0x1f2126, 0xff),
+            snap_preview: hex(0x4477cc, 0x4d),
         }
     }
+}
+
+/// `#rrggbbaa`, premultiplied, as `parse_color` reads it.
+fn hex(rgb: u32, alpha: u8) -> [f32; 4] {
+    let channel = |shift: u32| ((rgb >> shift) & 0xff) as f32 / 255.0;
+    let a = if alpha == 0xff {
+        1.0
+    } else {
+        alpha as f32 / 255.0
+    };
+    [channel(16) * a, channel(8) * a, channel(0) * a, a]
+}
+
+fn rgb([r, g, b, _]: [f32; 4]) -> [f32; 3] {
+    [r, g, b]
 }
 
 /// `[colors]` as written: unset ones keep `Colors`' defaults.
@@ -3035,6 +3052,53 @@ mod tests {
         let parsed = Config::from_toml(example, &no_env).unwrap();
         let empty = Config::from_toml("", &no_env).unwrap();
         assert_eq!(format!("{parsed:?}"), format!("{empty:?}"));
+    }
+
+    #[test]
+    fn the_example_defaults_are_the_defaults() {
+        // Each setting marked "(default)", and each one in a table whose
+        // values "are the defaults", taken alone out of its comment, leaves
+        // the config as no file does.
+        let empty = format!("{:?}", Config::from_toml("", &no_env).unwrap());
+        let lines: Vec<&str> = EXAMPLE.lines().collect();
+        let mut all_defaults = false;
+        let mut checked = 0;
+        for (n, line) in lines.iter().enumerate() {
+            if line.starts_with('[') {
+                // "All of them are the defaults" sits in the comment above.
+                let above: Vec<&str> = lines[..n]
+                    .iter()
+                    .rev()
+                    .map_while(|l| l.strip_prefix('#'))
+                    .collect();
+                let comment = above.iter().rev().map(|l| l.trim()).collect::<Vec<_>>();
+                all_defaults = comment.join(" ").contains("are the defaults");
+                continue;
+            }
+            let Some(setting) = line.strip_prefix("# ") else {
+                continue;
+            };
+            let is_setting = setting
+                .split_once(" = ")
+                .is_some_and(|(key, _)| key.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
+            if !is_setting || !(line.contains("(default)") || all_defaults) {
+                continue;
+            }
+            let mut text = lines.clone();
+            text[n] = setting;
+            let parsed = Config::from_toml(&text.join("\n"), &no_env)
+                .unwrap_or_else(|err| panic!("config.example.toml:{}: {err}", n + 1));
+            assert_eq!(
+                format!("{parsed:?}"),
+                empty,
+                "config.example.toml:{}: {setting:?} isn't the default",
+                n + 1
+            );
+            checked += 1;
+        }
+        // At least as many as config.example.toml marked when this was
+        // written: the lines are still found.
+        assert!(checked >= 38, "only {checked} defaults found");
     }
 
     #[test]
