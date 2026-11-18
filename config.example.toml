@@ -99,8 +99,17 @@ default-bindings = true
 # the services they start. Pila's own (WAYLAND_DISPLAY, DISPLAY,
 # XDG_CURRENT_DESKTOP, XDG_SESSION_TYPE, PILA_SOCKET, PILA_OUTPUT) stay as
 # Pila sets them, and so do XCURSOR_THEME and XCURSOR_SIZE when [cursor] sets
-# them. None by default.
+# them. The defaults below have apps that can run on Wayland do so (X11
+# through Xwayland as the fallback); your file's own value for one replaces it,
+# and NAME = false drops it.
 [environment]
+QT_QPA_PLATFORM = "wayland;xcb"    # Qt: Wayland, X11 without its plugin
+ELECTRON_OZONE_PLATFORM_HINT = "auto"  # Electron (VS Code, Discord, ...)
+MOZ_ENABLE_WAYLAND = "1"           # older Firefox and Thunderbird
+_JAVA_AWT_WM_NONREPARENTING = "1"  # Java's X11 windows, blank without it
+# SDL_VIDEODRIVER = "wayland,x11"  # e.g.: SDL 2 games; older SDLs (games that
+#                                  # bring their own) then fail to start
+# GDK_BACKEND = "wayland,x11"      # e.g.: GTK picks Wayland by itself already
 # LANGUAGE = "zh_CN:zh_Hans:zh"    # e.g.
 # XMODIFIERS = "@im=fcitx"         # e.g.: fcitx5 in X11 apps (XIM)
 # QT_QPA_PLATFORMTHEME = false     # e.g.: removed

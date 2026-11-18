@@ -458,6 +458,15 @@ sets them, with a warning if the section names one, and so do `XCURSOR_THEME` an
 when `[cursor]` sets them. Pila itself doesn't read the section: its own settings (such as the
 keymap) are in the rest of the file.
 
+By default the section has apps that can run on Wayland do so, with X11 through Xwayland as the
+fallback: `QT_QPA_PLATFORM = "wayland;xcb"` (Qt; X11 when its Wayland plugin isn't installed),
+`ELECTRON_OZONE_PLATFORM_HINT = "auto"` (Electron apps such as VS Code), `MOZ_ENABLE_WAYLAND = "1"`
+(older Firefox and Thunderbird) and `_JAVA_AWT_WM_NONREPARENTING = "1"` (Java's X11 windows,
+which stay blank without it). Your file's own value for one replaces it, and `false` drops it,
+e.g. `QT_QPA_PLATFORM = false` for Qt apps on X11 again. `SDL_VIDEODRIVER` and `GDK_BACKEND` are
+left alone: GTK picks Wayland by itself, and games that bring an older SDL fail to start with
+`SDL_VIDEODRIVER = "wayland,x11"`.
+
 **A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
 in one program: start it from `autostart` (in place of `pila-bar`), and point
 `launcher` at its launcher command so Mod+D opens it instead of `pila-launcher`. If it animates its own panels, turn Pila's animations off for them with a layer rule

@@ -2301,8 +2301,17 @@ mod tests {
             &no_env,
         )
         .unwrap();
+        let user = |config: &Config| -> Vec<(String, Option<String>)> {
+            let defaults = Config::default().environment;
+            config
+                .environment
+                .iter()
+                .filter(|entry| !defaults.contains(entry))
+                .cloned()
+                .collect()
+        };
         assert_eq!(
-            config.environment,
+            user(&config),
             [
                 ("EMPTY".to_string(), Some(String::new())),
                 ("LANGUAGE".to_string(), Some("zh_CN:zh".to_string())),
@@ -2310,16 +2319,11 @@ mod tests {
             ]
         );
         assert!(config.warnings.is_empty());
-        // None by default.
-        assert!(Config::default().environment.is_empty());
         // Pila's own: left out, with a warning, not an error.
         for name in PILA_ENV {
             let text = format!("[environment]\n{name} = \"x\"\nKEPT = \"y\"\n");
             let config = Config::from_toml(&text, &no_env).unwrap();
-            assert_eq!(
-                config.environment,
-                [("KEPT".to_string(), Some("y".to_string()))]
-            );
+            assert_eq!(user(&config), [("KEPT".to_string(), Some("y".to_string()))]);
             assert_eq!(config.warnings.len(), 1, "{:?}", config.warnings);
             assert!(config.warnings[0].contains(name), "{:?}", config.warnings);
         }
@@ -2328,6 +2332,42 @@ mod tests {
         assert!(err("[environment]\n\"\" = \"x\"").contains("can't be empty or have"));
         assert!(err("[environment]\nA = true").contains("a value is a string"));
         assert!(err("[environment]\nA = 3").contains("a string (the variable's value)"));
+    }
+
+    #[test]
+    fn environment_has_wayland_defaults_a_file_can_remove() {
+        let value = |config: &Config, name: &str| {
+            config
+                .environment
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, value)| value.clone())
+        };
+        let defaults = Config::default();
+        for (name, expected) in [
+            ("QT_QPA_PLATFORM", "wayland;xcb"),
+            ("ELECTRON_OZONE_PLATFORM_HINT", "auto"),
+            ("MOZ_ENABLE_WAYLAND", "1"),
+            ("_JAVA_AWT_WM_NONREPARENTING", "1"),
+        ] {
+            assert_eq!(
+                value(&defaults, name),
+                Some(Some(expected.to_string())),
+                "{name}"
+            );
+        }
+        // A file's own value wins; false removes a default.
+        let config = Config::from_toml(
+            "[environment]\nQT_QPA_PLATFORM = \"xcb\"\nMOZ_ENABLE_WAYLAND = false\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(value(&config, "QT_QPA_PLATFORM"), Some(Some("xcb".into())));
+        assert_eq!(value(&config, "MOZ_ENABLE_WAYLAND"), Some(None));
+        assert_eq!(
+            value(&config, "ELECTRON_OZONE_PLATFORM_HINT"),
+            Some(Some("auto".into()))
+        );
     }
 
     #[test]
@@ -3178,7 +3218,8 @@ mod tests {
         // The code has none of its own: each active setting of the example
         // taken out of it leaves an empty file's config without that
         // setting, an error, rather than falling back to a value in the code.
-        // Not the bindings and gestures (taking one out takes it away), nor
+        // Not the bindings, gestures and environment variables (taking one
+        // out takes it away), nor
         // `launcher` and `autostart`, which may be unset (none, nothing), nor
         // the devices' options (unset, libinput's for the device).
         let lines: Vec<&str> = EXAMPLE.lines().collect();
@@ -3192,8 +3233,14 @@ mod tests {
             let Some((key, _)) = line.split_once(" = ") else {
                 continue;
             };
-            let free = ["bindings", "gestures", "input.touchpad", "input.mouse"]
-                .contains(&table.as_str())
+            let free = [
+                "bindings",
+                "gestures",
+                "environment",
+                "input.touchpad",
+                "input.mouse",
+            ]
+            .contains(&table.as_str())
                 || (table.is_empty() && ["launcher", "autostart"].contains(&key));
             if line.starts_with('#') || free {
                 continue;
@@ -3292,7 +3339,9 @@ mod tests {
         let text = uncomment(r#"# LANGUAGE = "zh_CN:zh_Hans:zh"    # e.g."#);
         let config = Config::from_toml(&text, &no_env)
             .unwrap_or_else(|err| panic!("an example variable uncommented: {err}"));
-        assert_eq!(config.environment.len(), 1);
+        assert!(config
+            .environment
+            .contains(&("LANGUAGE".to_string(), Some("zh_CN:zh_Hans:zh".to_string()))));
     }
 
     #[test]

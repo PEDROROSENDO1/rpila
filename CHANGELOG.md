@@ -13,7 +13,10 @@
   terminal and the launcher), `NAME = "value"`, or `NAME = false` to remove one Pila was started
   with; a saved change reaches what starts from then on. On a TTY they also go to the D-Bus
   session bus and systemd's user manager. Pila's own variables (`WAYLAND_DISPLAY`, `DISPLAY`, ...)
-  stay as Pila sets them, with a warning if the section names one.
+  stay as Pila sets them, with a warning if the section names one. By default it has Qt,
+  Electron, older Firefox and Java's X11 windows run on Wayland (or as they should under
+  Xwayland): `QT_QPA_PLATFORM = "wayland;xcb"`, `ELECTRON_OZONE_PLATFORM_HINT = "auto"`,
+  `MOZ_ENABLE_WAYLAND = "1"`, `_JAVA_AWT_WM_NONREPARENTING = "1"`; `NAME = false` drops one.
 
 ## 0.7.0 (2026-11-18)
 
