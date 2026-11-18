@@ -1,19 +1,24 @@
 //! Nested backend: pila runs as a window inside the host Wayland session.
 
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use smithay::{
     backend::{
         drm::DrmNode,
         egl::{EGLDevice, EGLSurface},
         renderer::{damage::OutputDamageTracker, gles::GlesRenderer, ImportDma},
-        winit::{self, WinitEvent, WinitGraphicsBackend},
+        winit::{self, WinitEvent, WinitEventLoop, WinitGraphicsBackend},
     },
     desktop::layer_map_for_output,
     input::pointer::CursorImageStatus,
     output::{Mode, Output, PhysicalProperties, Scale as OutputScale, Subpixel},
     reexports::{
-        calloop::EventLoop,
+        calloop::{
+            EventIterator, EventLoop, EventSource, Poll, PostAction, Readiness, Token, TokenFactory,
+        },
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{DisplayHandle, Resource},
         winit::{
@@ -31,6 +36,85 @@ use tracing::{error, info, warn};
 use crate::{backend::Backend, frame, render, Pila};
 
 const REFRESH_MHZ: i32 = 60_000;
+
+/// Set when the host went away under Pila (`Nested::Ended`): `main` then
+/// fails rather than quitting as if asked to.
+static HOST_LOST: AtomicBool = AtomicBool::new(false);
+
+/// Whether the nested session ended because its host went away.
+pub fn host_lost() -> bool {
+    HOST_LOST.load(Ordering::Relaxed)
+}
+
+/// What the host window gives the event loop.
+enum Nested {
+    Winit(WinitEvent),
+    /// winit's loop ended: the host's connection broke (the host session
+    /// ended or crashed) or failed.
+    Ended,
+}
+
+/// Smithay's winit source, saying when it ends. winit ends its loop when
+/// the host's connection fails, and Smithay's source then removes itself
+/// without a word: Pila ran on with no window, unreachable but for its
+/// clients, while winit's thread that watches the host's socket spun on the
+/// dead connection, printing `Io error: Broken pipe` nonstop.
+struct HostWindow(WinitEventLoop);
+
+impl EventSource for HostWindow {
+    type Event = Nested;
+    type Metadata = ();
+    type Ret = ();
+    type Error = <WinitEventLoop as EventSource>::Error;
+
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = WinitEventLoop::NEEDS_EXTRA_LIFECYCLE_EVENTS;
+
+    fn process_events<F>(
+        &mut self,
+        readiness: Readiness,
+        token: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        let action = self.0.process_events(readiness, token, |event, meta| {
+            callback(Nested::Winit(event), meta)
+        })?;
+        if action == PostAction::Remove {
+            callback(Nested::Ended, &mut ());
+        }
+        Ok(action)
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> smithay::reexports::calloop::Result<()> {
+        self.0.register(poll, token_factory)
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> smithay::reexports::calloop::Result<()> {
+        self.0.reregister(poll, token_factory)
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> smithay::reexports::calloop::Result<()> {
+        self.0.unregister(poll)
+    }
+
+    fn before_sleep(&mut self) -> smithay::reexports::calloop::Result<Option<(Readiness, Token)>> {
+        self.0.before_sleep()
+    }
+
+    fn before_handle_events(&mut self, events: EventIterator<'_>) {
+        self.0.before_handle_events(events)
+    }
+}
 
 /// The host window: Smithay's defaults (`winit::init`), with Pila's title
 /// and the app id `pila`, which the host's window rules can match (a Pila
@@ -111,7 +195,16 @@ pub fn init_winit(
 
     event_loop
         .handle()
-        .insert_source(winit, move |event, _, state| {
+        .insert_source(HostWindow(winit), move |event, _, state| {
+            let event = match event {
+                Nested::Winit(event) => event,
+                Nested::Ended => {
+                    error!("lost the host compositor: quitting");
+                    HOST_LOST.store(true, Ordering::Relaxed);
+                    state.loop_signal.stop();
+                    return;
+                }
+            };
             // Redraws happen on demand: after a window event here, as input
             // and client requests ask (`redraw.rs`), and for a few frames
             // after a resize.

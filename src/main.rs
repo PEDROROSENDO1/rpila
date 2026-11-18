@@ -382,6 +382,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         backend.reset_gamma();
     }
 
+    if winit::host_lost() {
+        return Err("lost the host compositor".into());
+    }
     Ok(())
 }
 
