@@ -34,7 +34,8 @@ pub struct Options {
     /// The config file (TOML). `[animations]` defaults to off, so results
     /// don't depend on timing; `[shadow]` to off, so pixels near a window are
     /// its own; `[cursor]` to no shake to find, so a test's moves never grow
-    /// the cursor; `[keyboard]` to the US layout.
+    /// the cursor; `[keyboard]` to the US layout; `autostart` to nothing, so
+    /// the example's `pila-bar` is never one of the children a test counts.
     pub config: String,
     /// `--headless-outputs`.
     pub outputs: Option<String>,
@@ -70,7 +71,12 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The config as written: the test's, plus the defaults it doesn't set.
 fn full_config(config: &str) -> String {
-    let mut text = config.to_string();
+    // A top-level key, so before the test's sections.
+    let mut text = if config.contains("autostart") {
+        config.to_string()
+    } else {
+        format!("autostart = []\n{config}")
+    };
     if !config.contains("[animations]") {
         text.push_str("\n[animations]\nenabled = false\n");
     }
