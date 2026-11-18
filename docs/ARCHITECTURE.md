@@ -1325,7 +1325,9 @@ Key flows and invariants:
   unfocused and hovered, the title focused and unfocused), so focus going back and forth
   (Mod+Tab) rasterizes nothing again. A title that fit whole is kept for any room it still fits in
   (`TitleTexture::shows`): a resize changes the room every frame, and it would be shaped and
-  uploaded again each time. Titles come from `text.rs` (cosmic-text): fonts load on a
+  uploaded again each time. Titles come from `text.rs` (cosmic-text), in the system's sans-serif
+  at `text::FONT_SIZE`, the size of all of pila-launcher's and pila-bar's text
+  (`launcher/src/style.rs`, kept equal by a test): fonts load on a
   background thread at startup, and until then `render_title` returns `None` and bars draw
   without text; once loaded (and warmed up: common characters shaped and rasterized on that
   thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide

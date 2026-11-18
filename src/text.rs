@@ -13,8 +13,10 @@ use cosmic_text::{
 };
 use tracing::{info, warn};
 
-/// Title font size, in logical pixels.
-pub const FONT_SIZE: f32 = 13.0;
+/// Title font size, in logical pixels: that of all of pila-launcher's and
+/// pila-bar's text (`style::TEXT_SIZE` in `launcher/src/style.rs`, which a
+/// test keeps equal).
+pub const FONT_SIZE: f32 = 14.0;
 
 struct Fonts {
     system: FontSystem,
@@ -214,5 +216,17 @@ mod tests {
         let white = [1.0; 3];
         assert!(render_with(&mut fonts, "a", white, i32::MAX, 30, 2).is_none());
         assert!(render_with(&mut fonts, "a", white, 0, 30, 1).is_none());
+    }
+
+    #[test]
+    fn titles_are_the_size_of_pila_launchers_and_pila_bars_text() {
+        // Their own copy (`launcher/src/style.rs`: they share no code with
+        // Pila); the family is the same, sans-serif at its regular weight.
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/launcher/src/style.rs");
+        let source = std::fs::read_to_string(path).unwrap();
+        assert!(
+            source.contains(&format!("pub const TEXT_SIZE: f32 = {FONT_SIZE:?};")),
+            "launcher/src/style.rs's TEXT_SIZE isn't {FONT_SIZE:?}"
+        );
     }
 }

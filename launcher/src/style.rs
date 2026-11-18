@@ -28,7 +28,8 @@ pub const ACCENT: Color = color!(0x4477cc);
 pub const URGENT: Color = color!(0x8a5712);
 
 /// The one font both use, at one size, regular weight everywhere (the
-/// active and selected stand out by color).
+/// active and selected stand out by color): the font of Pila's title bars
+/// (`text::FONT_SIZE` in Pila, which a test keeps equal to `TEXT_SIZE`).
 pub const FONT: Font = Font::DEFAULT;
 pub const TEXT_SIZE: f32 = 14.0;
 
