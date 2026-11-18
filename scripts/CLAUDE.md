@@ -87,3 +87,31 @@ ext-background-effect (the theme is opaque: `blur.entries` in Pila's state tells
 maximizes, and in GTK a context menu opens and Escape closes it with no grab left. The container
 has CJK fonts (wqy-microhei, noto-fonts-cjk): `candidates.png` shows the candidates readable. Run them after changing
 `input_method.rs`, the keyboard path, grabs, popups' drawing or blur, or the Smithay rev.
+
+# scripts/demo-video
+
+`scripts/demo-video` makes a demo video on a sealed headless Pila (as `scripts/apps`: one
+1920x1080 output at scale 1.5, default looks, `pila-bar`, `swaybg` on a generated gradient,
+`mako`, UTC; `pila-bar` and `pila-launcher` come from `launcher/target/release`):
+`scripts/demo-scenes` plays captioned scenes with real input (pointer and Pila's bindings
+through the control socket, text through `wtype`), waiting on Pila's state, never on fixed
+sleeps for something to happen; `scripts/demo-record` records the output at a constant 60 fps
+(an ext-image-copy-capture client: each frame in the tick of its presentation time, ticks with
+nothing new repeated) into a lossless `pila-demo/master.mkv`, and ffmpeg captions it into
+`pila-demo.mp4` (every scene, 1080p60), `pila-demo-short.mp4` (the scenes marked short, 720p,
+under 10 MB) and the README's `docs/demo.webp`: the short one as an animated WebP (1280 px,
+30 fps), because GitHub's README shows a video still, with controls, never playing by itself
+or looping (and a paragraph that is only a link to an attached video becomes its player, so
+the image stands alone). The WebP comes from libwebp's animation encoder through `ctypes`
+(`encode_webp`), not ffmpeg's `libwebp_anim`: libwebp 1.6 skips blocks that changed less than a
+tolerance taken from `quality` since the previous *source* frame, so slow fades left stale
+blocks on the picture; `quality` stays 100 and a target PSNR sets the compression (with sharp
+YUV, for colored text). It's committed (keep it under 5 MB, GitHub's image proxy refuses more;
+the script warns); the mp4 files aren't, they're uploaded as GitHub attachments, which stay
+private until published content (release notes) links them: check a link logged out.
+`--shots` records nothing and takes a screenshot per scene (`pila-demo/shots/`), the quick way
+to check scenes; `--encode` encodes the last recording again. It fails when a scene's wait
+times out, a saved config doesn't load or Pila panics, and lists missed refreshes from
+`pila::frames`. Redo it when the looks, the bar, the launcher or the scenes change, and watch
+it before publishing it: no personal data. A scene that needs a new kind of input or wait gets
+a helper in `demo-scenes`, not a sleep.

@@ -27,6 +27,7 @@ ENV TZ="${TZ}" \
 #     tests in scripts/apps; GTK 4, foot and kitty reach it through
 #     text-input-v3. CJK fonts to read its candidates in screenshots:
 #     wqy-microhei (small, Chinese) and noto-fonts-cjk (Japanese and Korean too)
+#   - ffmpeg: scripts/demo-video encodes the demo videos
 #   - swayidle, ironbar and nwg-panel: desktop tools to try on Pila for the
 #     manual's list of what works ("Building your desktop")
 RUN pacman -Syu --noconfirm --needed \
@@ -38,7 +39,7 @@ RUN pacman -Syu --noconfirm --needed \
         fuzzel waybar swaybg mako libnotify swaylock swayidle wl-clipboard wlr-randr \
         ironbar nwg-panel \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
-        grim slurp wtype wlopm wlsunset \
+        grim slurp wtype wlopm wlsunset ffmpeg \
         fcitx5 fcitx5-rime rime-luna-pinyin wqy-microhei noto-fonts-cjk \
     && rm -rf /var/cache/pacman/pkg/* \
     && dbus-uuidgen --ensure=/etc/machine-id

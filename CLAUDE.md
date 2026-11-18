@@ -105,6 +105,10 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   they follow the pointer and leave no grab; `fcitx5-foot` and `fcitx5-gtk4` type Chinese
   through fcitx5 into a terminal and a GTK text field (`scripts/CLAUDE.md`): after changing
   grabs, decorations, fill states, input or input methods, and before a release.
+- Demo video: `scripts/demo-video` records captioned scenes on a sealed headless Pila into
+  `pila-demo.mp4`, `pila-demo-short.mp4` (not committed) and the README's animated
+  `docs/demo.webp` (`--shots` to check the scenes quickly; `scripts/CLAUDE.md`); show them to
+  the user before they're committed or published.
 - Debugging: `WAYLAND_DEBUG=1` on a client for protocol traces, `RUST_LOG=debug` for the
   compositor, `RUST_LOG=pila::frames=debug` for frame times and missed refreshes (see
   "Performance pillar"). To watch an animation frame by frame: `[animations] speed = 4`
