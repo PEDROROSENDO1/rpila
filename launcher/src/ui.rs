@@ -28,6 +28,7 @@ use crate::{
     apps::{self, App},
     exec::{self, Request},
     icons::{self, IconFile},
+    style,
 };
 
 /// The layer surface's namespace, for `[[layer-rule]]`s.
@@ -112,7 +113,7 @@ pub fn run(listener: UnixListener, first: Request) -> ExitCode {
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Launcher::update, Launcher::view)
         .subscription(Launcher::subscription)
-        .theme(|_: &Launcher, _| Some(Theme::Dark))
+        .theme(|_: &Launcher, _| Some(style::theme()))
         .style(|_: &Launcher, theme: &Theme| iced::theme::Style {
             // Opaque: the software renderer's buffers have no alpha.
             background_color: theme.palette().background,
@@ -123,6 +124,8 @@ pub fn run(listener: UnixListener, first: Request) -> ExitCode {
                 start_mode: StartMode::Background,
                 ..Default::default()
             },
+            default_font: style::FONT,
+            default_text_size: style::TEXT_SIZE.into(),
             ..Default::default()
         })
         .run();
@@ -265,8 +268,24 @@ impl Launcher {
             .id(QUERY)
             .on_input(Message::Query)
             .on_submit(Message::Submit)
-            .size(18)
-            .padding(8);
+            .size(style::TEXT_SIZE)
+            .padding(8)
+            .style(|_, status| text_input::Style {
+                background: style::SURFACE.into(),
+                border: Border {
+                    color: match status {
+                        text_input::Status::Focused { .. } => style::ACCENT,
+                        _ => style::HOVER,
+                    },
+                    width: 1.0,
+                    // Square, as the rest.
+                    radius: 0.0.into(),
+                },
+                icon: style::TEXT_DIM,
+                placeholder: style::TEXT_DIM,
+                value: style::TEXT_BRIGHT,
+                selection: style::ACCENT,
+            });
         let mut rows = column![].spacing(0);
         let end = (self.first + ROWS).min(self.shown.len());
         for row_index in self.first..end {
@@ -275,10 +294,10 @@ impl Launcher {
         }
         if self.shown.is_empty() && !self.entries.is_empty() {
             rows = rows.push(
-                container(text("No app matches").size(15))
+                container(text("No app matches"))
                     .padding([8, 12])
-                    .style(|theme: &Theme| container::Style {
-                        text_color: Some(theme.extended_palette().background.strong.text),
+                    .style(|_| container::Style {
+                        text_color: Some(style::TEXT_DIM),
                         ..Default::default()
                     }),
             );
@@ -289,18 +308,15 @@ impl Launcher {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(palette.background.base.color.into()),
-                    border: Border {
-                        color: palette.background.strong.color,
-                        width: 1.0,
-                        // Square: transparent corners would show black.
-                        radius: 0.0.into(),
-                    },
-                    ..Default::default()
-                }
+            .style(|_| container::Style {
+                background: Some(style::SURFACE_DIM.into()),
+                border: Border {
+                    color: style::HOVER,
+                    width: 1.0,
+                    // Square: transparent corners would show black.
+                    radius: 0.0.into(),
+                },
+                ..Default::default()
             })
             .into()
     }
@@ -318,7 +334,7 @@ impl Launcher {
             None => Space::new().width(ICON_SIZE).height(ICON_SIZE).into(),
         };
         let selected = row_index == self.selected;
-        let line = row![icon, text(&entry.app.name).size(15)]
+        let line = row![icon, text(&entry.app.name)]
             .spacing(12)
             .align_y(Alignment::Center);
         let item = container(line)
@@ -326,16 +342,12 @@ impl Launcher {
             .width(Length::Fill)
             .height(ROW_HEIGHT)
             .align_y(Alignment::Center)
-            .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+            .style(move |_| {
                 if selected {
+                    // As the bar's active workspace, square.
                     container::Style {
-                        background: Some(palette.primary.weak.color.into()),
-                        text_color: Some(palette.primary.weak.text),
-                        border: Border {
-                            radius: 8.0.into(),
-                            ..Default::default()
-                        },
+                        background: Some(style::ACCENT.into()),
+                        text_color: Some(style::TEXT_BRIGHT),
                         ..Default::default()
                     }
                 } else {

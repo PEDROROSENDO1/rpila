@@ -6,11 +6,11 @@
 
 #![allow(dead_code)] // Each client uses part of it.
 
-use iced::{color, font::Weight, theme::Palette, Color, Font, Theme};
+use iced::{color, theme::Palette, Color, Font, Theme};
 
-/// Behind the launcher's list (Pila's `bar`, the focused title bar).
+/// The theme's background (Pila's `bar`, the focused title bar).
 pub const SURFACE: Color = color!(0x2f3136);
-/// The bar's background (Pila's `bar-inactive`).
+/// Behind the bar and the launcher (Pila's `bar-inactive`).
 pub const SURFACE_DIM: Color = color!(0x26272b);
 /// Lines and edges (Pila's `background`, behind everything).
 pub const EDGE: Color = color!(0x1f2126);
@@ -21,19 +21,16 @@ pub const TEXT: Color = color!(0xdfe1e5);
 /// `icon-inactive`).
 pub const TEXT_DIM: Color = color!(0x80838a);
 pub const TEXT_BRIGHT: Color = color!(0xf2f3f5);
-/// The active and selected (the blue of Pila's snap preview).
+/// The active workspace and the selected app (the blue of Pila's snap
+/// preview).
 pub const ACCENT: Color = color!(0x4477cc);
-/// The selected row: the accent, faded into `SURFACE`.
-pub const ACCENT_TINT: Color = color!(0x354a70);
 /// Asking for attention (Pila's `bar-urgent`).
 pub const URGENT: Color = color!(0x8a5712);
 
-/// Bold, not semibold: the common sans fonts (DejaVu Sans among them) have
-/// no semibold, and the font lookup then falls back to another family.
-pub const BOLD: Font = Font {
-    weight: Weight::Bold,
-    ..Font::DEFAULT
-};
+/// The one font both use, at one size, regular weight everywhere (the
+/// active and selected stand out by color).
+pub const FONT: Font = Font::DEFAULT;
+pub const TEXT_SIZE: f32 = 14.0;
 
 pub fn theme() -> Theme {
     Theme::custom(

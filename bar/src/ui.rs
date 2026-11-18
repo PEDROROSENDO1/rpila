@@ -39,7 +39,6 @@ pub const HEIGHT: u32 = 28;
 pub const BUTTON_WIDTH: f32 = 28.0;
 /// The line along the edge that faces the windows.
 const EDGE: f32 = 1.0;
-const TEXT_SIZE: f32 = 13.0;
 /// How far a touchpad scrolls (in pixels) for one workspace.
 const PIXELS_PER_STEP: f32 = 40.0;
 
@@ -104,7 +103,8 @@ pub fn run(args: Args) -> ExitCode {
                 start_mode: StartMode::AllScreens,
                 ..Default::default()
             },
-            default_text_size: TEXT_SIZE.into(),
+            default_font: style::FONT,
+            default_text_size: style::TEXT_SIZE.into(),
             ..Default::default()
         })
         .run();
@@ -184,7 +184,6 @@ impl Bar {
         let clock = container(
             text(&self.clock)
                 .wrapping(text::Wrapping::None)
-                .font(style::BOLD)
                 .color(style::TEXT_BRIGHT),
         )
         .padding([0, 12])
@@ -215,11 +214,7 @@ impl Bar {
 /// color, an urgent one in the attention color, the others plain until
 /// hovered.
 fn button<'a>(index: usize, name: &'a str, active: bool, urgent: bool) -> Element<'a, Message> {
-    let label = text(name).wrapping(text::Wrapping::None).font(if active {
-        style::BOLD
-    } else {
-        iced::Font::DEFAULT
-    });
+    let label = text(name).wrapping(text::Wrapping::None);
     let block = button_widget(
         container(label)
             .height(Length::Fill)

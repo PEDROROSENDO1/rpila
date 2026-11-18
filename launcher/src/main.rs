@@ -10,6 +10,7 @@
 mod apps;
 mod exec;
 mod icons;
+mod style;
 mod ui;
 
 use std::{

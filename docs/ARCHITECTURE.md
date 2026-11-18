@@ -723,8 +723,9 @@ Key flows and invariants:
   `scripts/apps launcher` drives the real thing on a headless Pila. It and the bar share Pila's
   look, `launcher/src/style.rs` (the defaults of `[colors]` as an iced theme, the accent of the
   snap preview; the bar includes the file by `#[path]`); their surfaces are opaque (tiny-skia
-  draws into XRGB buffers), so the launcher's corners stay square, and emphasis is bold, not
-  semibold, which common sans fonts lack (the lookup then picks another family).
+  draws into XRGB buffers), so the launcher's corners stay square; one font and size for all
+  their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
+  out by color.
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, what starts when there's no
   `-c` and no `autostart` and it's installed (`Config::default_startup`, `config::DEFAULT_BAR`;
   no terminal starts by itself; not on the headless backend, whose tests start their own clients): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
