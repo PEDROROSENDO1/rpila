@@ -545,7 +545,8 @@ counted, and `--no-battery` leaves it out. With an icon font installed, a Nerd F
 alone, `Symbols Nerd Font`, are enough) or Font Awesome, both packaged by most distributions, the
 battery shows its icon too, one icon: with a Nerd Font its level by tens, with a bolt beside it
 while charging; with Font Awesome, which has fewer, its level by quarters, in the accent color
-while charging. Without one, words and numbers alone. The tray shows the icons apps put there (fcitx5,
+while charging. The clock gets a clock icon before it from the same font. Without one, words and
+numbers alone. The tray shows the icons apps put there (fcitx5,
 network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
 does what the app does on a click, the middle button its second action, the wheel what it does
 with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it).

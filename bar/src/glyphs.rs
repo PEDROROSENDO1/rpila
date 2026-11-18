@@ -48,11 +48,18 @@ const TENS_CHARGING: [char; 11] = [
     '\u{f0085}',
 ];
 
-/// The icon font found, and whether it has Material Design's batteries.
+/// A clock: Material Design's outline (`md-clock_outline`, as the
+/// batteries' outlines) in a Nerd Font, else Font Awesome's.
+const CLOCK_MATERIAL: char = '\u{f0150}';
+const CLOCK_AWESOME: char = '\u{f017}';
+
+/// The icon font found, whether it has Material Design's batteries, and
+/// its clock, if it has one.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IconFont {
     pub font: Font,
     pub tens: bool,
+    pub clock: Option<char>,
 }
 
 /// An icon to draw, and whether in the accent color.
@@ -123,16 +130,20 @@ pub fn find() -> Option<IconFont> {
         db.with_face_data(id, |data, index| {
             let face = ttf_parser::Face::parse(data, index).ok()?;
             let all = |glyphs: &[char]| glyphs.iter().all(|&c| face.glyph_index(c).is_some());
-            Some((all(&QUARTERS), all(&TENS) && all(&TENS_CHARGING)))
+            let clock = [CLOCK_MATERIAL, CLOCK_AWESOME]
+                .into_iter()
+                .find(|&c| face.glyph_index(c).is_some());
+            Some((all(&QUARTERS), all(&TENS) && all(&TENS_CHARGING), clock))
         })
         .flatten()
-        .unwrap_or((false, false))
+        .unwrap_or((false, false, None))
     };
     let icon_font = |face: &Face, id| {
-        let (quarters, tens) = has(id);
+        let (quarters, tens, clock) = has(id);
         quarters.then(|| IconFont {
             font: font(face),
             tens,
+            clock,
         })
     };
     let chosen = pick(faces.iter().map(|(face, _)| face))?;

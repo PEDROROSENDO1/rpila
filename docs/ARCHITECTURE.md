@@ -792,8 +792,10 @@ Key flows and invariants:
   iced's text already brings (`glyphs::find`: families by name, `Symbols Nerd Font` first, then
   checked to have the glyphs drawn); one icon, never two: a Nerd Font's Material Design batteries
   by tens (each also in a charging version), or else Font Awesome's by quarters (also at those
-  code points in Nerd Fonts), in the accent color while charging (`glyphs::battery`); none found,
-  the battery is text alone, never a missing glyph's box. The clock
+  code points in Nerd Fonts), in the accent color while charging (`glyphs::battery`); a clock
+  before the clock, Material Design's or else Font Awesome's, if the font has one
+  (`IconFont::clock`); none found, the battery and the clock are text alone, never a missing
+  glyph's box. The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the
   user's `LC_TIME` and wakes the bar only when the text changes. `scripts/apps bar` drives it on
   a headless Pila.

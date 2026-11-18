@@ -176,6 +176,8 @@ pub fn run(args: Args) -> ExitCode {
         }
         if show_battery {
             tasks.push(Task::run(battery::updates(), Message::Battery));
+        }
+        if show_battery || !format.is_empty() {
             tasks.push(Task::perform(glyphs::found(), Message::IconFont));
         }
         (bar, Task::batch(tasks))
@@ -407,11 +409,18 @@ impl Bar {
             .width(Length::Fill)
             .height(Length::Fill)
             .clip(true);
-        let clock = container(
-            text(&self.clock)
-                .wrapping(text::Wrapping::None)
-                .color(st.text_bright),
-        )
+        let time = text(&self.clock)
+            .wrapping(text::Wrapping::None)
+            .color(st.text_bright);
+        // A clock before it, from the icon font, if it has one.
+        let clock_icon = self
+            .icon_font
+            .and_then(|icons| Some(text(icons.clock?.to_string()).font(icons.font)))
+            .map(|icon| icon.color(st.text));
+        let clock = container(match clock_icon {
+            Some(icon) => Element::from(row![icon, time].spacing(6).align_y(Alignment::Center)),
+            None => time.into(),
+        })
         .padding([0, 12])
         .height(Length::Fill)
         .align_x(Alignment::End)
