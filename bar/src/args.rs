@@ -24,8 +24,8 @@ pub const USAGE: &str = "\
 Usage: pila-bar [--bottom] [--clock FORMAT]
 
 Pila's bar, on every monitor: the workspaces (a click or the wheel switches),
-the focused window's title and a clock. Pila starts it when its config has
-no `autostart`; with one, list pila-bar there. It works in any compositor
+the focused window's title and a clock. Pila starts it from its config's
+`autostart`, as the config it writes on the first run does. It works in any compositor
 with the layer shell, ext-workspace and wlr-foreign-toplevel-management.
 
 Options:

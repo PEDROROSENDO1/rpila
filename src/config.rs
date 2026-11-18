@@ -1602,11 +1602,11 @@ pub struct Config {
     pub default_mod: ModKey,
     /// `None`: the first of `TERMINALS` that is installed (`terminal_command`).
     pub terminal: Option<String>,
-    /// `None`: no launcher (`launcher = ""`, or unset and `DEFAULT_LAUNCHER`
-    /// isn't installed).
+    /// `None`: no launcher (unset, or `launcher = ""`). The file Pila writes
+    /// on the first run sets `pila-launcher` (`EXAMPLE`).
     pub launcher: Option<String>,
-    /// Commands run at startup (when no `-c` is given; empty:
-    /// `default_startup`).
+    /// Commands run at startup (when no `-c` is given). The file Pila writes
+    /// on the first run sets `pila-bar` (`EXAMPLE`).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<Binding>,
@@ -1650,13 +1650,6 @@ pub struct Config {
     pub warnings: Vec<String>,
 }
 
-/// Pila's own launcher (`launcher/`): the launcher when `launcher` isn't
-/// set, where it's installed.
-pub const DEFAULT_LAUNCHER: &str = "pila-launcher";
-/// Pila's own bar (`bar/`): what starts when `autostart` isn't set, where
-/// it's installed (`Config::default_startup`).
-pub const DEFAULT_BAR: &str = "pila-bar";
-
 /// Terminals tried in order when `terminal` isn't set.
 pub const TERMINALS: &[&str] = &[
     "kitty",
@@ -1668,18 +1661,6 @@ pub const TERMINALS: &[&str] = &[
     "gnome-terminal",
     "xterm",
 ];
-
-/// The launcher when `launcher` isn't set: Pila's own where it's installed.
-fn default_launcher(installed: &dyn Fn(&str) -> bool) -> Option<String> {
-    installed(DEFAULT_LAUNCHER).then(|| DEFAULT_LAUNCHER.to_string())
-}
-
-fn default_startup_with(installed: &dyn Fn(&str) -> bool) -> Vec<String> {
-    installed(DEFAULT_BAR)
-        .then(|| DEFAULT_BAR.to_string())
-        .into_iter()
-        .collect()
-}
 
 /// Whether `program` is an executable file in a `PATH` directory.
 pub(crate) fn in_path(program: &str) -> bool {
@@ -1704,8 +1685,10 @@ impl Default for Config {
     }
 }
 
-/// `config.example.toml`: every option, all commented out. Pila writes it to
-/// the default path when nothing is there (`create_default_file`).
+/// `config.example.toml`: every option, all commented out but `launcher` and
+/// `autostart`, which start Pila's own launcher and bar. Pila writes it to
+/// the default path when nothing is there (`create_default_file`), so a first
+/// run has them; with no file at all, or a file of one's own, they're unset.
 pub const EXAMPLE: &str = include_str!("../config.example.toml");
 
 /// Write `EXAMPLE` to `path`, creating its directories, unless something is
@@ -1799,12 +1782,10 @@ impl Config {
             None => default_mod,
         };
         let terminal = env("PILA_TERMINAL").or(file.terminal);
-        // Unset: Pila's own where it's installed; "" for none.
-        let launcher = match env("PILA_LAUNCHER").or(file.launcher) {
-            Some(launcher) if launcher.trim().is_empty() => None,
-            Some(launcher) => Some(launcher),
-            None => default_launcher(&in_path),
-        };
+        // "" (or blank) is none, as unset is.
+        let launcher = env("PILA_LAUNCHER")
+            .or(file.launcher)
+            .filter(|launcher| !launcher.trim().is_empty());
 
         let workspaces = match file.workspaces {
             None => DEFAULT_WORKSPACES,
@@ -1984,13 +1965,6 @@ impl Config {
             );
         }
         found
-    }
-
-    /// What starts with the session when `autostart` isn't set and no `-c`
-    /// is given: Pila's bar where it's installed, and nothing else (the
-    /// terminal is Mod+Return's).
-    pub fn default_startup() -> Vec<String> {
-        default_startup_with(&in_path)
     }
 
     /// The `[[output]]` settings for the output called `name` showing
@@ -2229,16 +2203,14 @@ mod tests {
     }
 
     #[test]
-    fn pila_launcher_and_pila_bar_are_the_defaults_where_installed() {
-        let all = |_: &str| true;
-        let nothing = |_: &str| false;
-        assert_eq!(default_launcher(&all).as_deref(), Some("pila-launcher"));
-        assert_eq!(default_launcher(&nothing), None);
-        // Only the bar: the terminal is Mod+Return's.
-        assert_eq!(default_startup_with(&all), ["pila-bar"]);
-        assert!(default_startup_with(&nothing).is_empty());
-        // "" (or blank) is no launcher, installed or not; PILA_LAUNCHER
-        // still wins over the file.
+    fn no_launcher_and_no_autostart_unless_set() {
+        // Pila starts neither of its own by itself: the file it writes on
+        // the first run sets them (`the_example_sets_pila_launcher_and_pila_bar`).
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.launcher, None);
+        assert!(config.autostart.is_empty());
+        // "" (or blank) is no launcher too; PILA_LAUNCHER still wins over
+        // the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
             let config = Config::from_toml(text, &no_env).unwrap();
             assert_eq!(config.launcher, None, "{text}");
@@ -3089,31 +3061,39 @@ mod tests {
     }
 
     #[test]
-    fn the_example_sets_nothing() {
+    fn the_example_sets_pila_launcher_and_pila_bar() {
         // Its values are all commented out, so what's active can't drift
-        // from the defaults: only table headers are left, which keep an
-        // uncommented line in its table.
+        // from the defaults, but the two that start Pila's own launcher and
+        // bar in the file a first run writes: only those and table headers
+        // are left, which keep an uncommented line in its table.
+        let set = [
+            r#"launcher = "pila-launcher""#,
+            r#"autostart = ["pila-bar"]"#,
+        ];
         let example = EXAMPLE;
         for (n, line) in example.lines().enumerate() {
             let line = line.trim();
             let header = line.starts_with('[') && line.ends_with(']');
             assert!(
-                line.is_empty() || line.starts_with('#') || header,
+                line.is_empty() || line.starts_with('#') || header || set.contains(&line),
                 "config.example.toml:{}: {line:?} isn't commented out",
                 n + 1
             );
         }
         let parsed = Config::from_toml(example, &no_env).unwrap();
-        let empty = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(format!("{parsed:?}"), format!("{empty:?}"));
+        assert_eq!(parsed.launcher.as_deref(), Some("pila-launcher"));
+        assert_eq!(parsed.autostart, ["pila-bar"]);
+        // And nothing else.
+        let only_those = Config::from_toml(&set.join("\n"), &no_env).unwrap();
+        assert_eq!(format!("{parsed:?}"), format!("{only_those:?}"));
     }
 
     #[test]
     fn the_example_defaults_are_the_defaults() {
         // Each setting marked "(default)", and each one in a table whose
         // values "are the defaults", taken alone out of its comment, leaves
-        // the config as no file does.
-        let empty = format!("{:?}", Config::from_toml("", &no_env).unwrap());
+        // the config as the example sets it.
+        let example = format!("{:?}", Config::from_toml(EXAMPLE, &no_env).unwrap());
         let lines: Vec<&str> = EXAMPLE.lines().collect();
         let mut all_defaults = false;
         let mut checked = 0;
@@ -3144,7 +3124,7 @@ mod tests {
                 .unwrap_or_else(|err| panic!("config.example.toml:{}: {err}", n + 1));
             assert_eq!(
                 format!("{parsed:?}"),
-                empty,
+                example,
                 "config.example.toml:{}: {setting:?} isn't the default",
                 n + 1
             );

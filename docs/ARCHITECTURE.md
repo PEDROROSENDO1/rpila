@@ -696,10 +696,10 @@ Key flows and invariants:
   opens its next popover on the same surface, and the null commit after the destroy is no
   popup's commit any more, so without it that popover's initial commit read as a hiding one
   and got no configure, while its grab held the app's input.
-- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, the
-  launcher when `launcher` isn't set and it's on `PATH` when the config is read
-  (`config::DEFAULT_LAUNCHER`; `launcher = ""` or not installed: Mod+D does nothing and isn't
-  swallowed; the tests' harness writes `launcher = ""` unless a test sets one). A separate
+- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, set
+  in `config.example.toml` (`launcher = "pila-launcher"`, one of its two uncommented lines), so the
+  file Pila writes on the first run (`config::create_default_file`) has it; Pila's code has no
+  default launcher (unset or `""`: Mod+D does nothing and isn't swallowed). A separate
   client written with iced on iced_layershell: it shares no code with Pila and reaches it only
   through Wayland, as a layer surface (Overlay, no anchor so Pila centers it, exclusive
   keyboard, namespace `pila-launcher`). A cargo workspace of its own with its own `Cargo.lock`:
@@ -726,9 +726,10 @@ Key flows and invariants:
   draws into XRGB buffers), so the launcher's corners stay square; one font and size for all
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
-- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, what starts when there's no
-  `-c` and no `autostart` and it's installed (`Config::default_startup`, `config::DEFAULT_BAR`;
-  no terminal starts by itself; not on the headless backend, whose tests start their own clients): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
+- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, started from
+  `config.example.toml`'s other uncommented line (`autostart = ["pila-bar"]`), so from the file a
+  first run writes; Pila's code starts nothing by itself (no `-c` and no `autostart`: nothing, no
+  terminal either): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same

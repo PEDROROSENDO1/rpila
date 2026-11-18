@@ -4,20 +4,21 @@
 
 - **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`
   files) with their icons, searched as you type; Return or a click starts one, Escape closes
-  it. It's the launcher Mod+D and tapping Mod open unless `launcher` names another
-  (`launcher = ""`: none); apps that run in a terminal start in kitty, or `--terminal` names
-  another. It stays in the background after the first use, so it opens at once; input methods
+  it. The configuration Pila writes on the first run sets `launcher = "pila-launcher"`, so
+  Mod+D and tapping Mod open it; apps that run in a terminal start in kitty, or `--terminal`
+  names another. It stays in the background after the first use, so it opens at once; input methods
   such as fcitx5 type into it. Written with iced, rendered in software: it needs no new library,
   and the packages include it.
 - **`pila-bar`, a bar of Pila's own:** on every monitor, the workspaces (a click or the wheel
   switches), the focused window's title and a clock in your language (`--bottom`,
-  `--clock FORMAT`). It starts when `autostart` isn't set; with an `autostart` of your own, list
-  it there. Written with iced like `pila-launcher`, on
+  `--clock FORMAT`). The configuration Pila writes on the first run starts it
+  (`autostart = ["pila-bar"]`). Written with iced like `pila-launcher`, on
   standard protocols (ext-workspace) plus wlr-foreign-toplevel-management, so it also runs on
   other compositors; the packages include it.
 - **No terminal at login:** with no `autostart`, Pila used to open a terminal; it now starts
-  `pila-bar` and nothing else (Mod+Return opens the terminal). Put your terminal in `autostart`
-  to have it back.
+  nothing (Mod+Return opens the terminal). Put your terminal in `autostart` to have it back.
+  An existing configuration file is left as it is: add `launcher = "pila-launcher"` and
+  `pila-bar` in `autostart` for Pila's own launcher and bar.
 - **`default-bindings = false`** leaves out every default binding and gesture, so only the
   config's own are left: for a scheme of one's own, or Pila as a login screen's compositor
   (greetd), where Mod+Return would otherwise open a terminal before anyone logs in. Switching

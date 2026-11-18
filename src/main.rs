@@ -16,8 +16,8 @@ Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headles
 
 Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
-                        config's autostart (default: pila-bar, where it's
-                        installed)
+                        config's autostart (default: nothing; the config
+                        written on the first run starts pila-bar)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
                         or ~/.config/pila/config.toml, written from
                         config.example.toml the first time it's missing)
@@ -41,8 +41,9 @@ Environment (overrides the config file):
   PILA_TERMINAL  Terminal for Mod+Return (default: the first
                  installed of kitty, foot, alacritty, ghostty, wezterm,
                  konsole, gnome-terminal, xterm)
-  PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (default:
-                 pila-launcher where it's installed, else both do nothing)
+  PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (unset: both do
+                 nothing; the config written on the first run sets
+                 pila-launcher)
   XCURSOR_THEME  Cursor theme when [cursor] sets none (default: default;
                  nested, only the one grown by shaking it)
   XCURSOR_SIZE   Cursor size when [cursor] sets none (default: 24; nested,
@@ -355,15 +356,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // `-c`, else the config's autostart, else Pila's bar (no terminal: it's
+    // `-c`, else the config's autostart (no terminal by itself: it's
     // Mod+Return's). They get the reserved X display, so they can be X11
     // apps: the first to connect starts Xwayland.
     let startup = match startup_command {
         Some(command) => vec![command],
-        None if !state.config.autostart.is_empty() => state.config.autostart.clone(),
-        // Tests start their own clients.
-        None if backend == BackendKind::Headless => Vec::new(),
-        None => Config::default_startup(),
+        None => state.config.autostart.clone(),
     };
     state.reserve_xwayland();
     state.start_session(startup);

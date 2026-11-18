@@ -304,7 +304,7 @@ fn a_reload_with_an_unchanged_file_keeps_windows_as_they_are() {
 }
 
 /// With no config file at the default path, Pila writes the example there
-/// (every line commented out: nothing changes) and follows it from then on.
+/// and follows it from then on.
 #[test]
 fn a_missing_config_is_created_from_the_example_and_followed() {
     let mut pila = TestPila::start_with(Options {

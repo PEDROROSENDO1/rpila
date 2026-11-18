@@ -1,7 +1,8 @@
 # Pila configuration. Copy to ~/.config/pila/config.toml (or
 # $XDG_CONFIG_HOME/pila/config.toml, or pass --config FILE) and edit.
-# Every setting is optional, and every one here is commented out: as it is,
-# this file gives the same desktop as no file at all. Values marked
+# Every setting is optional, and every one here is commented out but two:
+# `launcher` and `autostart`, which start Pila's own launcher and bar (with no
+# file at all, neither starts). Values marked
 # "(default)" are what Pila uses when the setting is unset; the others are
 # examples. Take the `#` off a line to use it: table headers ([keyboard],
 # [bindings], ...) are left active so it lands in the right table.
@@ -22,21 +23,23 @@
 # of foot, alacritty, ghostty, wezterm, konsole, gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
-# Mod+D and tapping Mod alone. Unset, pila-launcher, installed with Pila:
-# the installed apps, searched as you type; apps that run in a terminal start
-# in kitty (--terminal COMMAND for another; the others as for `terminal` where
-# kitty isn't installed). Where it isn't installed, or with "", they do
-# nothing. Any other launcher works too, such as fuzzel.
-# launcher = "pila-launcher"       # default where installed
+# Mod+D and tapping Mod alone. Unset (or ""), they do nothing. pila-launcher,
+# installed with Pila, lists the installed apps, searched as you type; apps
+# that run in a terminal start in kitty (--terminal COMMAND for another; the
+# others as for `terminal` where kitty isn't installed). Any other launcher
+# works too, such as fuzzel. Set here, in the file Pila writes on the first run.
+launcher = "pila-launcher"
 # launcher = "fuzzel"              # e.g.
 
 # Commands run at startup (`pila -c` replaces them). X11 apps among them
-# start Xwayland as they connect. Unset, pila-bar, installed with Pila (and
-# nothing where it isn't): a bar on every monitor with the workspaces (a click
-# or the wheel switches), the focused window's title and a clock (--bottom
-# for the bottom edge, --clock FORMAT as strftime writes it). Set, only what
-# it lists starts: add pila-bar to keep it, or another bar such as waybar.
-# autostart = ["pila-bar"]         # default where installed
+# start Xwayland as they connect. Unset, nothing starts (no terminal either:
+# Mod+Return opens one). pila-bar, installed with Pila, is a bar on every
+# monitor with the workspaces (a click or the wheel switches), the focused
+# window's title and a clock (--bottom for the bottom edge, --clock FORMAT as
+# strftime writes it). Any other bar works too, such as waybar. Set here, in
+# the file Pila writes on the first run; only one `autostart` line can be
+# active, so to use the longer example, replace this one with it.
+autostart = ["pila-bar"]
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
 #     "pila-bar --bottom",

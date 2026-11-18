@@ -75,8 +75,8 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   tested automatically (bare metal, looks), say so and why.
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
-  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (whose default is
-  `pila-bar`, where it's installed; no terminal starts by itself).
+  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (unset, nothing
+  starts, no terminal either; the config written on the first run starts `pila-bar`).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -312,7 +312,8 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
   `let`-`else`, logging what means something went wrong.
 - **Settings:** a new one is read when used or re-applied in `apply_config`. Keep in sync:
   `DEFAULT_BINDINGS` and `DEFAULT_GESTURES`, the
-  defaults in `config.example.toml` (every value commented out and marked default or example),
+  defaults in `config.example.toml` (every value commented out and marked default or example,
+  but `launcher` and `autostart`, which the file a first run writes sets to Pila's own),
   `USAGE` in `main.rs` for flags and env vars, and the user docs: `docs/MANUAL.md` (by task)
   and the man page `docs/pila.1` (tests check that both list every default binding, and the
   man page every flag and variable of `USAGE`). A feature users see gets its place in the

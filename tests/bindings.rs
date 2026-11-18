@@ -418,32 +418,38 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 }
 
 #[test]
-fn pila_launcher_is_the_launcher_where_its_installed() {
+fn the_config_written_on_the_first_run_starts_pila_bar_and_opens_pila_launcher() {
     use std::os::unix::fs::PermissionsExt;
-    // A pila-launcher on PATH that says it ran.
-    let bin = std::env::temp_dir().join(format!("pila-launcher-bin-{}", std::process::id()));
+    // A pila-bar and a pila-launcher on PATH that say they ran.
+    let bin = std::env::temp_dir().join(format!("pila-own-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    let script = bin.join("pila-launcher");
-    std::fs::write(
-        &script,
-        "#!/bin/sh\necho default > \"$XDG_RUNTIME_DIR/out\"\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    for name in ["pila-bar", "pila-launcher"] {
+        let script = bin.join(name);
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\necho {name} > \"$XDG_RUNTIME_DIR/{name}\"\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
 
-    // No config file: the one written from the example sets no launcher.
+    // No config file: the one written from the example starts the bar and
+    // binds the launcher.
     let mut pila = TestPila::start_with(Options {
         default_config_path: true,
         env: vec![("PATH".into(), path.clone())],
         ..Options::default()
     });
+    pila.wait_log("created the config from the example");
+    assert_eq!(pila.wait_file("pila-bar"), "pila-bar\n");
     pila.combo("Super+d");
-    assert_eq!(pila.wait_file("out"), "default\n");
+    assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
 
-    // `launcher = ""`: none, though it's installed.
+    // A file of one's own without them: neither, though both are installed.
     let mut pila = TestPila::start_with(Options {
-        config: "launcher = \"\"\n".into(),
+        default_config_path: true,
+        config: "# mine\n".into(),
         env: vec![("PATH".into(), path)],
         ..Options::default()
     });

@@ -10,7 +10,7 @@
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
 touchpad and monitors. It comes with a bar and a launcher of its own (`pila-bar` and
-`pila-launcher`, on by default); the rest of a desktop (notifications, a wallpaper, a lock
+`pila-launcher`, set in the configuration Pila writes on the first run); the rest of a desktop (notifications, a wallpaper, a lock
 screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
 has them all.
 
@@ -61,7 +61,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | Keys | What they do |
 |---|---|
 | `Mod+Return` | Open a terminal (`terminal`, or the first one installed of kitty, foot, alacritty and others) |
-| `Mod+D` | Open the launcher (`launcher`, else `pila-launcher` where it's installed) |
+| `Mod+D` | Open the launcher (`launcher`: `pila-launcher` in the configuration written on the first run) |
 | `Mod` | Tapped alone (pressed and released with nothing else in between): open the launcher too |
 | `Mod+Tab`, `Mod+J` | Switch to the previous window; keep Mod held and press again for older ones |
 | `Mod+Shift+Tab` | The same, the other way |
@@ -360,8 +360,9 @@ screen never uses the input method: what's typed there doesn't reach it.
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). The first time
 it starts without one, it writes the example there, `config.example.toml`. Every line in it is
-commented out, so it changes nothing until you edit it. Each value says whether it's the default
-or an example; take the `#` off a line to use it.
+commented out but two, `launcher = "pila-launcher"` and `autostart = ["pila-bar"]`, which start
+Pila's own launcher and bar. Each value says whether it's the default or an example; take the `#`
+off a line to use it.
 
 A newer Pila doesn't touch the file you have. To compare it with the newest example, which
 packages install in `/usr/share/doc/pila` (it's also in Pila's source), or to start over:
@@ -415,13 +416,13 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); with no `autostart`, its own bar, `pila-bar`. Setting `autostart` replaces that
-default: list `pila-bar` in it to keep the bar. Everything
+Xwayland); the configuration Pila writes on the first run lists its own bar, `pila-bar`, there.
+With no `autostart`, nothing starts. Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
 
 **A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
-in one program: start it from `autostart` (which then no longer starts Pila's bar), and point
+in one program: start it from `autostart` (in place of `pila-bar`), and point
 `launcher` at its launcher command so Mod+D opens it instead of `pila-launcher`. If it animates its own panels, turn Pila's animations off for them with a layer rule
 on their namespace:
 
@@ -452,11 +453,11 @@ autostart = [
 ]
 ```
 
-**Pila's own launcher**, `pila-launcher`, installed with Pila, is the launcher unless you set
-`launcher`: a search over the installed apps (their `.desktop` files) with their icons. Type to
+**Pila's own launcher**, `pila-launcher`, installed with Pila, is the one the configuration
+Pila writes on the first run sets (`launcher = "pila-launcher"`): a search over the installed apps (their `.desktop` files) with their icons. Type to
 filter, then Return (or a click) starts the one selected; the arrows, Tab and Page Up/Down move
-the selection, and Escape or Mod+D again closes it. `launcher = ""` turns it off (Mod+D and
-tapping Mod then do nothing).
+the selection, and Escape or Mod+D again closes it. With no `launcher` (or `launcher = ""`), Mod+D
+and tapping Mod do nothing.
 
 Apps that run in a terminal (`Terminal=true`, such as htop) start in kitty, or the first installed
 of the terminals Pila itself tries for `terminal` where kitty isn't; `$TERMINAL`, or
@@ -469,8 +470,8 @@ type into its search field.
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
 workspaces on the left, the focused window's title in the middle and a clock on the right, in
 the colors of Pila's own title bars. A click on a workspace goes to it, and the
-wheel over the bar to the next or previous one. It starts when `autostart` isn't set; with an
-`autostart` of your own, list it there to keep it:
+wheel over the bar to the next or previous one. The configuration Pila writes on the first run
+starts it (`autostart = ["pila-bar"]`); with other programs, list it among them:
 
 ```toml
 autostart = ["pila-bar --bottom", "mako"]
@@ -763,8 +764,8 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |
 | Stuck on a locked screen after the locker crashed | See [Locking the screen and idling](#locking-the-screen-and-idling). |
-| `Mod+D` or tapping Mod does nothing | Install `pila-launcher` (it comes with Pila's packages and `scripts/install`), or set `launcher` to your launcher's command; `launcher = ""` turns it off (see [Building your desktop](#building-your-desktop)). |
-| No bar, or no terminal, at login | With no `autostart`, Pila starts `pila-bar` and no terminal (Mod+Return opens one); with an `autostart` of your own, list `pila-bar` (or your bar) and any terminal you want there. |
+| `Mod+D` or tapping Mod does nothing | Set `launcher` to your launcher's command, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)); a configuration written before Pila had its own doesn't set it. |
+| No bar, or no terminal, at login | Pila starts only what `autostart` lists, no terminal by itself (Mod+Return opens one): list `pila-bar` (or your bar) and any terminal you want there. |
 | An app needs Mod with the mouse wheel, which switches workspaces | `"Mod+WheelScrollDown" = "none"` and `"Mod+WheelScrollUp" = "none"` under `[bindings]` give it back (nested, Mod is Alt). |
 | Tapping Mod opens the launcher and you don't want it | `"Mod" = "none"` under `[bindings]` (nested, Mod is Alt, so tapping Alt opens it). |
 | A fullscreen window flickers or shows wrong colors | `direct-scanout = false` in the configuration (Pila then draws those frames itself), and report it with `pila-report`'s file. |
