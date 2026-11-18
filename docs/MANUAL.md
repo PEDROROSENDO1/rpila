@@ -526,7 +526,7 @@ in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods
 type into its search field.
 
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
-workspaces on the left and the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars (`[colors]`). A click on a workspace goes to it, and the
+workspaces on the left and the tray, the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars (`[colors]`). A click on a workspace goes to it, and the
 wheel over the bar to the next or previous one. It's the default `autostart`; with other
 programs, list it among them:
 
@@ -541,8 +541,14 @@ writes it, in your `LC_TIME` language (default `'%a %e %b  %H:%M'`; `''` leaves 
 monitor for several). A monitor connected later gets its bar too, if it's one of those. The
 battery shows how full the laptop's batteries are together, with an arrow up while charging,
 and turns amber at 15% or less while running down; a mouse's or a headset's battery isn't
-counted, and `--no-battery` leaves it out. Its layer surfaces' namespace is `pila-bar`, for a
-`[[layer-rule]]`. It has no network or volume: for those, waybar.
+counted, and `--no-battery` leaves it out. The tray shows the icons apps put there (fcitx5,
+network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
+does what the app does on a click, the middle button its second action, the wheel what it does
+with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it).
+`--no-tray` leaves it out; with no D-Bus session bus there's no tray. Apps that only have the old
+X11 tray (XEmbed) don't show there. Its layer surfaces' namespace is `pila-bar`, for a
+`[[layer-rule]]`. It has no network or volume of its own (the apps' icons in the tray do): for
+those, waybar.
 
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),

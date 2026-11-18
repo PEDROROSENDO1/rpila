@@ -13,6 +13,8 @@ pub struct Args {
     pub outputs: Vec<String>,
     /// Show the battery, where there's one.
     pub battery: bool,
+    /// Show the tray (StatusNotifierItems).
+    pub tray: bool,
 }
 
 pub const DEFAULT_CLOCK: &str = "%a %e %b  %H:%M";
@@ -29,16 +31,17 @@ impl Default for Args {
             height: DEFAULT_HEIGHT,
             outputs: Vec::new(),
             battery: true,
+            tray: true,
         }
     }
 }
 
 pub const USAGE: &str = "\
 Usage: pila-bar [--bottom] [--clock FORMAT] [--height PIXELS] [--output NAME]...
-               [--no-battery]
+               [--no-battery] [--no-tray]
 
 Pila's bar, on every monitor: the workspaces (a click or the wheel switches),
-the battery (where there's one) and a clock. It's Pila's default `autostart`. It works in any compositor with
+the tray, the battery (where there's one) and a clock. It's Pila's default `autostart`. It works in any compositor with
 the layer shell and ext-workspace.
 
 Options:
@@ -50,6 +53,7 @@ Options:
   --output NAME     Only on this monitor (as `pila msg outputs` names it);
                     once per monitor for several (default: all of them)
   --no-battery      Leave the battery out
+  --no-tray         Leave the tray out (the apps' icons: StatusNotifierItem)
   -h, --help        Show this help
   -V, --version     Show the version
 ";
@@ -82,6 +86,7 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, Exit> 
             "-V" | "--version" => return Err(Exit::Version),
             "--bottom" if inline.is_none() => parsed.bottom = true,
             "--no-battery" if inline.is_none() => parsed.battery = false,
+            "--no-tray" if inline.is_none() => parsed.tray = false,
             "--clock" => parsed.clock = value("a format")?,
             "--height" => {
                 let text = value("a height")?;
@@ -123,6 +128,8 @@ mod tests {
         assert!(args(&["--bottom"]).unwrap().bottom);
         assert!(args(&[]).unwrap().battery);
         assert!(!args(&["--no-battery"]).unwrap().battery);
+        assert!(args(&[]).unwrap().tray);
+        assert!(!args(&["--no-tray"]).unwrap().tray);
         assert_eq!(args(&["--clock", "%H:%M"]).unwrap().clock, "%H:%M");
         assert_eq!(args(&["--clock=%T"]).unwrap().clock, "%T");
         assert_eq!(args(&["--clock", ""]).unwrap().clock, "");

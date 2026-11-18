@@ -11,6 +11,7 @@ mod outputs;
 mod pila_ipc;
 #[path = "../../launcher/src/style.rs"]
 mod style;
+mod tray;
 mod ui;
 
 use std::process::ExitCode;

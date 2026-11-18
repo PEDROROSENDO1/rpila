@@ -52,7 +52,11 @@ PILA_BAR_BIN; skipped where it isn't), started in the run:
   - a monitor that comes gets a bar of its own, one that goes takes its bar
     along and the bar runs on; with --bottom, along the bottom edge;
   - --height 40 --output HDMI-A-1: no bar until that monitor comes, then a
-    bar 40 high on it alone, back when it's plugged in again.
+    bar 40 high on it alone, back when it's plugged in again;
+  - the tray (where fcitx5 and busctl are): the bar is the session's
+    StatusNotifierWatcher, fcitx5's item registers, a right click opens its
+    menu with a grab, a click elsewhere closes it, and the item goes when
+    fcitx5 quits.
 
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
@@ -511,7 +515,61 @@ class Workload:
                    f"layers {self.bars(self.state())}")
         self.ctl(cmd="output_remove", name="HDMI-A-1")
         self.stop_bar(bar, "and gone with it")
+        self.bar_tray()
         return self.finish()
+
+    def bar_tray(self):
+        """The tray: the bar is the session's StatusNotifierWatcher, a real
+        item (fcitx5's) registers with it, its menu opens on a right click
+        with a grab that a click elsewhere ends, and the item goes when
+        fcitx5 quits. With no battery or clock, the item is the last block."""
+        if not (shutil.which("fcitx5") and shutil.which("busctl")):
+            return
+        def busctl(*args):
+            out = subprocess.run(["busctl", "--user", *args], capture_output=True, text=True)
+            return out.stdout.strip()
+        bar = self.start_bar("--no-battery", "--clock", "")
+        self.wait(lambda s: any(l["geometry"] and l["geometry"]["h"] for l in self.bars(s)), 20)
+        watcher = ("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher")
+        end = time.monotonic() + 10
+        owner = ""
+        while owner != f"u {bar.pid}" and time.monotonic() < end:
+            owner = busctl("call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                           "GetConnectionUnixProcessID", "s", watcher[0])
+            time.sleep(0.2)
+        self.check("pila-bar is the tray's StatusNotifierWatcher", owner == f"u {bar.pid}", owner or "no owner")
+        fcitx = subprocess.Popen(["fcitx5"], stdout=open(os.path.join(self.out, "fcitx5.log"), "w"),
+                                 stderr=subprocess.STDOUT)
+        registered = lambda: busctl("get-property", *watcher, "RegisteredStatusNotifierItems")
+        end = time.monotonic() + 15
+        while registered() in ("", "as 0") and time.monotonic() < end:
+            time.sleep(0.2)
+        self.check("fcitx5's tray item registers with it", registered() not in ("", "as 0"), registered())
+        # Its menu is read ahead; give it a moment, then a right click.
+        time.sleep(1.5)
+        self.move(1920 - BAR_HEIGHT // 2, BAR_HEIGHT // 2)
+        time.sleep(0.2)
+        self.ctl(cmd="button", button="right", state="click")
+        state = self.wait(lambda s: s["popups"] and s["pointer"]["grabbed"], 5)
+        self.check("a right click on its icon opens its menu, with a grab", state is not None,
+                   f"popups {self.state()['popups']}, grabbed {self.state()['pointer']['grabbed']}")
+        if shutil.which("grim"):
+            time.sleep(0.5)
+            subprocess.run(["grim", os.path.join(self.out, "tray.png")], check=False)
+        self.move(960, 600)
+        time.sleep(0.2)
+        self.ctl(cmd="button", button="left", state="click")
+        state = self.wait(lambda s: not s["popups"] and not s["pointer"]["grabbed"], 5)
+        self.check("a click elsewhere closes it, leaving no grab", state is not None,
+                   f"popups {self.state()['popups']}")
+        fcitx.terminate()
+        fcitx.wait(5)
+        end = time.monotonic() + 10
+        while registered() != "as 0" and time.monotonic() < end:
+            time.sleep(0.2)
+        self.check("the item leaves when fcitx5 quits, the bar running on",
+                   registered() == "as 0" and bar.poll() is None, f"{registered()}, exit status {bar.poll()}")
+        self.stop_bar(bar, "the tray's bar gone")
 
     # --- pila-launcher ---
 

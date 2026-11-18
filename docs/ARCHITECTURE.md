@@ -744,7 +744,7 @@ Key flows and invariants:
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, the default
-  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the battery and a clock on the right. Like the launcher, a
+  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the tray, the battery and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same
@@ -762,7 +762,28 @@ Key flows and invariants:
   coordinates, hidden ones left out; groups ignored), its only protocol besides the layer shell. `desktop::Model` applies the events as the
   protocol says (at the manager's `done`) and knows nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
   wheel (a notch, or `PIXELS_PER_STEP` of a touchpad) activates a workspace through
-  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The battery
+  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The tray (`bar/src/tray/`, unless `--no-tray`) speaks
+  StatusNotifierItem over the D-Bus session bus with zbus's blocking API, on a thread of its own
+  (`tray::updates`; no bus, no tray): the bar serves `org.kde.StatusNotifierWatcher` when no one
+  else does (on Pila no one does; KDE or a waybar first keep theirs) and registers as a host either
+  way, follows the watcher's and the items' signals and the bus's `NameOwnerChanged`, and reads
+  each item's properties on a thread of their own (`tray::read`, with a method timeout: a hung app
+  holds only its own); `tray::model::Model` (unit tested) turns that into the items to show, sent
+  whole. Icons: a named one through `tray::icons::find` (the item's `IconThemePath`, then the
+  user's GTK icon theme, breeze, Adwaita and hicolor, any context, the best size; `-symbolic` ones
+  drawn in the text's color), else the `IconPixmap` closest to the size, as RGBA. A click calls the
+  item on a thread (`Tray::click`: `Activate`, `SecondaryActivate`, `Scroll`, or `ContextMenu` for
+  an item with no menu). Menus (com.canonical.dbusmenu) are read ahead, at each read of an item
+  with a new `Menu` and on `LayoutUpdated` (`tray::read_layout`, `tray::menu::entries`), because
+  the popup must be made while the button is still down: Smithay grants a popup's grab only
+  then, and the grab is what closes it on a click elsewhere. So a right click opens it at once
+  (`Bar::tray_click`, `AboutToShow` sent alongside): an `xdg_popup` of the bar's layer surface,
+  below the bar at the pointer, sized for its tallest level (`ui::menu_size`), a submenu shown in
+  its place with a row back; an entry chosen sends `Event` "clicked". The pointer's x comes from a
+  `mouse_area` around the whole bar, whose `on_move` fires on the pointer's entering too: a
+  pointer that enters and clicks with no motion between (warped there) has no `CursorMoved`.
+  `tray::bus_tests` runs the watcher and host against a private dbus-daemon with items of its own.
+  The battery
   (`battery::updates`, unless `--no-battery`) is a thread that reads `/sys/class/power_supply`
   every 5 s (batteries whose `scope` isn't `Device`, so no mouse's; together by what they hold,
   `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;

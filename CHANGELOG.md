@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A tray in `pila-bar`:** the icons apps put in the tray (StatusNotifierItem: fcitx5, network
+  and Bluetooth applets, Steam, Discord, ...), with their clicks, wheel and menus, the menus
+  opening below the bar. The bar is the session's StatusNotifierWatcher when nothing else is.
+  `--no-tray` leaves it out; `--clock ''` no longer leaves room for the clock.
 - **`pila-bar` and `pila-launcher` follow `[colors]`:** they take the colors of Pila's title bars
   from the configuration, and change as soon as it's saved (they had the defaults whatever the
   configuration said). `pila msg colors` lists them, and `pila msg subscribe colors` follows them

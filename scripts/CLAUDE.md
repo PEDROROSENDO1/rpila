@@ -73,7 +73,11 @@ over the bar goes on from where a binding of Pila's left the workspace (so the b
 ext-workspace) and stops at the last; an output added gets a bar of its own as wide as it, one
 removed takes its bar along with the process still running; `--bottom` puts it along the
 bottom edge; `--height 40 --output HDMI-A-1` opens nothing until that output comes, then a bar
-40 high on it alone, again after it's removed and added back. `bar.png` shows it. Run it after changing the bar, the layer shell or ext-workspace.
+40 high on it alone, again after it's removed and added back. Then, where fcitx5 and `busctl`
+are, the tray (`bar_tray`, a bar with `--no-battery --clock ''` so that the item is the last
+block): the bar owns `org.kde.StatusNotifierWatcher`, fcitx5's item registers with it, a right
+click on it opens its menu with a grab (`tray.png`), a click elsewhere closes it with no grab
+left, and the item leaves when fcitx5 quits. `bar.png` shows the bar. Run it after changing the bar, the layer shell or ext-workspace.
 
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime

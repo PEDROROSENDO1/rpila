@@ -13,11 +13,17 @@ use std::process::ExitCode;
 
 use iced::{
     event, mouse,
-    widget::{button as button_widget, column, container, row, text, Row, Space},
+    widget::{
+        button as button_widget, column, container, image, mouse_area, row, svg, text, Row, Space,
+    },
     window, Alignment, Border, Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_layershell::{
-    reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption},
+    actions::IcedNewPopupSettings,
+    reexport::{
+        Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption, PopupAnchor,
+        PopupGravity,
+    },
     settings::{LayerShellSettings, Settings, StartMode},
     to_layer_message,
 };
@@ -32,6 +38,7 @@ use crate::{
     outputs::Change,
     pila_ipc,
     style::{self, Style},
+    tray::{self, menu, Click, Tray},
 };
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
@@ -41,6 +48,12 @@ pub const NAMESPACE: &str = "pila-bar";
 const EDGE: f32 = 1.0;
 /// How far a touchpad scrolls (in pixels) for one workspace.
 const PIXELS_PER_STEP: f32 = 40.0;
+/// A tray menu's rows, separators and border.
+const MENU_ROW: f32 = 28.0;
+const MENU_SEPARATOR: f32 = 9.0;
+const MENU_BORDER: f32 = 1.0;
+/// About as wide as a character of the menu's text, for its size.
+const MENU_CHAR: f32 = 8.5;
 
 #[to_layer_message(multi)]
 #[derive(Debug, Clone)]
@@ -50,6 +63,15 @@ pub enum Message {
     Battery(Battery),
     /// Pila's colors, new or changed.
     Style(Style),
+    Tray(tray::Update),
+    /// A click on a tray item (its key).
+    TrayClick(String, Click),
+    /// The pointer moved on a surface (its x there).
+    Pointer(window::Id, f32),
+    Closed(window::Id),
+    /// An entry of the open tray menu (its id), or back from a submenu.
+    MenuEntry(i32),
+    MenuBack,
     /// A click on a workspace (its place in the bar).
     Activate(usize),
     Wheel(mouse::ScrollDelta),
@@ -70,12 +92,32 @@ struct Bar {
     /// The surfaces open, by output.
     surfaces: Vec<(WlOutput, window::Id)>,
     style: Style,
+    tray: Option<Tray>,
+    tray_items: Vec<tray::Item>,
+    /// Where the pointer was last on the bar: a menu opens there.
+    pointer: Option<(window::Id, f32)>,
+    menu: Option<OpenMenu>,
+}
+
+/// A tray item's menu, open in a popup of the bar's.
+struct OpenMenu {
+    window: window::Id,
+    /// The item's key and its menu's path.
+    key: String,
+    path: String,
+    /// The submenus shown, by id, from the top: the last one's entries are.
+    submenus: Vec<i32>,
 }
 
 /// The text size for a bar `height` high: `style::TEXT_SIZE` at the default
 /// height, and as much bigger or smaller as the bar is.
 pub fn text_size(height: u32) -> f32 {
     (style::TEXT_SIZE * height as f32 / args::DEFAULT_HEIGHT as f32).round()
+}
+
+/// A tray icon's size in a bar `height` high.
+fn tray_icon_size(height: u32) -> f32 {
+    (height as f32 * 0.6).round()
 }
 
 pub fn run(args: Args) -> ExitCode {
@@ -94,6 +136,7 @@ pub fn run(args: Args) -> ExitCode {
         height,
         outputs,
         battery: show_battery,
+        tray: show_tray,
     } = args;
     let desktop_connection = connection.clone();
     let boot = move || {
@@ -107,6 +150,10 @@ pub fn run(args: Args) -> ExitCode {
             height,
             surfaces: Vec::new(),
             style: Style::default(),
+            tray: None,
+            tray_items: Vec::new(),
+            pointer: None,
+            menu: None,
         };
         let updates = desktop::updates(desktop_connection.clone(), outputs.clone());
         let mut tasks = vec![
@@ -115,6 +162,11 @@ pub fn run(args: Args) -> ExitCode {
         ];
         if !format.is_empty() {
             tasks.push(Task::run(clock::ticks(format.clone()), Message::Clock));
+        }
+        if show_tray {
+            // Sharp at scale 2.
+            let pixels = 2 * tray_icon_size(height) as u32;
+            tasks.push(Task::run(tray::updates(pixels), Message::Tray));
         }
         if show_battery {
             tasks.push(Task::run(battery::updates(), Message::Battery));
@@ -152,7 +204,10 @@ pub fn run(args: Args) -> ExitCode {
 
 impl Bar {
     fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(wheel)
+        Subscription::batch([
+            event::listen_with(wheel),
+            window::close_events().map(Message::Closed),
+        ])
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -169,7 +224,28 @@ impl Bar {
             Message::Clock(clock) => self.clock = clock,
             Message::Battery(battery) => self.battery = Some(battery),
             Message::Style(style) => self.style = style,
+            Message::Tray(tray::Update::Tray(tray)) => self.tray = Some(tray),
+            Message::Tray(tray::Update::Items(items)) => self.tray_items = items,
+            Message::TrayClick(key, click) => return self.tray_click(key, click),
+            Message::Pointer(window, x) => {
+                if self.menu.as_ref().is_none_or(|m| m.window != window) {
+                    self.pointer = Some((window, x));
+                }
+            }
+            Message::Closed(window) => {
+                if self.menu.as_ref().is_some_and(|m| m.window == window) {
+                    self.menu = None;
+                }
+            }
+            Message::MenuEntry(id) => return self.menu_entry(id),
+            Message::MenuBack => {
+                if let Some(open) = &mut self.menu {
+                    open.submenus.pop();
+                }
+            }
             Message::Activate(index) => self.activate(index),
+            // Not while a menu is open: the wheel may be over it.
+            Message::Wheel(_) if self.menu.is_some() => {}
             Message::Wheel(delta) => {
                 let (steps, rest) = wheel_steps(self.scrolled, delta);
                 self.scrolled = rest;
@@ -188,6 +264,91 @@ impl Bar {
             _ => {}
         }
         Task::none()
+    }
+
+    /// A click on a tray item: its menu, if it has one read and the click
+    /// asks for it, else the item's own. A click while a menu is open
+    /// closes it (a second click on the same item does only that).
+    fn tray_click(&mut self, key: String, click: Click) -> Task<Message> {
+        let was_open = self.menu.as_ref().map(|m| m.key.clone());
+        let closed = self.close_menu();
+        let Some(tray) = &self.tray else {
+            return closed;
+        };
+        if click != Click::ContextMenu {
+            tray.click(&key, click);
+            return closed;
+        }
+        if was_open.as_deref() == Some(key.as_str()) {
+            return closed;
+        }
+        let item = self.tray_items.iter().find(|i| i.key == key);
+        let menu = item.and_then(|i| Some((i.menu.clone()?, i.layout.clone()?)));
+        let (Some((path, layout)), Some((parent, x))) = (menu, self.pointer) else {
+            tray.click(&key, click);
+            return closed;
+        };
+        if layout.is_empty() {
+            tray.click(&key, click);
+            return closed;
+        }
+        tray.menu_opened(&key, &path);
+        let size = menu_size(&layout);
+        let edge = (x.round() as i32, 0, 1, self.height as i32);
+        let (anchor, gravity) = match self.bottom {
+            true => (PopupAnchor::TopLeft, PopupGravity::TopRight),
+            false => (PopupAnchor::BottomLeft, PopupGravity::BottomRight),
+        };
+        let settings = IcedNewPopupSettings::new(parent, size, edge)
+            .anchor(anchor)
+            .gravity(gravity);
+        let (window, open) = Message::popup_open(settings);
+        self.menu = Some(OpenMenu {
+            window,
+            key,
+            path,
+            submenus: Vec::new(),
+        });
+        Task::batch([closed, open])
+    }
+
+    /// Close the open menu, if there is one.
+    fn close_menu(&mut self) -> Task<Message> {
+        match self.menu.take() {
+            Some(open) => Task::done(Message::RemoveWindow(open.window)),
+            None => Task::none(),
+        }
+    }
+
+    /// The entries the open menu shows now, with its item.
+    fn menu_level(&self) -> Option<(&OpenMenu, &[menu::Entry])> {
+        let open = self.menu.as_ref()?;
+        let item = self.tray_items.iter().find(|i| i.key == open.key)?;
+        let mut level: &[menu::Entry] = item.layout.as_deref()?;
+        for id in &open.submenus {
+            level = &level.iter().find(|e| e.id == *id)?.children;
+        }
+        Some((open, level))
+    }
+
+    /// An entry chosen: into its submenu, or its action and the menu closes.
+    fn menu_entry(&mut self, id: i32) -> Task<Message> {
+        let Some((open, level)) = self.menu_level() else {
+            return self.close_menu();
+        };
+        let Some(entry) = level.iter().find(|e| e.id == id) else {
+            return Task::none();
+        };
+        if !entry.children.is_empty() {
+            if let Some(open) = &mut self.menu {
+                open.submenus.push(id);
+            }
+            return Task::none();
+        }
+        if let Some(tray) = &self.tray {
+            tray.menu_clicked(&open.key, &open.path, id);
+        }
+        self.close_menu()
     }
 
     /// A surface on `output`, along its edge.
@@ -221,7 +382,10 @@ impl Bar {
         }
     }
 
-    fn view(&self, _window: window::Id) -> Element<'_, Message> {
+    fn view(&self, window: window::Id) -> Element<'_, Message> {
+        if let Some((open, level)) = self.menu_level().filter(|(m, _)| m.window == window) {
+            return menu_view(level, !open.submenus.is_empty(), self.style);
+        }
         let st = self.style;
         let workspaces = Row::with_children(
             self.desktop
@@ -262,10 +426,17 @@ impl Bar {
         });
         // The workspaces on the left; the battery and the clock on the right.
         let mut bar = row![left].height(Length::Fill);
+        let icon_size = tray_icon_size(self.height);
+        for item in &self.tray_items {
+            bar = bar.push(tray_item(item, self.height, icon_size, st));
+        }
         if let Some(battery) = battery {
             bar = bar.push(battery);
         }
-        let bar = bar.push(clock);
+        // No clock (`--clock ''`): no room kept for it.
+        if !self.clock.is_empty() {
+            bar = bar.push(clock);
+        }
         let edge = container(Space::new())
             .width(Length::Fill)
             .height(EDGE)
@@ -275,10 +446,15 @@ impl Bar {
         } else {
             column![bar, edge]
         };
-        container(content)
+        let bar = container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(move |_| container::Style::default().background(st.surface_dim))
+            .style(move |_| container::Style::default().background(st.surface_dim));
+        // Where the pointer is on this surface, for a tray menu to open
+        // there: told as it enters too (with no motion before a click, as
+        // a pointer warped onto the bar), which a tray item doesn't capture.
+        mouse_area(bar)
+            .on_move(move |position| Message::Pointer(window, position.x))
             .into()
     }
 }
@@ -334,9 +510,179 @@ fn button<'a>(
         .into()
 }
 
-fn wheel(event: Event, _: event::Status, _: window::Id) -> Option<Message> {
+/// A tray item: its icon in a square block as high as the bar, standing
+/// out while it asks for attention. The left button activates it (or asks
+/// for its menu, if that's all it has), the middle one is its second
+/// action, the right one its menu, and the wheel is its own.
+fn tray_item<'a>(
+    item: &tray::Item,
+    height: u32,
+    icon_size: f32,
+    st: Style,
+) -> Element<'a, Message> {
+    let icon: Element<'a, Message> = match &item.icon {
+        Some(tray::Icon::Image(handle)) => image(handle.clone())
+            .width(icon_size)
+            .height(icon_size)
+            .into(),
+        Some(tray::Icon::Svg(handle)) => svg(handle.clone())
+            .width(icon_size)
+            .height(icon_size)
+            .into(),
+        Some(tray::Icon::Symbolic(handle)) => svg(handle.clone())
+            .width(icon_size)
+            .height(icon_size)
+            .style(move |_, _| svg::Style {
+                color: Some(st.text),
+            })
+            .into(),
+        // No icon found: its title's first letter.
+        None => text(item.title.chars().next().unwrap_or('?').to_string())
+            .color(st.text)
+            .into(),
+    };
+    let attention = item.needs_attention;
+    let block = container(icon)
+        .width(height as f32)
+        .height(Length::Fill)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .style(move |_| match attention {
+            true => container::Style::default().background(st.urgent),
+            false => container::Style::default(),
+        });
+    let key = item.key.clone();
+    let left = match item.item_is_menu {
+        true => Click::ContextMenu,
+        false => Click::Activate,
+    };
+    let scroll_key = key.clone();
+    mouse_area(block)
+        .on_press(Message::TrayClick(key.clone(), left))
+        .on_middle_press(Message::TrayClick(key.clone(), Click::SecondaryActivate))
+        .on_right_press(Message::TrayClick(key, Click::ContextMenu))
+        .on_scroll(move |delta| {
+            let notches = match delta {
+                mouse::ScrollDelta::Lines { y, .. } => -y,
+                mouse::ScrollDelta::Pixels { y, .. } => -y / PIXELS_PER_STEP,
+            };
+            Message::TrayClick(scroll_key.clone(), Click::Scroll(notches.round() as i32))
+        })
+        .interaction(mouse::Interaction::Pointer)
+        .into()
+}
+
+/// A popup's size for a menu with these entries: the tallest of its
+/// levels, as wide as its longest label.
+fn menu_size(entries: &[menu::Entry]) -> (u32, u32) {
+    let (rows, separators, widest) = menu::extent(entries);
+    // A toggle's mark, the label, a submenu's arrow.
+    let width = (widest as f32 * MENU_CHAR + 3.0 * 24.0).clamp(160.0, 480.0);
+    let height = rows as f32 * MENU_ROW + separators as f32 * MENU_SEPARATOR + 2.0 * MENU_BORDER;
+    (width.round() as u32, height.round() as u32)
+}
+
+/// A tray menu's level: a row to go back from a submenu, then its entries
+/// (a check or radio mark, the label, an arrow for a submenu), square, as
+/// the rest of the bar.
+fn menu_view<'a>(entries: &[menu::Entry], back: bool, st: Style) -> Element<'a, Message> {
+    let row_style = move |enabled: bool| {
+        move |_: &Theme, status: button_widget::Status| {
+            let hovered = enabled
+                && matches!(
+                    status,
+                    button_widget::Status::Hovered | button_widget::Status::Pressed
+                );
+            button_widget::Style {
+                background: hovered.then_some(st.accent.into()),
+                text_color: match (enabled, hovered) {
+                    (false, _) => st.text_dim,
+                    (true, true) => st.text_bright,
+                    (true, false) => st.text,
+                },
+                border: Border::default(),
+                ..Default::default()
+            }
+        }
+    };
+    let line = |mark: &str, label: String, arrow: &str| {
+        row![
+            text(mark.to_string()).width(16),
+            text(label)
+                .wrapping(text::Wrapping::None)
+                .width(Length::Fill),
+            text(arrow.to_string()),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center)
+    };
+    let mut list = column![];
+    if back {
+        list = list.push(
+            button_widget(line("\u{2039}", String::new(), ""))
+                .on_press(Message::MenuBack)
+                .width(Length::Fill)
+                .height(MENU_ROW)
+                .padding([0, 8])
+                .style(row_style(true)),
+        );
+    }
+    for entry in entries {
+        if entry.separator {
+            list = list.push(
+                container(
+                    container(Space::new())
+                        .width(Length::Fill)
+                        .height(1)
+                        .style(move |_| container::Style::default().background(st.hover)),
+                )
+                .height(MENU_SEPARATOR)
+                .align_y(Alignment::Center),
+            );
+            continue;
+        }
+        let mark = match entry.toggle {
+            menu::Toggle::Check(true) => "\u{2713}",
+            menu::Toggle::Radio(true) => "\u{2022}",
+            _ => "",
+        };
+        let arrow = if entry.children.is_empty() {
+            ""
+        } else {
+            "\u{203a}"
+        };
+        let mut button = button_widget(line(mark, entry.label.clone(), arrow))
+            .width(Length::Fill)
+            .height(MENU_ROW)
+            .padding([0, 8])
+            .style(row_style(entry.enabled));
+        if entry.enabled {
+            button = button.on_press(Message::MenuEntry(entry.id));
+        }
+        list = list.push(button);
+    }
+    container(list)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(MENU_BORDER)
+        .style(move |_| container::Style {
+            background: Some(st.surface_dim.into()),
+            border: Border {
+                color: st.hover,
+                width: MENU_BORDER,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}
+
+/// The wheel over the bar, unless a tray item took it.
+fn wheel(event: Event, status: event::Status, _: window::Id) -> Option<Message> {
     match event {
-        Event::Mouse(mouse::Event::WheelScrolled { delta }) => Some(Message::Wheel(delta)),
+        Event::Mouse(mouse::Event::WheelScrolled { delta }) if status == event::Status::Ignored => {
+            Some(Message::Wheel(delta))
+        }
         _ => None,
     }
 }
