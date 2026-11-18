@@ -29,6 +29,8 @@ standard replacement yet (layer shell, screencopy, foreign toplevel management, 
 output management and power management, virtual keyboard, input method) are supported too,
 each to be replaced when an `ext-` version lands.
 
+![Pila in 35 seconds, with pila-bar: windows opening and snapping to halves and quarters, blur behind a translucent terminal, workspaces, and the configuration applied as it's saved](https://raw.githubusercontent.com/igalmarino/pila/main/docs/demo.webp)
+
 How to use and set it up is in the [user manual](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md) (and `man pila`).
 
 ## Status
