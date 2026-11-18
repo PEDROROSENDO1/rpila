@@ -52,6 +52,8 @@ let
     cargoRoot = "launcher";
     # Its default members are both; the target directory stays at the top.
     buildAndTestSubdir = "launcher";
+    # smithay-client-toolkit (pila-bar's) finds libxkbcommon through it.
+    nativeBuildInputs = [ pkg-config ];
     buildInputs = [
       libxkbcommon
       wayland
