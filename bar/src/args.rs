@@ -23,10 +23,9 @@ impl Default for Args {
 pub const USAGE: &str = "\
 Usage: pila-bar [--bottom] [--clock FORMAT]
 
-Pila's bar, on every monitor: the workspaces (a click or the wheel switches),
-the focused window's title and a clock. It's Pila's default `autostart`.
-It works in any compositor
-with the layer shell, ext-workspace and wlr-foreign-toplevel-management.
+Pila's bar, on every monitor: the workspaces (a click or the wheel switches)
+and a clock. It's Pila's default `autostart`. It works in any compositor with
+the layer shell and ext-workspace.
 
 Options:
   --bottom          On the bottom edge of the screen (default: the top)

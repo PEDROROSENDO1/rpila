@@ -735,7 +735,7 @@ Key flows and invariants:
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, the default
-  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
+  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same
@@ -744,11 +744,9 @@ Key flows and invariants:
   `ui::HEIGHT` and as much exclusive zone, no keyboard, namespace `pila-bar`), opened for each
   output that comes and dropped with each that goes; every surface shows the same, since Pila's
   workspaces span all outputs. The desktop comes from a Wayland connection of the bar's own on a
-  thread (`desktop::updates`): ext-workspace for the workspaces (by coordinates, hidden ones
-  left out; groups ignored) and wlr-foreign-toplevel-management for the title (the toplevel
-  with `Activated`, its app id when it has no title). `desktop::Model` applies the events as the
-  protocols say (a workspace's at the manager's `done`, a toplevel's at its own) and knows
-  nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
+  thread (`desktop::updates`): ext-workspace (by coordinates, hidden ones left out; groups
+  ignored), its only protocol besides the layer shell. `desktop::Model` applies the events as the
+  protocol says (at the manager's `done`) and knows nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
   wheel (a notch, or `PIXELS_PER_STEP` of a touchpad) activates a workspace through
   `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the

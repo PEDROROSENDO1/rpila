@@ -1,6 +1,6 @@
 //! The bar: a layer surface on every monitor (Top, along the top or bottom
 //! edge, with an exclusive zone so windows keep clear of it), showing the
-//! workspaces, the focused window's title and the clock.
+//! workspaces and the clock.
 //!
 //! An iced_layershell daemon in `AllScreens` mode: it opens a surface on
 //! each output there is and on each one that comes, and drops a surface
@@ -165,34 +165,22 @@ impl Bar {
                 .map(|(index, w)| button(index, &w.name, w.active, w.urgent)),
         )
         .height(Length::Fill);
-        // Equal portions either side: the title stays in the middle.
+        // The workspaces on the left, the clock on the right.
         let left = container(workspaces)
-            .width(Length::FillPortion(1))
+            .width(Length::Fill)
             .height(Length::Fill)
             .clip(true);
-        let title = container(
-            text(self.desktop.title.as_deref().unwrap_or_default())
-                .wrapping(text::Wrapping::None)
-                .color(style::TEXT),
-        )
-        .padding([0, 12])
-        .width(Length::FillPortion(2))
-        .height(Length::Fill)
-        .align_x(Alignment::Center)
-        .align_y(Alignment::Center)
-        .clip(true);
         let clock = container(
             text(&self.clock)
                 .wrapping(text::Wrapping::None)
                 .color(style::TEXT_BRIGHT),
         )
         .padding([0, 12])
-        .width(Length::FillPortion(1))
         .height(Length::Fill)
         .align_x(Alignment::End)
         .align_y(Alignment::Center)
         .clip(true);
-        let bar = row![left, title, clock].height(Length::Fill);
+        let bar = row![left, clock].height(Length::Fill);
         let edge = container(Space::new())
             .width(Length::Fill)
             .height(EDGE)

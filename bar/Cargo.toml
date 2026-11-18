@@ -26,4 +26,3 @@ libc = "0.2"
 # iced_layershell already brings.
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-wayland-protocols-wlr = { version = "0.3", features = ["client"] }

@@ -1,10 +1,8 @@
-//! The desktop the bar shows: the workspaces (ext-workspace) and the focused
-//! window's title (wlr-foreign-toplevel-management, whose Activated state
-//! is the window with the keyboard), followed on a Wayland connection of the
-//! bar's own, on a thread: each change the compositor finishes (`done`)
-//! reaches the bar as a new `Desktop`.
+//! The desktop the bar shows: the workspaces (ext-workspace), followed on a
+//! Wayland connection of the bar's own, on a thread: each change the
+//! compositor finishes (`done`) reaches the bar as a new `Desktop`.
 //!
-//! `Model` turns the protocols' events into that state; it knows nothing of
+//! `Model` turns the protocol's events into that state; it knows nothing of
 //! Wayland (its keys are the handles), so it's tested on its own.
 
 use wayland_client::{
@@ -18,25 +16,18 @@ use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1},
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
-use wayland_protocols_wlr::foreign_toplevel::v1::client::{
-    zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
-    zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
-};
 
 /// What the bar shows of the desktop. `W` names a workspace (its handle).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Desktop<W> {
     /// The workspaces to show, in order.
     pub workspaces: Vec<Workspace<W>>,
-    /// The focused window's title (its app id if it has none).
-    pub title: Option<String>,
 }
 
 impl<W> Default for Desktop<W> {
     fn default() -> Self {
         Desktop {
             workspaces: Vec::new(),
-            title: None,
         }
     }
 }
@@ -67,40 +58,23 @@ struct WorkspaceEntry<W> {
     current: Option<WorkspaceState>,
 }
 
-#[derive(Debug, Clone, Default)]
-struct ToplevelState {
-    title: String,
-    app_id: String,
-    activated: bool,
-}
-
+/// ext-workspace's events, applied at the manager's `done`. `W` names a
+/// workspace.
 #[derive(Debug)]
-struct ToplevelEntry<T> {
-    key: T,
-    pending: ToplevelState,
-    current: Option<ToplevelState>,
-}
-
-/// The protocols' events, applied as each says: ext-workspace's on the
-/// manager's `done`, a toplevel's on its own `done`. `W` and `T` name a
-/// workspace and a toplevel.
-#[derive(Debug)]
-pub struct Model<W, T> {
+pub struct Model<W> {
     /// In the order they came.
     workspaces: Vec<WorkspaceEntry<W>>,
-    toplevels: Vec<ToplevelEntry<T>>,
 }
 
-impl<W, T> Default for Model<W, T> {
+impl<W> Default for Model<W> {
     fn default() -> Self {
         Model {
             workspaces: Vec::new(),
-            toplevels: Vec::new(),
         }
     }
 }
 
-impl<W: Clone + PartialEq, T: PartialEq> Model<W, T> {
+impl<W: Clone + PartialEq> Model<W> {
     fn workspace(&mut self, key: &W) -> Option<&mut WorkspaceState> {
         let entry = self.workspaces.iter_mut().find(|e| &e.key == key)?;
         Some(&mut entry.pending)
@@ -145,50 +119,9 @@ impl<W: Clone + PartialEq, T: PartialEq> Model<W, T> {
         }
     }
 
-    fn toplevel(&mut self, key: &T) -> Option<&mut ToplevelState> {
-        let entry = self.toplevels.iter_mut().find(|e| &e.key == key)?;
-        Some(&mut entry.pending)
-    }
-
-    pub fn toplevel_added(&mut self, key: T) {
-        self.toplevels.push(ToplevelEntry {
-            key,
-            pending: ToplevelState::default(),
-            current: None,
-        });
-    }
-
-    pub fn toplevel_title(&mut self, key: &T, title: String) {
-        if let Some(t) = self.toplevel(key) {
-            t.title = title;
-        }
-    }
-
-    pub fn toplevel_app_id(&mut self, key: &T, app_id: String) {
-        if let Some(t) = self.toplevel(key) {
-            t.app_id = app_id;
-        }
-    }
-
-    pub fn toplevel_activated(&mut self, key: &T, activated: bool) {
-        if let Some(t) = self.toplevel(key) {
-            t.activated = activated;
-        }
-    }
-
-    pub fn toplevel_done(&mut self, key: &T) {
-        if let Some(entry) = self.toplevels.iter_mut().find(|e| &e.key == key) {
-            entry.current = Some(entry.pending.clone());
-        }
-    }
-
-    pub fn toplevel_closed(&mut self, key: &T) {
-        self.toplevels.retain(|e| &e.key != key);
-    }
-
     /// The desktop as the compositor last finished saying it: the
     /// workspaces not hidden, by their coordinates (in the order they came
-    /// where they have none), and the focused window's title.
+    /// where they have none).
     pub fn desktop(&self) -> Desktop<W> {
         let mut shown: Vec<(&W, &WorkspaceState)> = self
             .workspaces
@@ -207,30 +140,8 @@ impl<W: Clone + PartialEq, T: PartialEq> Model<W, T> {
                 urgent: w.urgent,
             })
             .collect();
-        let title = self
-            .toplevels
-            .iter()
-            .filter_map(|e| e.current.as_ref())
-            .find(|t| t.activated)
-            .map(|t| {
-                one_line(if t.title.is_empty() {
-                    &t.app_id
-                } else {
-                    &t.title
-                })
-            })
-            .filter(|t| !t.is_empty());
-        Desktop { workspaces, title }
+        Desktop { workspaces }
     }
-}
-
-/// A title on one line: line breaks and tabs become spaces.
-fn one_line(text: &str) -> String {
-    text.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect::<String>()
-        .trim()
-        .to_string()
 }
 
 /// An array of u32 in a protocol event (native byte order).
@@ -282,10 +193,8 @@ pub fn updates() -> impl iced::futures::Stream<Item = Update> {
     receiver
 }
 
-type WaylandModel = Model<ExtWorkspaceHandleV1, ZwlrForeignToplevelHandleV1>;
-
 struct State {
-    model: WaylandModel,
+    model: Model<ExtWorkspaceHandleV1>,
 }
 
 /// Connect, bind what's there and send each change until the connection
@@ -299,16 +208,8 @@ fn follow(mut send: impl FnMut(Update) -> bool) -> Result<(), String> {
     let workspaces = globals
         .bind::<ExtWorkspaceManagerV1, _, _>(&qh, 1..=1, ())
         .ok();
-    let toplevels = globals
-        .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 1..=3, ())
-        .ok();
     if workspaces.is_none() {
         eprintln!("pila-bar: the compositor has no ext-workspace: no workspaces shown");
-    }
-    if toplevels.is_none() {
-        eprintln!(
-            "pila-bar: the compositor has no wlr-foreign-toplevel-management: no window title shown"
-        );
     }
     if let Some(manager) = workspaces {
         let switcher = Switcher {
@@ -425,64 +326,11 @@ impl Dispatch<ExtWorkspaceHandleV1, ()> for State {
     }
 }
 
-impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
-    fn event(
-        state: &mut Self,
-        _: &ZwlrForeignToplevelManagerV1,
-        event: zwlr_foreign_toplevel_manager_v1::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match event {
-            zwlr_foreign_toplevel_manager_v1::Event::Toplevel { toplevel } => {
-                state.model.toplevel_added(toplevel)
-            }
-            zwlr_foreign_toplevel_manager_v1::Event::Finished => {
-                eprintln!("pila-bar: the compositor stopped sending windows")
-            }
-            _ => {}
-        }
-    }
-
-    event_created_child!(State, ZwlrForeignToplevelManagerV1, [
-        zwlr_foreign_toplevel_manager_v1::EVT_TOPLEVEL_OPCODE => (ZwlrForeignToplevelHandleV1, ()),
-    ]);
-}
-
-impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
-    fn event(
-        state: &mut Self,
-        toplevel: &ZwlrForeignToplevelHandleV1,
-        event: zwlr_foreign_toplevel_handle_v1::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        use zwlr_foreign_toplevel_handle_v1::{Event, State as Flag};
-        let model = &mut state.model;
-        match event {
-            Event::Title { title } => model.toplevel_title(toplevel, title),
-            Event::AppId { app_id } => model.toplevel_app_id(toplevel, app_id),
-            Event::State { state } => {
-                let activated = u32_array(&state).contains(&(Flag::Activated as u32));
-                model.toplevel_activated(toplevel, activated);
-            }
-            Event::Done => model.toplevel_done(toplevel),
-            Event::Closed => {
-                model.toplevel_closed(toplevel);
-                toplevel.destroy();
-            }
-            _ => {}
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    type TestModel = Model<u32, u32>;
+    type TestModel = Model<u32>;
 
     fn names(desktop: &Desktop<u32>) -> Vec<(&str, bool, bool)> {
         desktop
@@ -563,46 +411,10 @@ mod tests {
     }
 
     #[test]
-    fn the_title_is_the_activated_windows() {
-        let mut model = TestModel::default();
-        assert_eq!(model.desktop().title, None);
-        model.toplevel_added(1);
-        model.toplevel_title(&1, "foot".into());
-        model.toplevel_activated(&1, true);
-        assert_eq!(model.desktop().title, None, "before done");
-        model.toplevel_done(&1);
-        assert_eq!(model.desktop().title.as_deref(), Some("foot"));
-
-        // Focus moves to a window with no title: its app id.
-        model.toplevel_added(2);
-        model.toplevel_app_id(&2, "org.example.App".into());
-        model.toplevel_activated(&2, true);
-        model.toplevel_done(&2);
-        model.toplevel_activated(&1, false);
-        model.toplevel_done(&1);
-        assert_eq!(model.desktop().title.as_deref(), Some("org.example.App"));
-
-        // A new title, on one line.
-        model.toplevel_title(&2, "a\nb\tc ".into());
-        model.toplevel_done(&2);
-        assert_eq!(model.desktop().title.as_deref(), Some("a b c"));
-
-        // Closed, or no window focused: no title.
-        model.toplevel_closed(&2);
-        assert_eq!(model.desktop().title, None);
-        model.toplevel_activated(&1, true);
-        model.toplevel_title(&1, "   ".into());
-        model.toplevel_done(&1);
-        assert_eq!(model.desktop().title, None, "blank");
-    }
-
-    #[test]
     fn events_for_unknown_handles_are_ignored() {
         let mut model = TestModel::default();
         model.workspace_name(&9, "x".into());
         model.workspace_removed(&9);
-        model.toplevel_done(&9);
-        model.toplevel_closed(&9);
         model.workspaces_done();
         assert_eq!(model.desktop(), Desktop::default());
     }

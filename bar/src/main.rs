@@ -1,7 +1,6 @@
-//! `pila-bar`: a bar for Pila (or any compositor with the layer shell,
-//! ext-workspace and wlr-foreign-toplevel-management). A layer surface on
-//! every monitor showing the workspaces, the focused window's title and a
-//! clock (`ui.rs`, iced).
+//! `pila-bar`: a bar for Pila (or any compositor with the layer shell and
+//! ext-workspace). A layer surface on every monitor showing the workspaces
+//! and a clock (`ui.rs`, iced).
 
 mod args;
 mod clock;

@@ -72,8 +72,7 @@ maximized foot fills the rest; a click on the second workspace's button goes the
 over the bar goes on from where a binding of Pila's left the workspace (so the bar followed
 ext-workspace) and stops at the last; an output added gets a bar of its own as wide as it, one
 removed takes its bar along with the process still running; `--bottom` puts it along the
-bottom edge. `bar.png` shows it. Run it after changing the bar, the layer shell, ext-workspace or
-foreign-toplevel.
+bottom edge. `bar.png` shows it. Run it after changing the bar, the layer shell or ext-workspace.
 
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
