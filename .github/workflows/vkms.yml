@@ -77,7 +77,7 @@ jobs:
           ls -l /dev/dri /sys/class/drm/*/device/driver 2>/dev/null || true
           echo "VKMS_CONNECTOR=$base/connectors/connector1/status" >>"$GITHUB_ENV"
           echo "VKMS_SECOND=$second/enabled" >>"$GITHUB_ENV"
-      # README.md's build packages for Ubuntu, plus seatd to start the session,
+      # docs/INSTALL.md's build packages for Ubuntu, plus seatd to start the session,
       # Mesa's software drivers (vkms has no GPU to render with), a client and
       # a gamma client (wlr-gamma-control).
       - name: Packages

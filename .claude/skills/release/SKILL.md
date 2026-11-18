@@ -52,7 +52,7 @@ flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
   to `install_files` need no change there. The docs in `share/doc/pila` are installed apart:
   one added for the packages goes in `package()`, `packages.yml`'s Package step and
   `package.nix`'s `postInstall`.
-- Keep `depends` in step with the libraries Pila links (`readelf -d`) and README's package
+- Keep `depends` in step with the libraries Pila links (`readelf -d`) and docs/INSTALL.md's package
   table.
 - Regenerate `.SRCINFO` (`makepkg --printsrcinfo`) after editing the `PKGBUILD`.
 - Committing them to `main` starts `aur.yml`: it checks that `.SRCINFO` matches and, once the user
@@ -71,7 +71,7 @@ maintained (`fedora:44`), so one package serves every release after it; each req
 system's glibc (`libc6 (>= 2.39)`, `glibc >= 2.43`). When that Fedora reaches its end of life
 (44: 2027-06-02, `https://endoflife.date/api/fedora.json`), move `packages.yml`'s rpm build image,
 its install test, `repos.yml`'s `verify` image and the `glibc` line to the next one, and the
-README's "Fedora 44 or newer".
+docs/INSTALL.md's "Fedora 44 or newer".
 
 # APT and DNF repositories
 
@@ -83,7 +83,7 @@ README's "Fedora 44 or newer".
 `67A0F1D196AEC2CBB1560ECA2413E5C5541073F3`, expiring 2031-11-17: its private half is only the
 `repos` environment's secret `REPO_SIGNING_KEY` (and the user's backup), its public half
 `packaging/pila.asc`, which the workflow checks it matches. Extending or replacing it changes
-`packaging/pila.asc`, the secret, and the fingerprint in README and `packaging/repo-index.html`.
+`packaging/pila.asc`, the secret, and the fingerprint in docs/INSTALL.md and `packaging/repo-index.html`.
 
 # Nix package
 

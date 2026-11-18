@@ -54,7 +54,7 @@ case "$build" in
         if [ -z "${DEVCONTAINER:-}" ]; then
             echo "Building in the dev container: the binary is linked against Arch's" >&2
             echo "libraries and may not run on another distro (install Rust and build" >&2
-            echo "on the host instead, see README.md)." >&2
+            echo "on the host instead, see docs/INSTALL.md)." >&2
         fi
         scripts/dev cargo build --release
         scripts/dev cargo build --release --manifest-path launcher/Cargo.toml

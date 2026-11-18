@@ -59,14 +59,14 @@ now, in this order:
   in the configuration shows the monitors on the other through it, which has never been tried:
   `pila-report` says which GPU is which;
 - **no systemd** (Void, Alpine, with elogind or seatd), and other **distros**, such as
-  [Ubuntu and Fedora](#debian-ubuntu-and-fedora);
+  [Ubuntu and Fedora](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#debian-ubuntu-and-fedora);
 - **display managers** other than GDM, SDDM, greetd and LightDM;
 - **monitors:** high refresh rates, 4K, mixed scales, several at once;
 - **other shells and apps:** bars, launchers, games, Steam, Electron.
 
 A short report helps even if everything works:
 
-1. [Try it nested first](#try-it-nested-first): it changes nothing on your system.
+1. [Try it nested first](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#try-it-nested-first): it changes nothing on your system.
    [Getting out](#getting-out) says how to leave a real session.
 2. For your real hardware, run `pila-check` on a spare TTY (Ctrl+Alt+F3, log in), which leaves
    your session running. It starts real programs (`kitty` or `foot`; `python3`, `grim`, `xterm`
@@ -130,24 +130,26 @@ A short report helps even if everything works:
 - **Scripting:** `pila msg` lists windows, monitors and workspaces as text or JSON and runs any
   action ([docs/IPC.md](https://github.com/igalmarino/pila/blob/main/docs/IPC.md)).
 
-## Running Pila
+## Installing Pila
 
 Pila runs on a TTY of any Linux machine (DRM/KMS, libinput, and a session from logind,
 elogind or seatd; systemd isn't required), or nested as a window inside another Wayland or
-X11 session.
+X11 session. The safest first run is nested: from a checkout, `cargo run --release` opens it as a
+window on your current desktop and changes nothing else (nested, Mod is **Alt**: Mod+Return
+opens a terminal, Mod+Shift+E quits).
 
-### Try it nested first
+- **Debian, Ubuntu, Fedora:** signed APT and DNF repositories
+  ([setup](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#debian-ubuntu-and-fedora)).
+- **Arch Linux:** [`pila-git`](https://aur.archlinux.org/packages/pila-git) in the AUR
+  ([more](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#arch-linux-aur)).
+- **Nix and NixOS:** `nix run github:igalmarino/pila`, or as a login session
+  ([more](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#nix-and-nixos)).
+- **From source:** the [build dependencies](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#building), then `scripts/install`
+  ([as a login session](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#as-a-login-session)) or `scripts/tty`
+  ([on a spare TTY](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#by-hand-on-a-tty)).
 
-The safest first run: build it (below) and start it from your current desktop. It opens
-as a window, and nothing else on your system changes (from a checkout the window starts empty:
-Pila's bar shows once `pila-bar` is installed):
-
-```bash
-cargo run --release
-```
-
-Nested, Mod is **Alt** (your desktop keeps Super). Mod+Return opens a terminal, Mod+Shift+E
-quits. Closing the window works too.
+All of it, and the [programs a full session uses](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#packages-for-a-full-session),
+is in [docs/INSTALL.md](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md).
 
 ### Getting out
 
@@ -160,249 +162,24 @@ On a TTY or as a login session, Mod is **Super**:
   look at the log (see [Reporting bugs](#reporting-bugs)); `scripts/uninstall` (or
   removing the package) takes the session entry away.
 
-### Building
-
-Pila needs Rust 1.89 or newer. If your distro's Rust is older, install it with
-[rustup](https://rustup.rs). It also needs `pkg-config` and the development files of
-`libseat`, `libinput`, `libudev`, `gbm` (Mesa) and `xkbcommon`. At runtime it loads EGL
-(Mesa) and, for X11 apps, starts `Xwayland` if it's installed (optional). Package names on common distros (they may
-differ between releases):
-
-| Distro | Packages |
-| - | - |
-| Arch | `seatd libinput systemd-libs mesa libxkbcommon xorg-xwayland pkgconf` |
-| Debian, Ubuntu | `libseat-dev libinput-dev libudev-dev libgbm-dev libxkbcommon-dev libegl1 xwayland pkg-config` |
-| Fedora | `libseat-devel libinput-devel systemd-devel mesa-libgbm-devel libxkbcommon-devel mesa-libEGL xorg-x11-server-Xwayland pkgconf-pkg-config` |
-| openSUSE | `libseat-devel libinput-devel libudev-devel libgbm-devel libxkbcommon-devel Mesa-libEGL1 xwayland pkg-config` |
-| Void | `libseat-devel libinput-devel eudev-libudev-devel libgbm-devel libxkbcommon-devel mesa xorg-server-xwayland pkg-config` |
-| Alpine | `libseat-dev libinput-dev eudev-dev mesa-dev libxkbcommon-dev xwayland pkgconf` |
-
-Then `cargo build --release`, and for the launcher and the bar (a cargo workspace of their own,
-in `launcher/`) `cargo build --release --manifest-path launcher/Cargo.toml`, which puts
-`pila-launcher` and `pila-bar` in `launcher/target/release`. `scripts/install` builds and
-installs all three.
-
-### Debian, Ubuntu and Fedora
-
-Pila has an APT repository (Ubuntu 24.04 or newer, Debian 13 or newer) and a DNF repository
-(Fedora 44 or newer), for x86_64. Add one once and install Pila, which brings what it needs;
-updates then come with the system's (`apt upgrade`, `dnf upgrade`).
-
-Debian, Ubuntu:
-
-```bash
-sudo curl --create-dirs -fsSLo /etc/apt/keyrings/pila.asc https://igalmarino.github.io/pila/pila.asc
-printf 'Types: deb\nURIs: https://igalmarino.github.io/pila/deb\nSuites: stable\nComponents: main\nSigned-By: /etc/apt/keyrings/pila.asc\n' \
-  | sudo tee /etc/apt/sources.list.d/pila.sources
-sudo apt update && sudo apt install pila
-```
-
-Fedora (`dnf` asks to import the key the first time: compare its fingerprint with the one below):
-
-```bash
-sudo curl -fsSLo /etc/yum.repos.d/pila.repo https://igalmarino.github.io/pila/rpm/pila.repo
-sudo dnf install pila
-```
-
-The repositories and their packages are signed with the key
-[`packaging/pila.asc`](packaging/pila.asc), fingerprint
-`67A0 F1D1 96AE C2CB B156 0ECA 2413 E5C5 5410 73F3`. They hold the packages of the last three
-releases; every release since 0.2.2 also has its `.deb` and `.rpm` attached
-([releases](https://github.com/igalmarino/pila/releases)), to install by hand
-(`sudo apt install ./pila_*.deb`, `sudo dnf install ./pila-*.rpm`) with no updates.
-
-They install the same files as `scripts/install` in `/usr`. Each package is installed on a clean
-system and started headless before it's attached to a release, and installed again from the
-repositories once they're published. A tester reports a real session working on Debian, with
-SDDM; on Ubuntu and Fedora it hasn't been tried yet: please [report](#help-test-pila) how it goes.
-
-### Nix and NixOS
-
-The repository is a flake, which builds the latest `main`, like the AUR package. It needs
-[flakes enabled](https://wiki.nixos.org/wiki/Flakes) and, on NixOS, graphics drivers on the
-system (`hardware.graphics.enable = true`).
-
-```bash
-nix run github:igalmarino/pila           # try it: nested from your desktop, or from a TTY
-nix profile install github:igalmarino/pila
-```
-
-As a login session on NixOS, add the flake to your system's inputs
-(`inputs.pila.url = "github:igalmarino/pila";`) and to its configuration:
-
-```nix
-{ inputs, pkgs, ... }:
-let
-  pila = inputs.pila.packages.${pkgs.stdenv.hostPlatform.system}.default;
-in
-{
-  environment.systemPackages = [ pila ];
-  services.displayManager.sessionPackages = [ pila ];
-  # Screen sharing.
-  xdg.portal = {
-    enable = true;
-    wlr.enable = true;
-    configPackages = [ pila ];
-  };
-}
-```
-
-From a checkout, `nix develop` gives a shell with everything to build it (`cargo build
---release`). `scripts/install` isn't for NixOS: it writes to paths NixOS doesn't read its session
-entries from.
-
-`nix run` has been confirmed on a NixOS system. The login session above hasn't been tried yet:
-please [report](#help-test-pila) how it goes.
-
-### Arch Linux (AUR)
-
-[`pila-git`](https://aur.archlinux.org/packages/pila-git) builds the latest `main` from
-GitHub and installs the same files as `scripts/install` with `PREFIX=/usr` (plus the README,
-`config.example.toml`, the user manual and `docs/IPC.md` in `/usr/share/doc/pila`):
-
-```bash
-git clone https://aur.archlinux.org/pila-git.git
-cd pila-git
-less PKGBUILD    # read what you're about to build and install
-makepkg -si
-```
-
-To update it, `git pull` there and run `makepkg -si` again. Its `PKGBUILD` is kept in
-`packaging/aur/pila-git`, where `makepkg -si` builds it too. Remove a hand install first
-(`scripts/uninstall`). To publish a new version of the AUR package, regenerate `.SRCINFO`
-(`makepkg --printsrcinfo > .SRCINFO`) and commit both files: a workflow (`aur.yml`) checks them
-and, once the maintainer approves it, publishes them.
-
-A `-git` package only needs updating when the `PKGBUILD` changes (dependencies, files);
-`makepkg` picks up new commits by itself.
-
-### As a login session
-
-```bash
-scripts/install                # builds the release binary and installs it
-PREFIX=/usr scripts/install    # for display managers that only read /usr/share
-```
-
-This installs the binary, a session wrapper, `pila-report` and `pila-check` in `$PREFIX/bin`
-(`pila-check`'s helpers in `$PREFIX/share/pila/check`), the man page,
-a `pila` entry in `$PREFIX/share/wayland-sessions` for the display manager, and the portal
-configs for screen sharing in `$SYSCONFDIR/xdg`. `PREFIX` defaults to `/usr/local` and `SYSCONFDIR`
-to `/etc`; `DESTDIR` stages the files for a distro package (see `scripts/install-paths`).
-GDM reads `/usr/local`; LightDM and some SDDM setups need `PREFIX=/usr`.
-
-The build uses the host's `cargo`. Without one, it falls back to the dev container
-(`--container`), whose binary is linked against Arch's libraries and may not run
-elsewhere. `--no-build` installs what's already in `target/release`. Before installing, it
-checks that the binary runs on this system (a container build may need a newer glibc than
-the host's), and warns if another Pila session entry (e.g. a distro package's) is installed
-too. Run it on the host, not inside the dev container.
-
-This is the way to install your working tree while developing. The AUR package builds
-what's on GitHub, so use it for a published version, and don't keep both installed.
-
-Log out, pick *Pila* (on GDM, the gear icon on the password screen), log in. The session
-uses the user's D-Bus bus (and `systemd --user` where there is one) like any other
-desktop, so portals, PipeWire and the keyring (unlocked by the display manager's PAM setup)
-just work. With systemd, Pila runs as the user service `pila.service`, bound to
-`graphical-session.target`, so the user services of the graphical session and the XDG
-autostart entries start with it and stop when it quits. Without a per-user bus (e.g. elogind
-or seatd without systemd), the wrapper starts one for the session with `dbus-run-session`.
-
-The log goes to `~/.local/state/pila/pila.log` (`$XDG_STATE_HOME/pila` if that's set; the
-previous run's is in `pila.log.old`).
-A copy goes to the journal with systemd (`journalctl -t pila -b`), or otherwise to syslog
-through `logger`. After changing Pila, run `scripts/install` again and log out and back
-in. `scripts/uninstall`, given the same variables, removes what it installed. Mod+Shift+E
-ends the session (back to the login screen).
-
-### By hand, on a TTY
-
-On a free TTY (Ctrl+Alt+F3), from this folder:
-
-```bash
-scripts/tty                        # the release build with ~/.config/pila/config.toml
-scripts/tty my-test.toml           # another config; --debug for the debug build
-```
-
-This lets you try a build or a config while another session (Pila or anything else) keeps
-running on another VT. This Pila gets a D-Bus bus of its own (`dbus-run-session`), so its
-portals don't touch the other session's services. The log (portals included) goes to
-`pila-tty.log`, the previous run's to `pila-tty.log.old`. Ctrl+Alt+F1..F12 switch TTYs;
-Mod+Shift+E quits.
-
-Host packages for a full session (names are the same on most distros):
-
-- `kitty`: the default terminal (or set `terminal`; foot, alacritty and others are found
-  too)
-- `xdg-desktop-portal-wlr`, `slurp`: screen sharing (`slurp` picks the screen to share)
-- `grim`, `slurp`: screenshots; Mod+Ctrl+S needs `grim`, Mod+Shift+S both and `wl-clipboard`
-- `xdg-desktop-portal-gtk`: the file chooser and other portals
-- `libnotify` (`libnotify-bin` on Debian, Ubuntu): `notify-send`, which Pila uses to tell you
-  about an invalid config, for instance; a notification daemon must show them (mako, or your shell's, ...)
-- `xdg-utils`: `xdg-open`, which programs such as kitty use to open links and files; without it
-  a click on a link does nothing, and says nothing
-- `wl-clipboard`: `wl-copy`, which Mod+Shift+S needs to put a region of the screen on the clipboard;
-  without it, that binding does nothing
-- `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
-  lock screen doesn't need it
-- `pciutils`: `lspci`, with which `pila-report` names the GPU and its driver
-
-```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils       # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify-bin xdg-utils wl-clipboard swaylock pciutils # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils     # Fedora
-```
-
-### Desktop shells and tools
-
-Pila draws windows and title bars, and comes with a bar (`pila-bar`, the default `autostart`) and
-a launcher (`pila-launcher`, the default `launcher`). The rest of a
-desktop comes from the usual Wayland tools: notifications (mako), wallpaper (swaybg), lock screen
-and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), or another bar
-and launcher (waybar, fuzzel), started from `autostart` (which then replaces the default: list `pila-bar` there to keep it). A full desktop shell provides all of these at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
-turns them back on): shells that don't recognize Pila may run `wlr-randr --off` without naming an
-output, which fails.
-
 ## Configuring Pila
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`, or the file
 given with `--config`), and writes the example there the first time it's missing.
-[`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) documents every option
-and the default key bindings: the modifier key, terminal and launcher, programs to start with
-Pila (`autostart`), keyboard layout and repeat, key bindings, touchpad gestures
-(`[gestures]`), touchpad and mouse settings, the cursor (`[cursor]`), each monitor's mode,
-scale, rotation, position and adaptive sync, monitors on other GPUs (`other-gpus`), direct
-scanout (`direct-scanout`), tearing for games (`tearing`), drawing frames close to the refresh
-(`render-late`), the number of workspaces, rounded corners, shadows (`[shadow]`),
-colors (`[colors]`), animations (`[animations]`) and
-per-app rules (`[[window-rule]]`, `[[layer-rule]]`). A missing file means the defaults; an invalid one is
-reported in the log and in a notification, and Pila starts with the defaults. `PILA_MOD`, `PILA_TERMINAL` and
-`PILA_LAUNCHER` override the file; `pila --help` lists the options.
-
-Saving the file applies it right away, everything but `autostart`. If the new version is
-invalid, Pila keeps running with the previous one and shows the error in a notification
-(with a notification daemon such as mako) and in the log. `pila --check-config` checks
-the file, keyboard layout included, without starting Pila: it prints what's wrong and
-exits with status 1, or 0 if it's valid.
-
-The default key bindings, and how to set up a desktop, monitors, screen sharing, locking and
-games, are in the [user manual](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md). Mod is Super on a TTY or login session and Alt
-nested; Mod+Return opens a terminal and Mod+Shift+E quits.
+[`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) documents
+every option and the default key bindings. Saving the file applies it right away; an invalid one is
+reported in a notification and the log, and Pila keeps the previous one. `pila --check-config`
+checks it without starting Pila. How to set up a desktop, monitors, screen sharing, locking and
+games is in the [user manual](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md).
 
 ## Reporting bugs
 
-Open an [issue](https://github.com/igalmarino/pila/issues/new/choose). `pila-report`
-(`scripts/report` in a checkout) gathers most of what's needed into `pila-report.txt`, without
-your home directory, user name and host name, and sends nothing anywhere. By hand, it's:
-
-- `pila --version`, your distro, GPU and driver (`lspci -k | grep -A3 VGA`);
-- how Pila was started: login session, `scripts/tty`, or nested;
-- the log: `~/.local/state/pila/pila.log` for a login session (`pila.log.old` is the run
-  before; with systemd also `journalctl -t pila -b`), `pila-tty.log` for `scripts/tty`, the
-  terminal for nested. `RUST_LOG=debug` makes it detailed (run `RUST_LOG=debug pila-session`
-  from a TTY, or `RUST_LOG=debug scripts/tty`); a crash is logged with where
-  it happened ("pila crashed" and a backtrace);
-- your config file, if you have one, and the steps to reproduce.
+Open an [issue](https://github.com/igalmarino/pila/issues/new/choose) and attach
+`pila-report.txt`, which `pila-report` (`scripts/report` in a checkout) writes: version, system,
+GPU, monitors, whether the configuration is valid and the end of the log, without your home
+directory, user name and host name. It sends nothing anywhere. Add how Pila was started (login session,
+`scripts/tty` or nested) and the steps to reproduce. Where the logs are and how to make them
+detailed is in the manual's [Troubleshooting](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#troubleshooting).
 
 Look through logs and configs before posting them: they can hold window titles, commands,
 file paths and monitor details.

@@ -2,7 +2,7 @@
 # rebuilt whole after packages.yml has attached a release's .deb and .rpm, from the
 # packages of the last $KEEP releases: nothing of them is kept in git. Signed with the
 # key in the `repos` environment (its public half is packaging/pila.asc), then installed
-# from the published site on clean systems, as README says. By hand (gh workflow run
+# from the published site on clean systems, as docs/INSTALL.md says. By hand (gh workflow run
 # repos.yml) it rebuilds and publishes the site from the releases there are.
 name: Repositories
 
@@ -127,7 +127,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
-  # README's commands on clean systems, from the published site; Pages' cache may serve
+  # docs/INSTALL.md's commands on clean systems, from the published site; Pages' cache may serve
   # the previous site for up to 10 minutes.
   verify:
     name: Install on ${{ matrix.image }}

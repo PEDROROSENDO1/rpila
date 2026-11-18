@@ -16,8 +16,8 @@ has them all.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
-`/usr/share/doc/pila`, and in its source); `man pila` has the command line. Installing Pila is in the
-[README](https://github.com/igalmarino/pila/blob/main/README.md#running-pila).
+`/usr/share/doc/pila`, and in its source); `man pila` has the command line. Installing Pila is in
+[INSTALL.md](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md).
 
 - [Starting and leaving Pila](#starting-and-leaving-pila)
 - [The Mod key and the default bindings](#the-mod-key-and-the-default-bindings)

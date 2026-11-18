@@ -1,5 +1,5 @@
 # What rarely breaks but must not stay broken: pila on other distros with the
-# packages README.md lists, the minimum Rust version, the Nix package and the
+# packages docs/INSTALL.md lists, the minimum Rust version, the Nix package and the
 # RustSec advisories. pila-git and the flake build the latest main, so this
 # doesn't wait for a release: it runs when something it depends on changes,
 # every week (distros' images and advisories change without a commit), and by
@@ -82,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The package lists from README.md's build table, plus a C compiler
+          # The package lists from docs/INSTALL.md's build table, plus a C compiler
           # and curl for rustup.
           - image: debian:trixie
             install: >-
