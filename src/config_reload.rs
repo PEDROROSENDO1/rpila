@@ -198,6 +198,10 @@ impl Pila {
         if old.environment != self.config.environment {
             self.export_environment();
         }
+        // pila-bar and pila-launcher take them up.
+        if old.colors != self.config.colors {
+            self.send_colors_event();
+        }
         self.queue_redraw();
     }
 

@@ -992,6 +992,40 @@ fn keyboard_layouts_are_listed_switched_and_followed() {
     assert_eq!(out.status.code(), Some(1), "{}", error(&out));
 }
 
+/// `colors` gives `[colors]` as the config writes them, for clients that
+/// look like Pila (pila-bar, pila-launcher); subscribers hear of a change
+/// when the config is saved, and of nothing else.
+#[test]
+fn colors_are_listed_and_followed() {
+    let mut pila = TestPila::start_with(Options {
+        config: "[colors]\nbar = \"#102030\"\n".into(),
+        ..Options::default()
+    });
+    let answer = query(&pila, &["colors"]);
+    assert_eq!(answer["colors"]["bar"], "#102030", "{answer}");
+    // The rest are the example's.
+    assert_eq!(answer["colors"]["bar_inactive"], "#26272b", "{answer}");
+    assert_eq!(answer["colors"]["snap_preview"], "#4477cc4d", "{answer}");
+    assert_eq!(answer["colors"].as_object().unwrap().len(), 11, "{answer}");
+    let shown = text(&msg(&pila, &["colors"]));
+    assert!(shown.contains("bar  #102030\n"), "{shown}");
+
+    let (mut events, _) = Subscription::new(&pila, Some(&["colors"]));
+    let first = events.line().unwrap();
+    assert_eq!(first["event"], "colors");
+    assert_eq!(first["colors"], answer["colors"]);
+
+    // Another setting changes: no colors event.
+    pila.write_config("[colors]\nbar = \"#102030\"\n[cursor]\nshake-to-find = false\n");
+    let quiet = events.during(Duration::from_millis(1500));
+    assert!(quiet.is_empty(), "{quiet:?}");
+    pila.write_config("[colors]\nbar = \"#102030\"\nhover = \"#abcdef\"\n");
+    let changed = events.wait("colors", "the new hover", |e| {
+        e["colors"]["hover"] == "#abcdef"
+    });
+    assert_eq!(changed["colors"]["bar"], "#102030");
+}
+
 /// A lock screen may offer to switch the keyboard layout (to type the
 /// password in another): `switch-layout` runs while locked, as the
 /// monitors' power actions do; that gets past nothing.

@@ -1,7 +1,7 @@
 # IPC
 
-`pila msg` asks a running Pila about its windows, monitors, workspaces and keyboard layouts and
-runs actions. Other programs can talk to the same socket directly.
+`pila msg` asks a running Pila about its windows, monitors, workspaces, keyboard layouts and
+colors and runs actions. Other programs can talk to the same socket directly.
 
 ## `pila msg`
 
@@ -10,6 +10,7 @@ pila msg [--json] windows            The windows, on all workspaces
 pila msg [--json] outputs            The monitors
 pila msg [--json] workspaces         The workspaces
 pila msg [--json] keyboard           The keyboard layouts, and which is in use
+pila msg [--json] colors             The colors of [colors]
 pila msg [--json] focused            The focused window
 pila msg [--json] version            Pila's version
 pila msg [--json] subscribe [EVENTS] Events as they happen, until Pila quits
@@ -62,8 +63,9 @@ actions are those of `config.example.toml`.
 | `outputs` | | `protocol`, `outputs` |
 | `workspaces` | | `protocol`, `workspaces` |
 | `keyboard` | | `protocol`, `layouts` |
+| `colors` | | `protocol`, `colors` |
 | `focused` | | `protocol`, `window`: a window, or null |
-| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard` (all if left out) | `protocol`; then events (below) |
+| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard`, `colors` (all if left out) | `protocol`; then events (below) |
 | `action` | `action`: as in `[bindings]` | nothing more |
 | `focus` | `id` | nothing more |
 | `close` | `id` | nothing more |
@@ -97,6 +99,12 @@ such as `English (US)`), `active` (in use). While a virtual keyboard (`wtype`, a
 keyboard) types with a keymap of its own, these are still the physical keyboard's. The action
 `switch-layout <n|next|prev>` changes the layout.
 
+**The colors:** an object with `[colors]`' settings, named with `_` for `-` (`bar`,
+`bar_inactive`, `bar_urgent`, `icon`, `icon_inactive`, `hover`, `hover_icon`, `close_hover`,
+`close_hover_icon`, `background`, `snap_preview`), each `#rrggbb`, or `#rrggbbaa` when
+translucent: those of the configuration file, the example's where it leaves one out. For
+programs that want to look like Pila's title bars, as `pila-bar` and `pila-launcher` do.
+
 ## Events
 
 After `subscribe`, the connection gets an event line for each kind asked for, with how things are
@@ -110,7 +118,8 @@ now, and then one whenever that kind changes:
 ```
 
 Each event is the whole list, as the request of the same name answers it (`keyboard` events carry
-`layouts`): replace what you had.
+`layouts`; `colors` events the `colors` object): replace what you had. Colors change when a
+saved configuration changes them.
 A window being moved or resized with the pointer keeps, in events, the `x`, `y`, `width` and
 `height` it had before, until it's let go: a drag sends one event, when it ends, rather than one
 a frame (`windows` answers with where it is now). Events come once things settle on screen, as taskbars hear about them

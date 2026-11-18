@@ -126,13 +126,14 @@ Show a summary of the options.
 .B pila msg
 talks to a running Pila:
 .TP
-.BR "pila msg " [ \-\-json ] " windows" | outputs | workspaces | keyboard | focused | version
-List the windows, monitors, workspaces or keyboard layouts, or show the focused window or the
-version.
+.BR "pila msg " [ \-\-json ] " windows" | outputs | workspaces | keyboard | colors | focused | version
+List the windows, monitors, workspaces, keyboard layouts or the colors of
+.BR [colors] ,
+or show the focused window or the version.
 .TP
-.BR "pila msg " [ \-\-json ] " subscribe " [ windows | workspaces | outputs | keyboard ...]
-Print events as they happen: the whole list of windows, workspaces, monitors or keyboard layouts
-each time it changes, until Pila quits.
+.BR "pila msg " [ \-\-json ] " subscribe " [ windows | workspaces | outputs | keyboard | colors ...]
+Print events as they happen: the whole list of windows, workspaces, monitors, keyboard layouts
+or colors each time it changes, until Pila quits.
 .TP
 .BI "pila msg action " action
 Run an action, as in a key binding (for example

@@ -1319,7 +1319,7 @@ struct ConfigFile {
 
 /// A color from the config: `#rrggbb`, or `#rrggbbaa` if `alpha` allows it.
 /// Premultiplied, as the renderer takes it.
-fn parse_color(name: &str, text: &str, alpha: bool) -> Result<[f32; 4], String> {
+pub(crate) fn parse_color(name: &str, text: &str, alpha: bool) -> Result<[f32; 4], String> {
     let invalid = || {
         let form = if alpha {
             "#rrggbb or #rrggbbaa"

@@ -7,6 +7,8 @@ mod battery;
 mod clock;
 mod desktop;
 mod outputs;
+#[path = "../../launcher/src/pila_ipc.rs"]
+mod pila_ipc;
 #[path = "../../launcher/src/style.rs"]
 mod style;
 mod ui;

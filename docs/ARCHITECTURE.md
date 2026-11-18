@@ -211,7 +211,12 @@ Key flows and invariants:
   focus away (e.g. GNOME's Alt+Tab) never get a release (Smithay's winit backend drops
   winit's synthetic ones), so `WinitEvent::Focus(false)` calls `Pila::release_all_keys`.
   The dmabuf global is created in `winit::init_dmabuf`. Input is absolute motion only,
-  mapped onto the single output; relative motion is derived from it.
+  mapped onto the single output; relative motion is derived from it. When the host's
+  connection fails (the host session ended or crashed), winit ends its loop and Smithay's
+  source removes itself without an event; `winit::HostWindow` wraps it and turns that end into
+  `Nested::Ended`, which stops the loop, and `main` then fails ("lost the host compositor",
+  `winit::host_lost`). Without it Pila ran on with no window while winit's thread watching the
+  host's socket spun on the dead connection, printing `Io error: Broken pipe` nonstop.
 - **Cursor** (`cursor.rs`): a client's cursor surface (`wl_pointer.set_cursor`) is drawn at
   `surface_position` (pointer minus hotspot, on top as `Kind::Cursor`) and gets frame callbacks
   like any surface; `handle_commit` moves the hotspot with the buffer's offset on every commit.
@@ -729,8 +734,12 @@ Key flows and invariants:
   a thread. iced_layershell speaks text-input-v3, so input
   methods type into the search field. Its pure parts have unit tests in the crate;
   `scripts/apps launcher` drives the real thing on a headless Pila. It and the bar share Pila's
-  look, `launcher/src/style.rs` (the defaults of `[colors]` as an iced theme, the accent of the
-  snap preview; the bar includes the file by `#[path]`); their surfaces are opaque (tiny-skia
+  look, `launcher/src/style.rs` (`style::Style`: the colors of `[colors]` as an iced theme, the
+  accent of the snap preview, opaque), and follow the user's: `launcher/src/pila_ipc.rs`
+  subscribes to the IPC's `colors` events on `PILA_SOCKET` from a thread and turns each into a
+  `Style` (`Style::from_pila`), so a saved `[colors]` reaches them at once; with no
+  `PILA_SOCKET` (another compositor) or a Pila that refuses `colors`, they keep
+  `Style::default`, the example's defaults. The bar includes both files by `#[path]`. Their surfaces are opaque (tiny-skia
   draws into XRGB buffers), so the launcher's corners stay square; one font and size for all
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
@@ -1330,7 +1339,10 @@ Key flows and invariants:
   (`Pila::ipc_events_due`), and `after_frames` sends them even when it draws nothing. The keyboard layouts are checked
   every loop iteration instead (`send_keyboard_events`, before `after_frames` returns early): an
   xkb option can switch them with nothing to draw. Only against those the last event was made
-  from (`keyboard_layouts_are`, nothing built): the event is made only when they changed. `keyboard_layout.rs` reads them from the
+  from (`keyboard_layouts_are`, nothing built): the event is made only when they changed. The
+  colors (`[colors]`, for pila-bar and pila-launcher) are sent when `apply_config` changes them
+  (`send_colors_event`); `ipc_colors` writes them back as the config does (`hex`, from
+  premultiplied). `keyboard_layout.rs` reads them from the
   seat's xkb state and `switch-layout` sets them; while a virtual keyboard's keymap is in place
   it's the physical keyboard's that count, the names cached when that keymap swapped in
   (`InputState::layout_names`) and the layout it comes back to (`saved_layout`), which a switch

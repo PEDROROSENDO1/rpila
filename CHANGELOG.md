@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+- **`pila-bar` and `pila-launcher` follow `[colors]`:** they take the colors of Pila's title bars
+  from the configuration, and change as soon as it's saved (they had the defaults whatever the
+  configuration said). `pila msg colors` lists them, and `pila msg subscribe colors` follows them
+  (a new request and event in the IPC).
 - **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an arrow up
   while charging, amber at 15% or less while running down (a mouse's battery isn't counted);
   `--no-battery` leaves it out.
 - **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
   its text growing with it, and shown only on the monitors `--output NAME` names (once per
   monitor), including when one is plugged in later.
+- **Fix: a nested Pila quits when its host goes.** When the session it ran in as a window ended
+  or crashed, it ran on with no window, printing `Io error: Broken pipe` nonstop; it now quits
+  with "lost the host compositor".
 - **APT and DNF repositories:** Pila's `.deb` and `.rpm` are now in signed repositories on
   GitHub Pages, so Debian, Ubuntu and Fedora install it once and update it with the system
   (README, "Debian, Ubuntu and Fedora"). The `.rpm` is built on the oldest Fedora maintained

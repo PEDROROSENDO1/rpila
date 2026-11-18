@@ -20,9 +20,11 @@ iced = { version = "0.14", default-features = false, features = [
     "crisp",
 ] }
 iced_layershell = { version = "0.19.1", default-features = false }
+# Pila's colors, from its IPC socket (`pila_ipc.rs`, shared with pila-launcher).
+serde_json = "1"
 # The clock: the local time and strftime, in the user's LC_TIME.
 libc = "0.2"
-# The desktop's state, on a connection of its own (`desktop.rs`): versions
-# iced_layershell already brings.
+# The desktop's state, on iced_layershell's connection (`desktop.rs`):
+# versions iced_layershell already brings.
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }

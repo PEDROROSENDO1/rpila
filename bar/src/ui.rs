@@ -30,7 +30,8 @@ use crate::{
     clock,
     desktop::{self, Desktop, Switcher, Update},
     outputs::Change,
-    style,
+    pila_ipc,
+    style::{self, Style},
 };
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
@@ -47,6 +48,8 @@ pub enum Message {
     Update(Update),
     Clock(String),
     Battery(Battery),
+    /// Pila's colors, new or changed.
+    Style(Style),
     /// A click on a workspace (its place in the bar).
     Activate(usize),
     Wheel(mouse::ScrollDelta),
@@ -66,6 +69,7 @@ struct Bar {
     height: u32,
     /// The surfaces open, by output.
     surfaces: Vec<(WlOutput, window::Id)>,
+    style: Style,
 }
 
 /// The text size for a bar `height` high: `style::TEXT_SIZE` at the default
@@ -102,9 +106,13 @@ pub fn run(args: Args) -> ExitCode {
             bottom,
             height,
             surfaces: Vec::new(),
+            style: Style::default(),
         };
         let updates = desktop::updates(desktop_connection.clone(), outputs.clone());
-        let mut tasks = vec![Task::run(updates, Message::Update)];
+        let mut tasks = vec![
+            Task::run(updates, Message::Update),
+            Task::run(pila_ipc::styles("pila-bar"), Message::Style),
+        ];
         if !format.is_empty() {
             tasks.push(Task::run(clock::ticks(format.clone()), Message::Clock));
         }
@@ -115,7 +123,7 @@ pub fn run(args: Args) -> ExitCode {
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Bar::update, Bar::view)
         .subscription(Bar::subscription)
-        .theme(|_: &Bar, _| Some(style::theme()))
+        .theme(|bar: &Bar, _| Some(bar.style.theme()))
         .style(|_: &Bar, theme: &Theme| iced::theme::Style {
             // Opaque: the software renderer's buffers have no alpha.
             background_color: theme.palette().background,
@@ -160,6 +168,7 @@ impl Bar {
             }
             Message::Clock(clock) => self.clock = clock,
             Message::Battery(battery) => self.battery = Some(battery),
+            Message::Style(style) => self.style = style,
             Message::Activate(index) => self.activate(index),
             Message::Wheel(delta) => {
                 let (steps, rest) = wheel_steps(self.scrolled, delta);
@@ -213,12 +222,13 @@ impl Bar {
     }
 
     fn view(&self, _window: window::Id) -> Element<'_, Message> {
+        let st = self.style;
         let workspaces = Row::with_children(
             self.desktop
                 .workspaces
                 .iter()
                 .enumerate()
-                .map(|(index, w)| button(index, &w.name, w.active, w.urgent, self.height)),
+                .map(|(index, w)| button(index, &w.name, w.active, w.urgent, self.height, st)),
         )
         .height(Length::Fill);
         let left = container(workspaces)
@@ -228,7 +238,7 @@ impl Bar {
         let clock = container(
             text(&self.clock)
                 .wrapping(text::Wrapping::None)
-                .color(style::TEXT_BRIGHT),
+                .color(st.text_bright),
         )
         .padding([0, 12])
         .height(Length::Fill)
@@ -240,13 +250,13 @@ impl Bar {
             container(
                 text(battery.text())
                     .wrapping(text::Wrapping::None)
-                    .color(if low { style::TEXT_BRIGHT } else { style::TEXT }),
+                    .color(if low { st.text_bright } else { st.text }),
             )
             .padding([0, 10])
             .height(Length::Fill)
             .align_y(Alignment::Center)
             .style(move |_| match low {
-                true => container::Style::default().background(style::URGENT),
+                true => container::Style::default().background(st.urgent),
                 false => container::Style::default(),
             })
         });
@@ -259,7 +269,7 @@ impl Bar {
         let edge = container(Space::new())
             .width(Length::Fill)
             .height(EDGE)
-            .style(|_| container::Style::default().background(style::EDGE));
+            .style(move |_| container::Style::default().background(st.edge));
         let content = if self.bottom {
             column![edge, bar]
         } else {
@@ -268,7 +278,7 @@ impl Bar {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_| container::Style::default().background(style::SURFACE_DIM))
+            .style(move |_| container::Style::default().background(st.surface_dim))
             .into()
     }
 }
@@ -282,6 +292,7 @@ fn button<'a>(
     active: bool,
     urgent: bool,
     height: u32,
+    st: Style,
 ) -> Element<'a, Message> {
     let label = text(name).wrapping(text::Wrapping::None);
     let block = button_widget(
@@ -304,13 +315,13 @@ fn button<'a>(
                 button_widget::Status::Hovered | button_widget::Status::Pressed
             );
             let (background, text_color) = if active {
-                (Some(style::ACCENT), style::TEXT_BRIGHT)
+                (Some(st.accent), st.text_bright)
             } else if urgent {
-                (Some(style::URGENT), style::TEXT_BRIGHT)
+                (Some(st.urgent), st.text_bright)
             } else if hovered {
-                (Some(style::HOVER), style::TEXT_BRIGHT)
+                (Some(st.hover), st.text_bright)
             } else {
-                (None, style::TEXT_DIM)
+                (None, st.text_dim)
             };
             button_widget::Style {
                 background: background.map(Into::into),

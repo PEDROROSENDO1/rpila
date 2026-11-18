@@ -28,7 +28,8 @@ use crate::{
     apps::{self, App},
     exec::{self, Request},
     icons::{self, IconFile},
-    style,
+    pila_ipc,
+    style::{self, Style},
 };
 
 /// The layer surface's namespace, for `[[layer-rule]]`s.
@@ -76,6 +77,8 @@ pub enum Message {
     /// The wheel: scroll by this many rows.
     Scroll(isize),
     Hide,
+    /// Pila's colors, new or changed.
+    Style(Style),
 }
 
 struct Launcher {
@@ -89,6 +92,7 @@ struct Launcher {
     /// The selected row and the first one in view, in `shown`.
     selected: usize,
     first: usize,
+    style: Style,
 }
 
 pub fn run(listener: UnixListener, first: Request) -> ExitCode {
@@ -103,17 +107,19 @@ pub fn run(listener: UnixListener, first: Request) -> ExitCode {
             shown: Vec::new(),
             selected: 0,
             first: 0,
+            style: Style::default(),
         };
         let show = launcher.request(first.clone());
         let requests = match listener.lock().ok().and_then(|mut l| l.take()) {
             Some(listener) => Task::run(requests(listener), Message::Request),
             None => Task::none(),
         };
-        (launcher, Task::batch([show, requests]))
+        let styles = Task::run(pila_ipc::styles("pila-launcher"), Message::Style);
+        (launcher, Task::batch([show, requests, styles]))
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Launcher::update, Launcher::view)
         .subscription(Launcher::subscription)
-        .theme(|_: &Launcher, _| Some(style::theme()))
+        .theme(|launcher: &Launcher, _| Some(launcher.style.theme()))
         .style(|_: &Launcher, theme: &Theme| iced::theme::Style {
             // Opaque: the software renderer's buffers have no alpha.
             background_color: theme.palette().background,
@@ -209,6 +215,10 @@ impl Launcher {
                 Task::none()
             }
             Message::Hide => self.hide(),
+            Message::Style(style) => {
+                self.style = style;
+                Task::none()
+            }
             // The layer shell's own messages are handled before `update`.
             _ => Task::none(),
         }
@@ -264,27 +274,28 @@ impl Launcher {
     }
 
     fn view(&self, _window: window::Id) -> Element<'_, Message> {
+        let st = self.style;
         let input = text_input("Search apps", &self.query)
             .id(QUERY)
             .on_input(Message::Query)
             .on_submit(Message::Submit)
             .size(style::TEXT_SIZE)
             .padding(8)
-            .style(|_, status| text_input::Style {
-                background: style::SURFACE.into(),
+            .style(move |_, status| text_input::Style {
+                background: st.surface.into(),
                 border: Border {
                     color: match status {
-                        text_input::Status::Focused { .. } => style::ACCENT,
-                        _ => style::HOVER,
+                        text_input::Status::Focused { .. } => st.accent,
+                        _ => st.hover,
                     },
                     width: 1.0,
                     // Square, as the rest.
                     radius: 0.0.into(),
                 },
-                icon: style::TEXT_DIM,
-                placeholder: style::TEXT_DIM,
-                value: style::TEXT_BRIGHT,
-                selection: style::ACCENT,
+                icon: st.text_dim,
+                placeholder: st.text_dim,
+                value: st.text_bright,
+                selection: st.accent,
             });
         let mut rows = column![].spacing(0);
         let end = (self.first + ROWS).min(self.shown.len());
@@ -296,8 +307,8 @@ impl Launcher {
             rows = rows.push(
                 container(text("No app matches"))
                     .padding([8, 12])
-                    .style(|_| container::Style {
-                        text_color: Some(style::TEXT_DIM),
+                    .style(move |_| container::Style {
+                        text_color: Some(st.text_dim),
                         ..Default::default()
                     }),
             );
@@ -308,10 +319,10 @@ impl Launcher {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_| container::Style {
-                background: Some(style::SURFACE_DIM.into()),
+            .style(move |_| container::Style {
+                background: Some(st.surface_dim.into()),
                 border: Border {
-                    color: style::HOVER,
+                    color: st.hover,
                     width: 1.0,
                     // Square: transparent corners would show black.
                     radius: 0.0.into(),
@@ -334,6 +345,7 @@ impl Launcher {
             None => Space::new().width(ICON_SIZE).height(ICON_SIZE).into(),
         };
         let selected = row_index == self.selected;
+        let st = self.style;
         let line = row![icon, text(&entry.app.name)]
             .spacing(12)
             .align_y(Alignment::Center);
@@ -346,8 +358,8 @@ impl Launcher {
                 if selected {
                     // As the bar's active workspace, square.
                     container::Style {
-                        background: Some(style::ACCENT.into()),
-                        text_color: Some(style::TEXT_BRIGHT),
+                        background: Some(st.accent.into()),
+                        text_color: Some(st.text_bright),
                         ..Default::default()
                     }
                 } else {

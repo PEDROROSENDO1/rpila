@@ -184,6 +184,19 @@ const OUTPUT: &[&str] = &[
 ];
 const WORKSPACE: &[&str] = &["index", "active", "windows"];
 const LAYOUT: &[&str] = &["index", "name", "active"];
+const COLORS: &[&str] = &[
+    "bar",
+    "bar_inactive",
+    "bar_urgent",
+    "icon",
+    "icon_inactive",
+    "hover",
+    "hover_icon",
+    "close_hover",
+    "close_hover_icon",
+    "background",
+    "snap_preview",
+];
 
 #[track_caller]
 fn has_fields(what: &str, object: &Value, fields: &[&str]) {
@@ -272,8 +285,9 @@ fn ipc_answers_and_events_keep_their_fields() {
         &ask(&mut ipc, "keyboard")["layouts"],
         LAYOUT,
     );
+    has_fields("the colors", &ask(&mut ipc, "colors")["colors"], COLORS);
 
-    let kinds = ["windows", "workspaces", "outputs", "keyboard"];
+    let kinds = ["windows", "workspaces", "outputs", "keyboard", "colors"];
     ipc.ask(serde_json::json!({ "request": "subscribe", "events": kinds }));
     let mut seen = BTreeSet::new();
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -286,6 +300,7 @@ fn ipc_answers_and_events_keep_their_fields() {
             "workspaces" => all_have("a workspaces event", &event["workspaces"], WORKSPACE),
             "outputs" => all_have("an outputs event", &event["outputs"], OUTPUT),
             "keyboard" => all_have("a keyboard event", &event["layouts"], LAYOUT),
+            "colors" => has_fields("a colors event", &event["colors"], COLORS),
             _ => panic!("unknown event: {event}"),
         }
         seen.insert(kind);

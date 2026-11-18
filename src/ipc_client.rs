@@ -17,10 +17,12 @@ Requests:
   outputs             The monitors
   workspaces          The workspaces
   keyboard            The keyboard layouts, and which is in use
+  colors              The colors of [colors], as pila-bar takes them
   focused             The focused window
   version             Pila's version
   subscribe [EVENTS]  Events as they happen: windows, workspaces, outputs,
-                      keyboard (all of them unless named), until Pila quits
+                      keyboard, colors (all of them unless named), until
+                      Pila quits
   action <action>     Run an action, as in [bindings]: action workspace 2
   focus <id>          Focus a window, by its id in `windows`
   close <id>          Ask a window to close
@@ -64,12 +66,12 @@ fn request(args: &[String]) -> Result<Value, String> {
         _ => Err(format!("{name} takes one window id")),
     };
     match name.as_str() {
-        "windows" | "outputs" | "workspaces" | "keyboard" | "focused" | "version"
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "focused" | "version"
             if rest.is_empty() =>
         {
             Ok(json!({ "request": name }))
         }
-        "windows" | "outputs" | "workspaces" | "keyboard" | "focused" | "version" => {
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "focused" | "version" => {
             Err(format!("{name} takes no arguments"))
         }
         "action" if rest.is_empty() => Err("action needs an action".to_string()),
@@ -223,6 +225,12 @@ fn text_of(name: &str, answer: &Value) -> Vec<String> {
                     },
                 )
             })
+            .collect(),
+        "colors" => answer["colors"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, color)| format!("{}  {}", name.replace('_', "-"), plain(color)))
             .collect(),
         "version" => vec![format!("pila {}", plain(&answer["version"]))],
         _ => Vec::new(),

@@ -190,7 +190,9 @@ others' (`bar-inactive`) and one asking for attention (`bar-urgent`); the title 
 them (`icon`, `icon-inactive`); a button under the pointer (`hover`, `hover-icon`, and
 `close-hover`, `close-hover-icon` for the close button). `background` is what shows behind the
 windows without a wallpaper, and `snap-preview` the area a dragged window would snap to (it may
-be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors.
+be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors. Pila's
+bar and launcher (`pila-bar`, `pila-launcher`) take the same colors, and change with them as
+soon as the file is saved.
 
 **Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
 64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
@@ -524,7 +526,7 @@ in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods
 type into its search field.
 
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
-workspaces on the left and the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars. A click on a workspace goes to it, and the
+workspaces on the left and the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars (`[colors]`). A click on a workspace goes to it, and the
 wheel over the bar to the next or previous one. It's the default `autostart`; with other
 programs, list it among them:
 

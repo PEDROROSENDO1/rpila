@@ -9,10 +9,11 @@
 //! when asked for.
 //!
 //! A client may `subscribe` to events: whole snapshots of the windows,
-//! workspaces, outputs or keyboard layouts, sent first as they are and then
-//! whenever one changes (`Pila::send_ipc_events`, from `after_frames`, where
-//! the taskbars hear about windows too; the layouts every loop iteration,
-//! `send_keyboard_events`). A change that may come with no frame at all (the
+//! workspaces, outputs, keyboard layouts or colors, sent first as they are and
+//! then whenever one changes (`Pila::send_ipc_events`, from `after_frames`,
+//! where the taskbars hear about windows too; the layouts every loop
+//! iteration, `send_keyboard_events`; the colors when the config is applied,
+//! `send_colors_event`). A change that may come with no frame at all (the
 //! monitors turned off) sends them anyway (`ipc_events_due`). Each subscriber
 //! keeps the last snapshot it got of each kind; with none, nothing is built.
 
@@ -308,6 +309,8 @@ pub enum Request {
     Outputs,
     Workspaces,
     Keyboard,
+    /// `[colors]`, for clients that look like Pila (pila-bar, pila-launcher).
+    Colors,
     /// Events of these kinds, from now on.
     Subscribe(Vec<Kind>),
     Focused,
@@ -336,6 +339,7 @@ pub fn parse_request(line: &[u8]) -> Result<Request, String> {
         "outputs" => Request::Outputs,
         "workspaces" => Request::Workspaces,
         "keyboard" => Request::Keyboard,
+        "colors" => Request::Colors,
         "subscribe" => Request::Subscribe(match request.get("events") {
             None => Kind::ALL.to_vec(),
             Some(Value::Array(names)) if !names.is_empty() => names
@@ -370,6 +374,7 @@ fn handle(
             Ok(json!({ "protocol": PROTOCOL, "workspaces": state.ipc_workspaces() }))
         }
         Request::Keyboard => Ok(json!({ "protocol": PROTOCOL, "layouts": state.ipc_layouts() })),
+        Request::Colors => Ok(json!({ "protocol": PROTOCOL, "colors": state.ipc_colors() })),
         Request::Subscribe(kinds) => {
             state.subscribe(client, kinds);
             Ok(json!({ "protocol": PROTOCOL }))
@@ -428,14 +433,16 @@ pub enum Kind {
     Workspaces,
     Outputs,
     Keyboard,
+    Colors,
 }
 
 impl Kind {
-    const ALL: [Kind; 4] = [
+    const ALL: [Kind; 5] = [
         Kind::Windows,
         Kind::Workspaces,
         Kind::Outputs,
         Kind::Keyboard,
+        Kind::Colors,
     ];
     /// Built after frames are drawn; the rest every loop iteration.
     const AFTER_FRAMES: [Kind; 3] = [Kind::Windows, Kind::Workspaces, Kind::Outputs];
@@ -446,10 +453,11 @@ impl Kind {
             Kind::Workspaces => "workspaces",
             Kind::Outputs => "outputs",
             Kind::Keyboard => "keyboard",
+            Kind::Colors => "colors",
         }
     }
 
-    /// The event's list: named as the answer to the request of the same
+    /// The event's list (or object, for colors): named as the answer to the request of the same
     /// name has it.
     fn field(self) -> &'static str {
         match self {
@@ -484,6 +492,17 @@ pub struct Subscribers {
     /// being moved or resized with the pointer stays there until it's let
     /// go, so that a drag sends one event rather than one a frame.
     settled: HashMap<String, serde_json::Map<String, Value>>,
+}
+
+/// A premultiplied color as `#rrggbb`, or `#rrggbbaa` when not opaque.
+fn hex([r, g, b, a]: [f32; 4]) -> String {
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let straight = |v: f32| if a > 0.0 { byte(v / a) } else { 0 };
+    let rgb = format!("#{:02x}{:02x}{:02x}", straight(r), straight(g), straight(b));
+    match byte(a) {
+        255 => rgb,
+        alpha => format!("{rgb}{alpha:02x}"),
+    }
 }
 
 /// A window's geometry in IPC answers.
@@ -548,6 +567,12 @@ impl Pila {
     /// off draws nothing): send the events at the end of this iteration.
     pub fn ipc_events_due(&mut self) {
         self.ipc_events.due = true;
+    }
+
+    /// The colors, to their subscribers, if they changed since their last
+    /// event: when the config is applied (`apply_config`).
+    pub fn send_colors_event(&mut self) {
+        self.send_events_of(&[Kind::Colors]);
     }
 
     /// The same for the keyboard layouts, every loop iteration: an xkb
@@ -620,17 +645,18 @@ impl Pila {
         }
     }
 
-    /// An event line: `{"event": kind, field: [...]}`.
+    /// An event line: `{"event": kind, field: [...]}` (`{...}` for colors).
     fn ipc_event(&mut self, kind: Kind) -> String {
-        let list = match kind {
-            Kind::Windows => self.ipc_windows_settled(),
-            Kind::Workspaces => self.ipc_workspaces(),
-            Kind::Outputs => self.ipc_outputs(),
-            Kind::Keyboard => self.ipc_layouts(),
+        let value = match kind {
+            Kind::Windows => Value::Array(self.ipc_windows_settled()),
+            Kind::Workspaces => Value::Array(self.ipc_workspaces()),
+            Kind::Outputs => Value::Array(self.ipc_outputs()),
+            Kind::Keyboard => Value::Array(self.ipc_layouts()),
+            Kind::Colors => self.ipc_colors(),
         };
         let mut event = serde_json::Map::new();
         event.insert("event".into(), kind.name().into());
-        event.insert(kind.field().into(), Value::Array(list));
+        event.insert(kind.field().into(), value);
         Value::Object(event).to_string()
     }
 
@@ -744,6 +770,32 @@ impl Pila {
     }
 
     /// The physical keyboard's layouts, in order.
+    /// `[colors]` as the config writes them (`#rrggbb`, or `#rrggbbaa` when
+    /// translucent), named with `_` for `-`.
+    fn ipc_colors(&self) -> Value {
+        let c = &self.config.colors;
+        let opaque = |[r, g, b]: [f32; 3]| [r, g, b, 1.0];
+        let colors = [
+            ("bar", c.bar),
+            ("bar_inactive", c.bar_inactive),
+            ("bar_urgent", c.bar_urgent),
+            ("icon", opaque(c.icon)),
+            ("icon_inactive", opaque(c.icon_inactive)),
+            ("hover", opaque(c.hover)),
+            ("hover_icon", opaque(c.hover_icon)),
+            ("close_hover", opaque(c.close_hover)),
+            ("close_hover_icon", opaque(c.close_hover_icon)),
+            ("background", c.background),
+            ("snap_preview", c.snap_preview),
+        ];
+        Value::Object(
+            colors
+                .into_iter()
+                .map(|(name, color)| (name.to_string(), hex(color).into()))
+                .collect(),
+        )
+    }
+
     fn ipc_layouts(&mut self) -> Vec<Value> {
         let (names, active) = self.keyboard_layouts();
         names
@@ -800,5 +852,25 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    /// `colors` writes a color as `[colors]` does, translucent ones
+    /// included (premultiplied inside Pila).
+    #[test]
+    fn colors_read_back_as_written() {
+        for text in [
+            "#2f3136",
+            "#000000",
+            "#ffffff",
+            "#4477cc4d",
+            "#c42b1c80",
+            "#12345601",
+        ] {
+            let color = crate::config::parse_color("c", text, true).unwrap();
+            assert_eq!(super::hex(color), text);
+        }
+        // Fully transparent: no color left to tell.
+        let clear = crate::config::parse_color("c", "#ff000000", true).unwrap();
+        assert_eq!(super::hex(clear), "#00000000");
     }
 }

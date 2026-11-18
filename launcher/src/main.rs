@@ -10,6 +10,7 @@
 mod apps;
 mod exec;
 mod icons;
+mod pila_ipc;
 mod style;
 mod ui;
 
