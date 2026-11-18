@@ -467,7 +467,8 @@ in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods
 type into its search field.
 
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
-workspaces, the focused window's title and a clock. A click on a workspace goes to it, and the
+workspaces on the left, the focused window's title in the middle and a clock on the right, in
+the colors of Pila's own title bars. A click on a workspace goes to it, and the
 wheel over the bar to the next or previous one. It starts when `autostart` isn't set; with an
 `autostart` of your own, list it there to keep it:
 

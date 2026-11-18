@@ -720,10 +720,14 @@ Key flows and invariants:
   (`exec::pick_terminal`; a copy of `config::TERMINALS`, which a test keeps equal); reaped on
   a thread. iced_layershell speaks text-input-v3, so input
   methods type into the search field. Its pure parts have unit tests in the crate;
-  `scripts/apps launcher` drives the real thing on a headless Pila.
+  `scripts/apps launcher` drives the real thing on a headless Pila. It and the bar share Pila's
+  look, `launcher/src/style.rs` (the defaults of `[colors]` as an iced theme, the accent of the
+  snap preview; the bar includes the file by `#[path]`); their surfaces are opaque (tiny-skia
+  draws into XRGB buffers), so the launcher's corners stay square, and emphasis is bold, not
+  semibold, which common sans fonts lack (the lookup then picks another family).
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, what starts when there's no
   `-c` and no `autostart` and it's installed (`Config::default_startup`, `config::DEFAULT_BAR`;
-  no terminal starts by itself; not on the headless backend, whose tests start their own clients): the workspaces, the focused window's title and a clock. Like the launcher, a
+  no terminal starts by itself; not on the headless backend, whose tests start their own clients): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same

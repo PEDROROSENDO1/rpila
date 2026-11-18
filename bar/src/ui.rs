@@ -12,8 +12,8 @@ use std::process::ExitCode;
 
 use iced::{
     event, mouse,
-    widget::{container, mouse_area, row, text, Row},
-    window, Alignment, Element, Event, Length, Subscription, Task, Theme,
+    widget::{button as button_widget, column, container, row, text, Row, Space},
+    window, Alignment, Border, Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_layershell::{
     reexport::{Anchor, KeyboardInteractivity, Layer},
@@ -26,6 +26,7 @@ use crate::{
     args::Args,
     clock,
     desktop::{self, Desktop, Switcher, Update},
+    style,
 };
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
@@ -34,8 +35,10 @@ pub const NAMESPACE: &str = "pila-bar";
 /// The bar's height, its exclusive zone.
 pub const HEIGHT: u32 = 28;
 /// A workspace's button, for names of one or two characters (longer ones
-/// get what they need).
+/// get what they need): a square block as high as the bar.
 pub const BUTTON_WIDTH: f32 = 28.0;
+/// The line along the edge that faces the windows.
+const EDGE: f32 = 1.0;
 const TEXT_SIZE: f32 = 13.0;
 /// How far a touchpad scrolls (in pixels) for one workspace.
 const PIXELS_PER_STEP: f32 = 40.0;
@@ -56,16 +59,20 @@ struct Bar {
     clock: String,
     /// A touchpad's scroll not yet a workspace's worth.
     scrolled: f32,
+    /// Along the bottom edge: the line facing the windows goes on top.
+    bottom: bool,
 }
 
 pub fn run(args: Args) -> ExitCode {
     let format = args.clock.clone();
+    let bottom = args.bottom;
     let boot = move || {
         let bar = Bar {
             desktop: Desktop::default(),
             switcher: None,
             clock: String::new(),
             scrolled: 0.0,
+            bottom,
         };
         let mut tasks = vec![Task::run(desktop::updates(), Message::Update)];
         if !format.is_empty() {
@@ -80,7 +87,7 @@ pub fn run(args: Args) -> ExitCode {
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Bar::update, Bar::view)
         .subscription(Bar::subscription)
-        .theme(|_: &Bar, _| Some(Theme::Dark))
+        .theme(|_: &Bar, _| Some(style::theme()))
         .style(|_: &Bar, theme: &Theme| iced::theme::Style {
             // Opaque: the software renderer's buffers have no alpha.
             background_color: theme.palette().background,
@@ -156,62 +163,99 @@ impl Bar {
                 .iter()
                 .enumerate()
                 .map(|(index, w)| button(index, &w.name, w.active, w.urgent)),
-        );
+        )
+        .height(Length::Fill);
+        // Equal portions either side: the title stays in the middle.
+        let left = container(workspaces)
+            .width(Length::FillPortion(1))
+            .height(Length::Fill)
+            .clip(true);
         let title = container(
-            text(self.desktop.title.as_deref().unwrap_or_default()).wrapping(text::Wrapping::None),
+            text(self.desktop.title.as_deref().unwrap_or_default())
+                .wrapping(text::Wrapping::None)
+                .color(style::TEXT),
         )
         .padding([0, 12])
-        .width(Length::Fill)
+        .width(Length::FillPortion(2))
         .height(Length::Fill)
+        .align_x(Alignment::Center)
         .align_y(Alignment::Center)
         .clip(true);
-        let clock = container(text(&self.clock).wrapping(text::Wrapping::None))
-            .padding([0, 12])
-            .height(Length::Fill)
-            .align_y(Alignment::Center);
-        container(row![workspaces, title, clock].height(Length::Fill))
+        let clock = container(
+            text(&self.clock)
+                .wrapping(text::Wrapping::None)
+                .font(style::BOLD)
+                .color(style::TEXT_BRIGHT),
+        )
+        .padding([0, 12])
+        .width(Length::FillPortion(1))
+        .height(Length::Fill)
+        .align_x(Alignment::End)
+        .align_y(Alignment::Center)
+        .clip(true);
+        let bar = row![left, title, clock].height(Length::Fill);
+        let edge = container(Space::new())
+            .width(Length::Fill)
+            .height(EDGE)
+            .style(|_| container::Style::default().background(style::EDGE));
+        let content = if self.bottom {
+            column![edge, bar]
+        } else {
+            column![bar, edge]
+        };
+        container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|theme: &Theme| container::Style {
-                background: Some(theme.extended_palette().background.base.color.into()),
-                ..Default::default()
-            })
+            .style(|_| container::Style::default().background(style::SURFACE_DIM))
             .into()
     }
 }
 
-/// A workspace's button: the active one in the accent color, an urgent one
-/// in the danger color.
+/// A workspace's button, a square block: the active one in the accent
+/// color, an urgent one in the attention color, the others plain until
+/// hovered.
 fn button<'a>(index: usize, name: &'a str, active: bool, urgent: bool) -> Element<'a, Message> {
-    let label = container(text(name).wrapping(text::Wrapping::None))
-        .height(Length::Fill)
-        .align_y(Alignment::Center);
-    let label = if name.chars().count() <= 2 {
-        label.width(BUTTON_WIDTH).align_x(Alignment::Center)
+    let label = text(name).wrapping(text::Wrapping::None).font(if active {
+        style::BOLD
     } else {
-        label.padding([0, 8])
-    };
-    let label = label.style(move |theme: &Theme| {
-        let palette = theme.extended_palette();
-        let pair = if active {
-            Some(palette.primary.base)
-        } else if urgent {
-            Some(palette.danger.base)
-        } else {
-            None
-        };
-        match pair {
-            Some(pair) => container::Style {
-                background: Some(pair.color.into()),
-                text_color: Some(pair.text),
-                ..Default::default()
-            },
-            None => container::Style::default(),
-        }
+        iced::Font::DEFAULT
     });
-    mouse_area(label)
-        .on_press(Message::Activate(index))
-        .interaction(mouse::Interaction::Pointer)
+    let block = button_widget(
+        container(label)
+            .height(Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center),
+    )
+    .on_press(Message::Activate(index))
+    .height(Length::Fill);
+    let block = if name.chars().count() <= 2 {
+        block.width(BUTTON_WIDTH).padding(0)
+    } else {
+        block.padding([0, 10])
+    };
+    block
+        .style(move |_, status| {
+            let hovered = matches!(
+                status,
+                button_widget::Status::Hovered | button_widget::Status::Pressed
+            );
+            let (background, text_color) = if active {
+                (Some(style::ACCENT), style::TEXT_BRIGHT)
+            } else if urgent {
+                (Some(style::URGENT), style::TEXT_BRIGHT)
+            } else if hovered {
+                (Some(style::HOVER), style::TEXT_BRIGHT)
+            } else {
+                (None, style::TEXT_DIM)
+            };
+            button_widget::Style {
+                background: background.map(Into::into),
+                text_color,
+                // Square corners.
+                border: Border::default(),
+                ..Default::default()
+            }
+        })
         .into()
 }
 

@@ -6,6 +6,8 @@
 mod args;
 mod clock;
 mod desktop;
+#[path = "../../launcher/src/style.rs"]
+mod style;
 mod ui;
 
 use std::process::ExitCode;
