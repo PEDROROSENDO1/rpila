@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **APT and DNF repositories:** Pila's `.deb` and `.rpm` are now in signed repositories on
+  GitHub Pages, so Debian, Ubuntu and Fedora install it once and update it with the system
+  (README, "Debian, Ubuntu and Fedora"). The `.rpm` is built on the oldest Fedora maintained
+  (44, glibc 2.43, which it now requires) instead of the newest, so one serves every Fedora
+  maintained.
+
 ## 0.7.1 (2026-11-18)
 
 - **The arrows step through halves and quarters:** `Mod+Left` fills the left half, then

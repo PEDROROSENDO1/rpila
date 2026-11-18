@@ -1,7 +1,8 @@
 # The .deb and .rpm of a release: built when one is published, installed on
 # clean systems and started there, then attached to it. By hand (gh workflow run
 # packages.yml) it stops before attaching, and the packages are the run's
-# artifacts. nfpm is pinned by checksum, the actions by commit.
+# artifacts. Once attached, repos.yml puts them in the APT and DNF repositories.
+# nfpm is pinned by checksum, the actions by commit.
 name: Packages
 
 on:
@@ -34,8 +35,9 @@ jobs:
               build-essential curl ca-certificates git
               libseat-dev libinput-dev libudev-dev libgbm-dev libxkbcommon-dev
               libegl1 xwayland pkg-config
+          # The oldest Fedora maintained, likewise (raised when it reaches its end of life).
           - packager: rpm
-            image: fedora:latest
+            image: fedora:44
             install: >-
               dnf install -y gcc curl git tar gzip
               libseat-devel libinput-devel systemd-devel mesa-libgbm-devel
@@ -100,6 +102,10 @@ jobs:
             packager: deb
             install: >-
               apt-get update && apt-get install -y --no-install-recommends ./dist/*.deb
+          - image: fedora:44
+            packager: rpm
+            install: >-
+              dnf install -y --setopt=install_weak_deps=False ./dist/*.rpm
           - image: fedora:latest
             packager: rpm
             install: >-

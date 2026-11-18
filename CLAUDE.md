@@ -60,7 +60,9 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   ones): run that after editing one. `compat.yml` (`rust-version`, Debian, Ubuntu, Fedora, Nix,
   `cargo audit`) runs when dependencies, the Nix files, `scripts/install`(`-paths`) or
   `resources/` change (not `packaging/`), weekly and by hand before a release. `packages.yml`
-  builds the `.deb` and `.rpm` of a release. `aur.yml` publishes `packaging/aur/pila-git` to
+  builds the `.deb` and `.rpm` of a release, and `repos.yml` then puts the last three releases'
+  in the signed APT and DNF repositories on GitHub Pages (key in the `repos` environment, public
+  half `packaging/pila.asc`). `aur.yml` publishes `packaging/aur/pila-git` to
   the AUR once approved in the `aur` environment: a release's `pkgver` commit by Claude, as
   part of the release; any other change by the user. `vkms.yml` (by hand, an
   experiment) runs the udev backend on the kernel's virtual KMS driver in the runner's VM.

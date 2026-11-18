@@ -27,7 +27,9 @@ and the tag and the release are made on GitHub with `gh`, which is logged in.
    `awk '/^## X /{on=1;next} /^## /{if(on)exit} on' CHANGELOG.md > notes.md` (in the
    scratchpad), then `gh release create vX --verify-tag --title "pila X" --notes-file notes.md`.
    Publishing it starts `packages.yml`, which builds the `.deb` and `.rpm`, installs them on
-   clean systems and attaches them: check that it passes.
+   clean systems and attaches them: check that it passes. Its success starts `repos.yml`, which
+   rebuilds the APT and DNF repositories and installs the new version from them on clean
+   systems: check that it passes too (its `verify` jobs retry while Pages' cache is stale).
 4. A commit `pila-git: pkgver for vX` (`PKGBUILD` and `.SRCINFO`). `pkgver` is
    `X.r<commits>.g<7 of the commit's hash>`: of the commit, `vX^{commit}`, not of the annotated
    tag (`git rev-list --count <sha>`).
@@ -63,6 +65,25 @@ flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
 `scripts/install` stages with `PREFIX=/usr`. A directory added to `install_files` goes in its
 `contents`, and a newly linked library in its `depends` (Debian's and Fedora's names), as in the
 `PKGBUILD`.
+
+The `.deb` is built on the oldest Ubuntu supported (24.04) and the `.rpm` on the oldest Fedora
+maintained (`fedora:44`), so one package serves every release after it; each requires its build
+system's glibc (`libc6 (>= 2.39)`, `glibc >= 2.43`). When that Fedora reaches its end of life
+(44: 2027-06-02, `https://endoflife.date/api/fedora.json`), move `packages.yml`'s rpm build image,
+its install test, `repos.yml`'s `verify` image and the `glibc` line to the next one, and the
+README's "Fedora 44 or newer".
+
+# APT and DNF repositories
+
+`repos.yml` (after a release's `packages.yml`, or `gh workflow run repos.yml`) downloads the
+`.deb`, `.rpm` and `SHA256SUMS` of the last three releases, signs the `.rpm`s and the metadata
+(`apt-ftparchive`, `createrepo_c`) and deploys the whole site to GitHub Pages
+(`https://igalmarino.github.io/pila/`: `deb/`, `rpm/`, `pila.asc`, `index.html` from
+`packaging/repo-index.html`); nothing of it is in git. The key is ed25519,
+`67A0F1D196AEC2CBB1560ECA2413E5C5541073F3`, expiring 2031-11-17: its private half is only the
+`repos` environment's secret `REPO_SIGNING_KEY` (and the user's backup), its public half
+`packaging/pila.asc`, which the workflow checks it matches. Extending or replacing it changes
+`packaging/pila.asc`, the secret, and the fingerprint in README and `packaging/repo-index.html`.
 
 # Nix package
 

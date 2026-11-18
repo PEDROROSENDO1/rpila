@@ -1,0 +1,8 @@
+# Pila's DNF repository (.github/workflows/repos.yml), for /etc/yum.repos.d/.
+[pila]
+name=Pila
+baseurl=https://igalmarino.github.io/pila/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://igalmarino.github.io/pila/pila.asc

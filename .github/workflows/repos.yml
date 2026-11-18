@@ -1,0 +1,177 @@
+# Pila's APT and DNF repositories on GitHub Pages (https://igalmarino.github.io/pila/),
+# rebuilt whole after packages.yml has attached a release's .deb and .rpm, from the
+# packages of the last $KEEP releases: nothing of them is kept in git. Signed with the
+# key in the `repos` environment (its public half is packaging/pila.asc), then installed
+# from the published site on clean systems, as README says. By hand (gh workflow run
+# repos.yml) it rebuilds and publishes the site from the releases there are.
+name: Repositories
+
+on:
+  workflow_run:
+    workflows: [Packages]
+    types: [completed]
+  workflow_dispatch:
+
+env:
+  SITE: https://igalmarino.github.io/pila
+  KEEP: 3
+
+permissions:
+  contents: read
+
+# One deployment at a time, and a newer one waits instead of cancelling the one running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the repositories
+    # packages.yml run by hand attaches nothing, so there's nothing new.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'release')
+    runs-on: ubuntu-latest
+    environment: repos
+    outputs:
+      version: ${{ steps.packages.outputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils createrepo-c rpm gnupg
+      - name: Signing key
+        env:
+          REPO_SIGNING_KEY: ${{ secrets.REPO_SIGNING_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$REPO_SIGNING_KEY" | gpg --batch --import
+          key="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr/ { print $10; exit }')"
+          published="$(gpg --batch --with-colons --show-keys packaging/pila.asc | awk -F: '/^fpr/ { print $10; exit }')"
+          if [ -z "$key" ] || [ "$key" != "$published" ]; then
+            echo "The signing key ($key) isn't packaging/pila.asc's ($published)" >&2
+            exit 1
+          fi
+          echo "KEY=$key" >> "$GITHUB_ENV"
+      - name: Packages of the last releases
+        id: packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit "$KEEP" --json tagName --jq '.[].tagName' > tags
+          test -s tags
+          echo "version=$(head -n 1 tags | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+          while read -r tag; do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "releases/$tag" \
+              --pattern '*.deb' --pattern '*.rpm' --pattern SHA256SUMS
+            (cd "releases/$tag" && sha256sum --check SHA256SUMS)
+          done < tags
+      - name: APT repository
+        run: |
+          mkdir -p site/deb/pool/main site/deb/dists/stable/main/binary-amd64
+          cp releases/*/*.deb site/deb/pool/main/
+          cd site/deb
+          apt-ftparchive packages pool > dists/stable/main/binary-amd64/Packages
+          gzip -9kn dists/stable/main/binary-amd64/Packages
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=Pila \
+            -o APT::FTPArchive::Release::Label=Pila \
+            -o APT::FTPArchive::Release::Suite=stable \
+            -o APT::FTPArchive::Release::Codename=stable \
+            -o APT::FTPArchive::Release::Architectures=amd64 \
+            -o APT::FTPArchive::Release::Components=main \
+            -o APT::FTPArchive::Release::Description="Pila, a stacking Wayland compositor" \
+            release dists/stable > "$RUNNER_TEMP/Release"
+          mv "$RUNNER_TEMP/Release" dists/stable/Release
+          gpg --batch --local-user "$KEY" --clearsign -o dists/stable/InRelease dists/stable/Release
+          gpg --batch --local-user "$KEY" --armor --detach-sign -o dists/stable/Release.gpg dists/stable/Release
+          cat dists/stable/Release
+      # The packages are signed first: the metadata has their checksums.
+      - name: DNF repository
+        run: |
+          mkdir -p site/rpm
+          cp releases/*/*.rpm site/rpm/
+          rpmsign --define "_gpg_name $KEY" --define "_gpg_path $GNUPGHOME" --addsign site/rpm/*.rpm
+          createrepo_c site/rpm
+          gpg --batch --local-user "$KEY" --armor --detach-sign -o site/rpm/repodata/repomd.xml.asc \
+            site/rpm/repodata/repomd.xml
+          cp packaging/pila.repo site/rpm/
+      - name: Site
+        run: |
+          cp packaging/pila.asc site/
+          cp packaging/repo-index.html site/index.html
+          gpg --dearmor < packaging/pila.asc > "$RUNNER_TEMP/pila.gpg"
+          gpgv --keyring "$RUNNER_TEMP/pila.gpg" site/deb/dists/stable/InRelease
+          gpgv --keyring "$RUNNER_TEMP/pila.gpg" site/rpm/repodata/repomd.xml.asc site/rpm/repodata/repomd.xml
+          find site -type f | sort
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Publish on GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # README's commands on clean systems, from the published site; Pages' cache may serve
+  # the previous site for up to 10 minutes.
+  verify:
+    name: Install on ${{ matrix.image }}
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:24.04
+            family: deb
+          - image: debian:trixie
+            family: deb
+          # The oldest Fedora the .rpm is built for (packages.yml) and the newest.
+          - image: fedora:44
+            family: rpm
+          - image: fedora:latest
+            family: rpm
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Repository (APT)
+        if: matrix.family == 'deb'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends curl ca-certificates
+          curl --create-dirs -fsSLo /etc/apt/keyrings/pila.asc "$SITE/pila.asc"
+          printf 'Types: deb\nURIs: %s/deb\nSuites: stable\nComponents: main\nSigned-By: /etc/apt/keyrings/pila.asc\n' "$SITE" \
+            | tee /etc/apt/sources.list.d/pila.sources
+          for _ in $(seq 24); do
+            apt-get update && apt-get install -y --no-install-recommends "pila=$VERSION-1" && break
+            sleep 30
+          done
+      - name: Repository (DNF)
+        if: matrix.family == 'rpm'
+        run: |
+          curl -fsSLo /etc/yum.repos.d/pila.repo "$SITE/rpm/pila.repo"
+          for _ in $(seq 24); do
+            dnf install -y --refresh --setopt=install_weak_deps=False "pila-$VERSION" && break
+            sleep 30
+          done
+      - name: What's installed
+        run: |
+          pila --version
+          pila --version | grep -F "pila $VERSION"
+          test -x /usr/bin/pila-session

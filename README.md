@@ -184,18 +184,36 @@ installs all three.
 
 ### Debian, Ubuntu and Fedora
 
-From 0.2.2 on, each [release](https://github.com/igalmarino/pila/releases) has a `.deb` (for
-Ubuntu 24.04 or newer and Debian 13 or newer) and a `.rpm` (for the Fedora current at the time
-of the release), for x86_64. Download one and install it, which brings what it needs:
+Pila has an APT repository (Ubuntu 24.04 or newer, Debian 13 or newer) and a DNF repository
+(Fedora 44 or newer), for x86_64. Add one once and install Pila, which brings what it needs;
+updates then come with the system's (`apt upgrade`, `dnf upgrade`).
+
+Debian, Ubuntu:
 
 ```bash
-sudo apt install ./pila_*.deb    # Debian, Ubuntu
-sudo dnf install ./pila-*.rpm    # Fedora
+sudo curl --create-dirs -fsSLo /etc/apt/keyrings/pila.asc https://igalmarino.github.io/pila/pila.asc
+printf 'Types: deb\nURIs: https://igalmarino.github.io/pila/deb\nSuites: stable\nComponents: main\nSigned-By: /etc/apt/keyrings/pila.asc\n' \
+  | sudo tee /etc/apt/sources.list.d/pila.sources
+sudo apt update && sudo apt install pila
 ```
 
-They install the same files as `scripts/install` in `/usr`, and there's no repository yet, so
-updating means installing a newer one. Each package is installed on a clean system and started
-headless before it's attached to a release. A tester reports a real session working on Debian, with
+Fedora (`dnf` asks to import the key the first time: compare its fingerprint with the one below):
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/pila.repo https://igalmarino.github.io/pila/rpm/pila.repo
+sudo dnf install pila
+```
+
+The repositories and their packages are signed with the key
+[`packaging/pila.asc`](packaging/pila.asc), fingerprint
+`67A0 F1D1 96AE C2CB B156 0ECA 2413 E5C5 5410 73F3`. They hold the packages of the last three
+releases; every release since 0.2.2 also has its `.deb` and `.rpm` attached
+([releases](https://github.com/igalmarino/pila/releases)), to install by hand
+(`sudo apt install ./pila_*.deb`, `sudo dnf install ./pila-*.rpm`) with no updates.
+
+They install the same files as `scripts/install` in `/usr`. Each package is installed on a clean
+system and started headless before it's attached to a release, and installed again from the
+repositories once they're published. A tester reports a real session working on Debian, with
 SDDM; on Ubuntu and Fedora it hasn't been tried yet: please [report](#help-test-pila) how it goes.
 
 ### Nix and NixOS
