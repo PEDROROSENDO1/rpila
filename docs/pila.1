@@ -44,6 +44,23 @@ starts Pila as a login session: with its log in
 and a D-Bus session bus of its own (with dbus-run-session) when the system gives none.
 Login screens run it; from a TTY, run it after logging in.
 .PP
+.B pila\-bar
+is Pila's bar: on every monitor, the workspaces (a click or the wheel switches), the focused
+window's title and a clock.
+Pila starts it when the configuration's
+.B autostart
+isn't set and it's installed.
+.B pila\-bar \-\-help
+lists its options.
+.PP
+.B pila\-launcher
+is Pila's app launcher: the installed apps, searched as you type.
+Mod+D and tapping Mod open it unless the configuration's
+.B launcher
+names another (or is empty: none).
+.B pila\-launcher \-\-help
+lists its options.
+.PP
 .B pila\-report
 gathers what a bug report needs (version, system, GPU, monitors, whether the configuration is
 valid, the end of the log) into

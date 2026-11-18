@@ -10,9 +10,11 @@
 [![CI](https://github.com/igalmarino/pila/actions/workflows/ci.yml/badge.svg)](https://github.com/igalmarino/pila/actions/workflows/ci.yml)
 
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
-Windows float and overlap, with server-side title bars, like a classic desktop; panels,
-launchers, wallpapers and lock screens come from the usual Wayland tools (waybar, fuzzel,
-swaybg, swaylock, ...; [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
+Windows float and overlap, with server-side title bars, like a classic desktop. It comes with
+a bar and an app launcher of its own (`pila-bar`, `pila-launcher`, on by default); the rest
+(wallpapers, notifications, lock screens), or another bar and launcher, come from the usual
+Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
+[which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,
 fuzzel and mako, or a full desktop shell) usually run on tiling compositors such as niri or
@@ -137,7 +139,8 @@ X11 session.
 ### Try it nested first
 
 The safest first run: build it (below) and start it from your current desktop. It opens
-as a window, with a terminal inside, and nothing else on your system changes:
+as a window, and nothing else on your system changes (from a checkout the window starts empty:
+Pila's bar shows once `pila-bar` is installed):
 
 ```bash
 cargo run --release
@@ -174,7 +177,10 @@ differ between releases):
 | Void | `libseat-devel libinput-devel eudev-libudev-devel libgbm-devel libxkbcommon-devel mesa xorg-server-xwayland pkg-config` |
 | Alpine | `libseat-dev libinput-dev eudev-dev mesa-dev libxkbcommon-dev xwayland pkgconf` |
 
-Then `cargo build --release`.
+Then `cargo build --release`, and for the launcher and the bar (a cargo workspace of their own,
+in `launcher/`) `cargo build --release --manifest-path launcher/Cargo.toml`, which puts
+`pila-launcher` and `pila-bar` in `launcher/target/release`. `scripts/install` builds and
+installs all three.
 
 ### Debian, Ubuntu and Fedora
 
@@ -329,11 +335,12 @@ sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp 
 
 ### Desktop shells and tools
 
-Pila draws windows and title bars only; the rest of a desktop comes from the usual Wayland
-tools: a bar (waybar, or Pila's own `pila-bar`), launcher (fuzzel, or Pila's own `pila-launcher`), notifications (mako), wallpaper (swaybg), lock
-screen and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), all
-started from `autostart`. A full desktop shell provides all of these
-at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
+Pila draws windows and title bars, and comes with a bar (`pila-bar`, started when `autostart`
+isn't set) and a launcher (`pila-launcher`, Mod+D unless `launcher` names another). The rest of a
+desktop comes from the usual Wayland tools: notifications (mako), wallpaper (swaybg), lock screen
+and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), or another bar
+and launcher (waybar, fuzzel), started from `autostart` (which then replaces the default: list
+`pila-bar` there to keep it). A full desktop shell provides all of these at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
 turns them back on): shells that don't recognize Pila may run `wlr-randr --off` without naming an
 output, which fails.
 

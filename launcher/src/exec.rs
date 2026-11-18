@@ -15,8 +15,8 @@ Usage: pila-launcher [--terminal COMMAND]
 
 Pila's app launcher: the installed apps, searched as you type. Return or a
 click starts the one picked; Escape closes it. The first run stays in the
-background; running it again shows or hides that one. In Pila, set
-`launcher = \"pila-launcher\"` for Mod+D and tapping Mod.
+background; running it again shows or hides that one. Pila opens it on
+Mod+D and tapping Mod unless its config's `launcher` names another.
 
 Options:
   --terminal COMMAND  Run apps that ask for a terminal (Terminal=true in

@@ -9,8 +9,10 @@
 
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
-touchpad and monitors. The rest of a desktop (a bar, a launcher, notifications, a wallpaper, a
-lock screen) comes from separate programs, or from a desktop shell that has them all.
+touchpad and monitors. It comes with a bar and a launcher of its own (`pila-bar` and
+`pila-launcher`, on by default); the rest of a desktop (notifications, a wallpaper, a lock
+screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
+has them all.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -419,8 +421,8 @@ they open, bars, launchers, notifications and wallpapers, is placed by Pila the 
 programs ask.
 
 **A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
-in one program: start it from `autostart`, and point `launcher` at its launcher command so Mod+D
-opens it. If it animates its own panels, turn Pila's animations off for them with a layer rule
+in one program: start it from `autostart` (which then no longer starts Pila's bar), and point
+`launcher` at its launcher command so Mod+D opens it instead of `pila-launcher`. If it animates its own panels, turn Pila's animations off for them with a layer rule
 on their namespace:
 
 ```toml
@@ -438,7 +440,7 @@ systemd or elogind runs it; elsewhere, or to quit Pila directly, set its command
 a keyboard layout switcher) are missing until it knows Pila; Pila's own bindings still work
 (a binding to `switch-layout next` switches layouts).
 
-**With separate tools**, for example:
+**With separate tools**, for example (these replace Pila's bar and launcher):
 
 ```toml
 launcher = "fuzzel"
@@ -459,9 +461,10 @@ tapping Mod then do nothing).
 Apps that run in a terminal (`Terminal=true`, such as htop) start in kitty, or the first installed
 of the terminals Pila itself tries for `terminal` where kitty isn't; `$TERMINAL`, or
 `--terminal COMMAND` (`launcher = "pila-launcher --terminal foot"`), picks another. The first
-Mod+D starts it, and it then stays in the background, so it opens at once afterwards. Its layer surface's namespace is `pila-launcher`, for a `[[layer-rule]]`. It
-shows the icons apps install in the `hicolor` theme or `pixmaps`, not those of your icon theme.
-Input methods such as fcitx5 type into its search field.
+Mod+D starts it, and it then stays in the background, so it opens at once afterwards. Its layer
+surface's namespace is `pila-launcher`, for a `[[layer-rule]]`. It shows the icons apps install
+in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods such as fcitx5
+type into its search field.
 
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
 workspaces, the focused window's title and a clock. A click on a workspace goes to it, and the
