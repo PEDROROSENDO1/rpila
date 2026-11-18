@@ -75,7 +75,8 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   tested automatically (bare metal, looks), say so and why.
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
-  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of the terminal.
+  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (whose default is
+  `pila-bar`, where it's installed; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).

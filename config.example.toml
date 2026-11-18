@@ -18,27 +18,28 @@
 # GNOME grabs Super while Pila runs inside it).
 # mod = "super"                  # (default on a TTY; alt nested)
 
-# Mod+Return, and what starts when there's no autostart. Unset, kitty, or
-# where it isn't installed the first installed of foot, alacritty, ghostty,
-# wezterm, konsole, gnome-terminal and xterm.
+# Mod+Return. Unset, kitty, or where it isn't installed the first installed
+# of foot, alacritty, ghostty, wezterm, konsole, gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
-# Mod+D and tapping Mod alone. Unset, they do nothing. pila-launcher,
-# installed with Pila, lists the installed apps, searched as you type; apps
-# that run in a terminal start in kitty (--terminal COMMAND for another; the
-# others as for `terminal` where kitty isn't installed). Any other launcher
-# works too, such as fuzzel.
-# launcher = "pila-launcher"       # e.g.
+# Mod+D and tapping Mod alone. Unset, pila-launcher, installed with Pila:
+# the installed apps, searched as you type; apps that run in a terminal start
+# in kitty (--terminal COMMAND for another; the others as for `terminal` where
+# kitty isn't installed). Where it isn't installed, or with "", they do
+# nothing. Any other launcher works too, such as fuzzel.
+# launcher = "pila-launcher"       # default where installed
+# launcher = "fuzzel"              # e.g.
 
-# Commands run at startup instead of the terminal (`pila -c` overrides them).
-# X11 apps among them start Xwayland as they connect. Unset, the terminal.
-# pila-bar, installed with Pila, is a bar on every monitor: the workspaces
-# (a click or the wheel switches), the focused window's title and a clock
-# (--bottom for the bottom edge, --clock FORMAT as strftime writes it). Any
-# other bar works too, such as waybar.
+# Commands run at startup (`pila -c` replaces them). X11 apps among them
+# start Xwayland as they connect. Unset, pila-bar, installed with Pila (and
+# nothing where it isn't): a bar on every monitor with the workspaces (a click
+# or the wheel switches), the focused window's title and a clock (--bottom
+# for the bottom edge, --clock FORMAT as strftime writes it). Set, only what
+# it lists starts: add pila-bar to keep it, or another bar such as waybar.
+# autostart = ["pila-bar"]         # default where installed
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
-#     "pila-bar",
+#     "pila-bar --bottom",
 #     "mako",
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",

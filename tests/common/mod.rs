@@ -70,7 +70,16 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The config as written: the test's, plus the defaults it doesn't set.
 fn full_config(config: &str) -> String {
-    let mut text = config.to_string();
+    // No launcher unless the test sets one: Pila's own is the default where
+    // it's installed, which depends on the machine.
+    let sets_launcher = config
+        .lines()
+        .any(|l| l.trim_start().starts_with("launcher"));
+    let mut text = if sets_launcher {
+        config.to_string()
+    } else {
+        format!("launcher = \"\"\n{config}")
+    };
     if !config.contains("[animations]") {
         text.push_str("\n[animations]\nenabled = false\n");
     }

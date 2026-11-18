@@ -1602,8 +1602,11 @@ pub struct Config {
     pub default_mod: ModKey,
     /// `None`: the first of `TERMINALS` that is installed (`terminal_command`).
     pub terminal: Option<String>,
+    /// `None`: no launcher (`launcher = ""`, or unset and `DEFAULT_LAUNCHER`
+    /// isn't installed).
     pub launcher: Option<String>,
-    /// Commands run at startup (when no `-c` is given).
+    /// Commands run at startup (when no `-c` is given; empty:
+    /// `default_startup`).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<Binding>,
@@ -1647,6 +1650,13 @@ pub struct Config {
     pub warnings: Vec<String>,
 }
 
+/// Pila's own launcher (`launcher/`): the launcher when `launcher` isn't
+/// set, where it's installed.
+pub const DEFAULT_LAUNCHER: &str = "pila-launcher";
+/// Pila's own bar (`bar/`): what starts when `autostart` isn't set, where
+/// it's installed (`Config::default_startup`).
+pub const DEFAULT_BAR: &str = "pila-bar";
+
 /// Terminals tried in order when `terminal` isn't set.
 pub const TERMINALS: &[&str] = &[
     "kitty",
@@ -1658,6 +1668,18 @@ pub const TERMINALS: &[&str] = &[
     "gnome-terminal",
     "xterm",
 ];
+
+/// The launcher when `launcher` isn't set: Pila's own where it's installed.
+fn default_launcher(installed: &dyn Fn(&str) -> bool) -> Option<String> {
+    installed(DEFAULT_LAUNCHER).then(|| DEFAULT_LAUNCHER.to_string())
+}
+
+fn default_startup_with(installed: &dyn Fn(&str) -> bool) -> Vec<String> {
+    installed(DEFAULT_BAR)
+        .then(|| DEFAULT_BAR.to_string())
+        .into_iter()
+        .collect()
+}
 
 /// Whether `program` is an executable file in a `PATH` directory.
 pub(crate) fn in_path(program: &str) -> bool {
@@ -1777,7 +1799,12 @@ impl Config {
             None => default_mod,
         };
         let terminal = env("PILA_TERMINAL").or(file.terminal);
-        let launcher = env("PILA_LAUNCHER").or(file.launcher);
+        // Unset: Pila's own where it's installed; "" for none.
+        let launcher = match env("PILA_LAUNCHER").or(file.launcher) {
+            Some(launcher) if launcher.trim().is_empty() => None,
+            Some(launcher) => Some(launcher),
+            None => default_launcher(&in_path),
+        };
 
         let workspaces = match file.workspaces {
             None => DEFAULT_WORKSPACES,
@@ -1957,6 +1984,13 @@ impl Config {
             );
         }
         found
+    }
+
+    /// What starts with the session when `autostart` isn't set and no `-c`
+    /// is given: Pila's bar where it's installed, and nothing else (the
+    /// terminal is Mod+Return's).
+    pub fn default_startup() -> Vec<String> {
+        default_startup_with(&in_path)
     }
 
     /// The `[[output]]` settings for the output called `name` showing
@@ -2195,9 +2229,29 @@ mod tests {
     }
 
     #[test]
+    fn pila_launcher_and_pila_bar_are_the_defaults_where_installed() {
+        let all = |_: &str| true;
+        let nothing = |_: &str| false;
+        assert_eq!(default_launcher(&all).as_deref(), Some("pila-launcher"));
+        assert_eq!(default_launcher(&nothing), None);
+        // Only the bar: the terminal is Mod+Return's.
+        assert_eq!(default_startup_with(&all), ["pila-bar"]);
+        assert!(default_startup_with(&nothing).is_empty());
+        // "" (or blank) is no launcher, installed or not; PILA_LAUNCHER
+        // still wins over the file.
+        for text in [r#"launcher = """#, r#"launcher = "  ""#] {
+            let config = Config::from_toml(text, &no_env).unwrap();
+            assert_eq!(config.launcher, None, "{text}");
+        }
+        let env = |name: &str| (name == "PILA_LAUNCHER").then(|| "fuzzel".to_string());
+        let config = Config::from_toml(r#"launcher = """#, &env).unwrap();
+        assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
+    }
+
+    #[test]
     fn launcher_binding_needs_a_launcher() {
         let alt = mods(false, true, false, false);
-        let none = Config::from_toml("", &no_env).unwrap();
+        let none = Config::from_toml(r#"launcher = """#, &no_env).unwrap();
         assert_eq!(none.action_for(Keysym::d, &alt), None);
         let some = Config::from_toml(r#"launcher = "fuzzel""#, &no_env).unwrap();
         assert_eq!(some.action_for(Keysym::d, &alt), Some(Action::Launcher));
@@ -2256,7 +2310,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(unbound.tap_action(Keysym::Alt_L, &alt), None);
-        let no_launcher = Config::from_toml("", &no_env).unwrap();
+        let no_launcher = Config::from_toml(r#"launcher = """#, &no_env).unwrap();
         assert_eq!(no_launcher.tap_action(Keysym::Alt_L, &alt), None);
 
         // Shift isn't a tap, and a modifier as the key of a combo is no key.

@@ -696,8 +696,10 @@ Key flows and invariants:
   opens its next popover on the same surface, and the null commit after the destroy is no
   popup's commit any more, so without it that popover's initial commit read as a hiding one
   and got no configure, while its grab held the app's input.
-- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, opt-in
-  (`launcher = "pila-launcher"`; Mod+D with no `launcher` still does nothing). A separate
+- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, the
+  launcher when `launcher` isn't set and it's on `PATH` when the config is read
+  (`config::DEFAULT_LAUNCHER`; `launcher = ""` or not installed: Mod+D does nothing and isn't
+  swallowed; the tests' harness writes `launcher = ""` unless a test sets one). A separate
   client written with iced on iced_layershell: it shares no code with Pila and reaches it only
   through Wayland, as a layer surface (Overlay, no anchor so Pila centers it, exclusive
   keyboard, namespace `pila-launcher`). A cargo workspace of its own with its own `Cargo.lock`:
@@ -719,8 +721,9 @@ Key flows and invariants:
   a thread. iced_layershell speaks text-input-v3, so input
   methods type into the search field. Its pure parts have unit tests in the crate;
   `scripts/apps launcher` drives the real thing on a headless Pila.
-- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, opt-in (started from
-  `autostart`): the workspaces, the focused window's title and a clock. Like the launcher, a
+- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, what starts when there's no
+  `-c` and no `autostart` and it's installed (`Config::default_startup`, `config::DEFAULT_BAR`;
+  no terminal starts by itself; not on the headless backend, whose tests start their own clients): the workspaces, the focused window's title and a clock. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same

@@ -82,9 +82,9 @@ A short report helps even if everything works:
   an edge or corner; moving, resizing and centering from the keyboard; minimize; showing the
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
   between monitors; switching by recent use (Mod+Tab, Alt+Tab); tapping Mod alone opens the
-  launcher, your own or Pila's (`pila-launcher`, opt-in: the installed apps, searched as you
-  type); a bar of Pila's own (`pila-bar`, opt-in: workspaces, the focused window's title and a
-  clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
+  launcher, your own or Pila's (`pila-launcher`, the default: the installed apps, searched as
+  you type); a bar of Pila's own (`pila-bar`, started by default: workspaces, the focused
+  window's title and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).

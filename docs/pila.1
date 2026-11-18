@@ -66,7 +66,9 @@ Run the shell command
 .I CMD
 at startup, instead of the configuration's
 .B autostart
-(which defaults to the terminal).
+(which defaults to
+.BR pila-bar ,
+where it's installed).
 .TP
 .BR \-\-config " " \fIFILE\fR
 Read the configuration from
@@ -147,9 +149,9 @@ configuration's own.
 Open a terminal.
 .TP
 .B Mod+D
-Open the launcher, if one is configured (such as
+Open the launcher: the configured one, else
 .BR pila-launcher ,
-installed with Pila).
+installed with Pila (nothing where it isn't).
 .TP
 .B Mod
 Tapped alone (pressed and released with no other key, click, scroll or gesture in between):
@@ -269,7 +271,7 @@ Overrides the configuration's
 .BR mod .
 .TP
 .B PILA_TERMINAL
-The terminal for Mod+Return and startup.
+The terminal for Mod+Return.
 Overrides
 .BR terminal .
 .TP

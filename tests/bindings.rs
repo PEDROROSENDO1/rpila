@@ -418,6 +418,42 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 }
 
 #[test]
+fn pila_launcher_is_the_launcher_where_its_installed() {
+    use std::os::unix::fs::PermissionsExt;
+    // A pila-launcher on PATH that says it ran.
+    let bin = std::env::temp_dir().join(format!("pila-launcher-bin-{}", std::process::id()));
+    std::fs::create_dir_all(&bin).unwrap();
+    let script = bin.join("pila-launcher");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\necho default > \"$XDG_RUNTIME_DIR/out\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+
+    // No config file: the one written from the example sets no launcher.
+    let mut pila = TestPila::start_with(Options {
+        default_config_path: true,
+        env: vec![("PATH".into(), path.clone())],
+        ..Options::default()
+    });
+    pila.combo("Super+d");
+    assert_eq!(pila.wait_file("out"), "default\n");
+
+    // `launcher = ""`: none, though it's installed.
+    let mut pila = TestPila::start_with(Options {
+        config: "launcher = \"\"\n".into(),
+        env: vec![("PATH".into(), path)],
+        ..Options::default()
+    });
+    pila.combo("Super+d");
+    let state = pila.settle();
+    assert_eq!(state["children"], 0);
+    let _ = std::fs::remove_dir_all(&bin);
+}
+
+#[test]
 fn mod_d_without_a_launcher_does_nothing() {
     let (mut pila, client, _, _) = one_window("");
     pila.combo("Super+d");
