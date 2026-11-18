@@ -161,7 +161,6 @@ pub fn clear_color(scene: &Scene) -> [f32; 4] {
 }
 
 /// Everything below the cursor, front to back (see `Pila::scene`).
-#[derive(Default)]
 pub struct Scene {
     /// Session locked: only `lock_surfaces` are drawn, on black.
     pub locked: bool,
@@ -196,6 +195,26 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Nothing to draw but the background, in `colors`.
+    pub fn blank(colors: Colors) -> Self {
+        Self {
+            locked: false,
+            lock_surfaces: Vec::new(),
+            upper: Vec::new(),
+            layer_ghosts: Vec::new(),
+            snap_preview: None,
+            windows: Vec::new(),
+            ghosts: Vec::new(),
+            slide: None,
+            lower: Vec::new(),
+            dnd_icon: None,
+            window_menu: None,
+            hidden_windows: Vec::new(),
+            corner_radius: 0,
+            colors,
+        }
+    }
+
     /// Whether the frame of the output at `output` may tear (`tearing.rs`):
     /// the window in front there is fullscreen over all of it and its frames
     /// may tear, plainly drawn, with nothing of Pila's over it and not locked.

@@ -75,8 +75,8 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   tested automatically (bare metal, looks), say so and why.
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
-  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (unset, nothing
-  starts, no terminal either; the config written on the first run starts `pila-bar`).
+  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default
+  `pila-bar`; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -310,11 +310,12 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
 - **Panics end the session:** past startup no `unwrap`/`expect` but on a local invariant the
   message states; `.locked()` (`sync.rs`) for a mutex, `get_or_insert` for user data, else
   `let`-`else`, logging what means something went wrong.
-- **Settings:** a new one is read when used or re-applied in `apply_config`. Keep in sync:
-  `DEFAULT_BINDINGS` and `DEFAULT_GESTURES`, the
-  defaults in `config.example.toml` (every value commented out and marked default or example,
-  but `launcher` and `autostart`, which the file a first run writes sets to Pila's own),
-  `USAGE` in `main.rs` for flags and env vars, and the user docs: `docs/MANUAL.md` (by task)
+- **Settings:** a new one is read when used or re-applied in `apply_config`. Its default is
+  written in `config.example.toml` alone, as an active line (examples stay commented out): the
+  code takes what a user's file leaves out from it (`Config::parse_with`) and has no default
+  values of its own (`need` fails without one; `every_default_comes_from_the_example` checks).
+  The same goes for the default bindings and gestures, its `[bindings]` and `[gestures]`. Keep
+  in sync: `USAGE` in `main.rs` for flags and env vars, and the user docs: `docs/MANUAL.md` (by task)
   and the man page `docs/pila.1` (tests check that both list every default binding, and the
   man page every flag and variable of `USAGE`). A feature users see gets its place in the
   manual.

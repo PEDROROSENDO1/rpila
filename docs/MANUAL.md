@@ -10,7 +10,7 @@
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
 touchpad and monitors. It comes with a bar and a launcher of its own (`pila-bar` and
-`pila-launcher`, set in the configuration Pila writes on the first run); the rest of a desktop (notifications, a wallpaper, a lock
+`pila-launcher`, on by default); the rest of a desktop (notifications, a wallpaper, a lock
 screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
 has them all.
 
@@ -61,7 +61,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | Keys | What they do |
 |---|---|
 | `Mod+Return` | Open a terminal (`terminal`, or the first one installed of kitty, foot, alacritty and others) |
-| `Mod+D` | Open the launcher (`launcher`: `pila-launcher` in the configuration written on the first run) |
+| `Mod+D` | Open the launcher (`launcher`, by default `pila-launcher`) |
 | `Mod` | Tapped alone (pressed and released with nothing else in between): open the launcher too |
 | `Mod+Tab`, `Mod+J` | Switch to the previous window; keep Mod held and press again for older ones |
 | `Mod+Shift+Tab` | The same, the other way |
@@ -359,10 +359,14 @@ screen never uses the input method: what's typed there doesn't reach it.
 ## The configuration file
 
 Pila reads `~/.config/pila/config.toml` (or `$XDG_CONFIG_HOME/pila/config.toml`). The first time
-it starts without one, it writes the example there, `config.example.toml`. Every line in it is
-commented out but two, `launcher = "pila-launcher"` and `autostart = ["pila-bar"]`, which start
-Pila's own launcher and bar. Each value says whether it's the default or an example; take the `#`
-off a line to use it.
+it starts without one, it writes the example there, `config.example.toml`, which holds Pila's
+defaults: each active (uncommented) value in it is the default, so you edit the value itself. The
+commented-out lines are examples, or settings that depend on the machine (`mod`, `terminal`, the
+keymap); take the `#` off one to use it.
+
+Pila has that file built in, and takes from it every setting your file leaves out: you can delete
+the lines you don't change, or keep a file with only your own settings. A setting written in your
+file keeps its value when a newer Pila changes the default; one you deleted gets the new default.
 
 A newer Pila doesn't touch the file you have. To compare it with the newest example, which
 packages install in `/usr/share/doc/pila` (it's also in Pila's source), or to start over:
@@ -393,7 +397,9 @@ prints what's wrong.
 ```
 
 `default-bindings = false` (at the top of the file, before any table) leaves out every default
-binding and gesture: only yours are left. That suits a scheme of your own, or Pila as the
+binding and gesture: only yours are left. The file Pila writes on the first run lists the defaults
+under its own `[bindings]` and `[gestures]`, so there they stay yours: delete the lines you don't
+want instead. That suits a scheme of your own, or Pila as the
 compositor of a login screen (greetd), where Mod+Return would otherwise open a terminal before
 anyone has logged in. Switching to another VT (Ctrl+Alt+F1 ...) isn't a binding, and stays.
 
@@ -416,8 +422,8 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); the configuration Pila writes on the first run lists its own bar, `pila-bar`, there.
-With no `autostart`, nothing starts. Everything
+Xwayland); by default its own bar, `pila-bar`, and no terminal. `autostart = []` starts
+nothing. Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
 
@@ -453,11 +459,11 @@ autostart = [
 ]
 ```
 
-**Pila's own launcher**, `pila-launcher`, installed with Pila, is the one the configuration
-Pila writes on the first run sets (`launcher = "pila-launcher"`): a search over the installed apps (their `.desktop` files) with their icons. Type to
+**Pila's own launcher**, `pila-launcher`, installed with Pila, is the default `launcher`: a
+search over the installed apps (their `.desktop` files) with their icons. Type to
 filter, then Return (or a click) starts the one selected; the arrows, Tab and Page Up/Down move
-the selection, and Escape or Mod+D again closes it. With no `launcher` (or `launcher = ""`), Mod+D
-and tapping Mod do nothing.
+the selection, and Escape or Mod+D again closes it. With `launcher = ""`, Mod+D and tapping Mod do
+nothing.
 
 Apps that run in a terminal (`Terminal=true`, such as htop) start in kitty, or the first installed
 of the terminals Pila itself tries for `terminal` where kitty isn't; `$TERMINAL`, or
@@ -470,8 +476,8 @@ type into its search field.
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
 workspaces on the left, the focused window's title in the middle and a clock on the right, in
 the colors of Pila's own title bars. A click on a workspace goes to it, and the
-wheel over the bar to the next or previous one. The configuration Pila writes on the first run
-starts it (`autostart = ["pila-bar"]`); with other programs, list it among them:
+wheel over the bar to the next or previous one. It's the default `autostart`; with other
+programs, list it among them:
 
 ```toml
 autostart = ["pila-bar --bottom", "mako"]
@@ -764,7 +770,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |
 | Stuck on a locked screen after the locker crashed | See [Locking the screen and idling](#locking-the-screen-and-idling). |
-| `Mod+D` or tapping Mod does nothing | Set `launcher` to your launcher's command, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)); a configuration written before Pila had its own doesn't set it. |
+| `Mod+D` or tapping Mod does nothing | `launcher` is `""`, or names a launcher that isn't installed: set it to one that is, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)). |
 | No bar, or no terminal, at login | Pila starts only what `autostart` lists, no terminal by itself (Mod+Return opens one): list `pila-bar` (or your bar) and any terminal you want there. |
 | An app needs Mod with the mouse wheel, which switches workspaces | `"Mod+WheelScrollDown" = "none"` and `"Mod+WheelScrollUp" = "none"` under `[bindings]` give it back (nested, Mod is Alt). |
 | Tapping Mod opens the launcher and you don't want it | `"Mod" = "none"` under `[bindings]` (nested, Mod is Alt, so tapping Alt opens it). |

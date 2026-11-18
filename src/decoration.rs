@@ -721,7 +721,13 @@ mod tests {
 
     #[test]
     fn button_glyphs_are_crisp_and_centered() {
-        let px = rasterize_button(Icon::Maximize, None, Colors::default().icon, 1, 0);
+        let px = rasterize_button(
+            Icon::Maximize,
+            None,
+            crate::config::Config::default().colors.icon,
+            1,
+            0,
+        );
         // The square's left edge (x = 13.5) lands on pixel column 13.
         assert_eq!(alpha_at(&px, 13, TITLE_BAR_HEIGHT / 2), 255);
         assert_eq!(alpha_at(&px, 12, TITLE_BAR_HEIGHT / 2), 0);
@@ -729,12 +735,18 @@ mod tests {
         assert_eq!(alpha_at(&px, BUTTON_WIDTH / 2, TITLE_BAR_HEIGHT / 2), 0);
         assert_eq!(alpha_at(&px, 0, 0), 0);
 
-        let px = rasterize_button(Icon::Close, None, Colors::default().icon, 1, 0);
+        let px = rasterize_button(
+            Icon::Close,
+            None,
+            crate::config::Config::default().colors.icon,
+            1,
+            0,
+        );
         assert!(alpha_at(&px, BUTTON_WIDTH / 2, TITLE_BAR_HEIGHT / 2) > 200); // the cross
         assert_eq!(alpha_at(&px, 0, 0), 0);
 
         // Hovered buttons fill their whole cell.
-        let colors = Colors::default();
+        let colors = crate::config::Config::default().colors;
         let px = rasterize_button(
             Icon::Close,
             Some(colors.close_hover),
@@ -747,7 +759,13 @@ mod tests {
 
     #[test]
     fn buttons_at_scale_2_have_crisp_2px_strokes() {
-        let px = rasterize_button(Icon::Maximize, None, Colors::default().icon, 2, 0);
+        let px = rasterize_button(
+            Icon::Maximize,
+            None,
+            crate::config::Config::default().colors.icon,
+            2,
+            0,
+        );
         assert_eq!(px.len() as i32, BUTTON_WIDTH * 2 * TITLE_BAR_HEIGHT * 2 * 4);
         // The left edge (logical x = 13.5, 1px wide) covers columns 26-27.
         let y = TITLE_BAR_HEIGHT;

@@ -16,8 +16,7 @@ Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headles
 
 Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
-                        config's autostart (default: nothing; the config
-                        written on the first run starts pila-bar)
+                        config's autostart (default: pila-bar)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
                         or ~/.config/pila/config.toml, written from
                         config.example.toml the first time it's missing)
@@ -41,8 +40,7 @@ Environment (overrides the config file):
   PILA_TERMINAL  Terminal for Mod+Return (default: the first
                  installed of kitty, foot, alacritty, ghostty, wezterm,
                  konsole, gnome-terminal, xterm)
-  PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (unset: both do
-                 nothing; the config written on the first run sets
+  PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (default:
                  pila-launcher)
   XCURSOR_THEME  Cursor theme when [cursor] sets none (default: default;
                  nested, only the one grown by shaking it)
@@ -290,8 +288,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BackendKind::Winit => ModKey::Alt,
         BackendKind::Udev | BackendKind::Headless => ModKey::Super,
     };
-    // No `--config` and no file yet: start the user's from the example (all
-    // commented out, so nothing changes). A path given by hand may be a typo.
+    // No `--config` and no file yet: start the user's from the example (the
+    // defaults, so nothing changes). A path given by hand may be a typo.
     if config_path.is_none() {
         if let Some(path) = Config::default_path() {
             match config::create_default_file(&path) {

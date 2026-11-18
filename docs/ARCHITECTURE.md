@@ -43,10 +43,19 @@ Key flows and invariants:
   re-run. A new setting must either be read when used or be re-applied there. A valid file
   with a mistake Pila can tell (an `[[output]]` named twice: `Config::output` takes the first)
   carries it in `Config::warnings`: `--check-config` prints it, startup and a reload notify it
-  (a reload "with a warning", for as long as an error). Keep in
-  sync: `DEFAULT_BINDINGS` and `DEFAULT_GESTURES` (both left out, with the workspace digits,
-  by `default-bindings = false`) and the defaults listed in
-  `config.example.toml` (the actions, `NAMED_ACTIONS` and `ACTIONS_WITH_ARGUMENT`, checked against its list); the `USAGE` string in `main.rs` with the
+  (a reload "with a warning", for as long as an error). The defaults
+  are `config.example.toml`'s active values (`config::EXAMPLE`, built in) and nowhere in the
+  code: `Config::parse_with` parses the user's file and the example into the same all-optional
+  structs (`ConfigFile`), so errors point at the user's lines, and fills each setting the user's
+  leaves out from the example's (`or_example!`; an animation's `true` is the example's
+  duration); one neither sets is an error (`config::need`), which
+  `every_default_comes_from_the_example` checks happens for each one. Only what depends on the
+  machine is worked out when unset (`mod`, `terminal`, the keymap; a device's libinput options
+  are libinput's). The bindings and gestures are the example's `[bindings]` and `[gestures]`,
+  then the workspace digits, then the user's (a later one for the same combo replaces an
+  earlier one); `default-bindings = false` leaves out all but the user's. Keep in
+  sync: the actions, `NAMED_ACTIONS` and `ACTIONS_WITH_ARGUMENT`, and `config.example.toml`'s
+  list of them (checked); the `USAGE` string in `main.rs` with the
   CLI flags and env vars; and the user docs, `docs/MANUAL.md` and the man page `docs/pila.1`
   (tests check both against the default bindings and the man page against `USAGE`).
 - **Keybindings** are intercepted in the keyboard filter closure (`input.rs`), which looks
@@ -696,10 +705,9 @@ Key flows and invariants:
   opens its next popover on the same surface, and the null commit after the destroy is no
   popup's commit any more, so without it that popover's initial commit read as a hiding one
   and got no configure, while its grab held the app's input.
-- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, set
-  in `config.example.toml` (`launcher = "pila-launcher"`, one of its two uncommented lines), so the
-  file Pila writes on the first run (`config::create_default_file`) has it; Pila's code has no
-  default launcher (unset or `""`: Mod+D does nothing and isn't swallowed). A separate
+- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, the
+  default `launcher` (`config.example.toml`'s; `launcher = ""`: Mod+D does nothing and isn't
+  swallowed). A separate
   client written with iced on iced_layershell: it shares no code with Pila and reaches it only
   through Wayland, as a layer surface (Overlay, no anchor so Pila centers it, exclusive
   keyboard, namespace `pila-launcher`). A cargo workspace of its own with its own `Cargo.lock`:
@@ -726,10 +734,8 @@ Key flows and invariants:
   draws into XRGB buffers), so the launcher's corners stay square; one font and size for all
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
-- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, started from
-  `config.example.toml`'s other uncommented line (`autostart = ["pila-bar"]`), so from the file a
-  first run writes; Pila's code starts nothing by itself (no `-c` and no `autostart`: nothing, no
-  terminal either): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
+- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, the default
+  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the focused window's title in the middle (equal portions either side keep it centered) and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same

@@ -4,21 +4,25 @@
 
 - **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`
   files) with their icons, searched as you type; Return or a click starts one, Escape closes
-  it. The configuration Pila writes on the first run sets `launcher = "pila-launcher"`, so
-  Mod+D and tapping Mod open it; apps that run in a terminal start in kitty, or `--terminal`
+  it. It's the default `launcher`, so Mod+D and tapping Mod open it; apps that run in a terminal start in kitty, or `--terminal`
   names another. It stays in the background after the first use, so it opens at once; input methods
   such as fcitx5 type into it. Written with iced, rendered in software: it needs no new library,
   and the packages include it.
 - **`pila-bar`, a bar of Pila's own:** on every monitor, the workspaces (a click or the wheel
   switches), the focused window's title and a clock in your language (`--bottom`,
-  `--clock FORMAT`). The configuration Pila writes on the first run starts it
-  (`autostart = ["pila-bar"]`). Written with iced like `pila-launcher`, on
+  `--clock FORMAT`). It's the default `autostart`. Written with iced like `pila-launcher`, on
   standard protocols (ext-workspace) plus wlr-foreign-toplevel-management, so it also runs on
   other compositors; the packages include it.
 - **No terminal at login:** with no `autostart`, Pila used to open a terminal; it now starts
-  nothing (Mod+Return opens the terminal). Put your terminal in `autostart` to have it back.
-  An existing configuration file is left as it is: add `launcher = "pila-launcher"` and
-  `pila-bar` in `autostart` for Pila's own launcher and bar.
+  `pila-bar` (Mod+Return opens the terminal). Put your terminal in `autostart` to have it back.
+  With no `launcher`, Mod+D and tapping Mod now open `pila-launcher`; `launcher = ""` and
+  `autostart = []` turn them off.
+- **The defaults live in `config.example.toml`:** every default is written there, active rather
+  than commented out, and nowhere in Pila's code. Pila has the file built in and takes whatever
+  your configuration leaves out from it, so a file with only the lines you changed keeps
+  working. The configuration Pila writes on the first run is that file, so it shows every
+  default as a value to edit. Such a file keeps the values it was written with: a later
+  release's new defaults reach the settings it doesn't have, not the ones it does.
 - **`default-bindings = false`** leaves out every default binding and gesture, so only the
   config's own are left: for a scheme of one's own, or Pila as a login screen's compositor
   (greetd), where Mod+Return would otherwise open a terminal before anyone logs in. Switching

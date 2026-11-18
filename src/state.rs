@@ -742,7 +742,7 @@ impl Pila {
             return Scene {
                 locked: true,
                 lock_surfaces,
-                ..Default::default()
+                ..Scene::blank(self.config.colors)
             };
         }
         let now = self.animation_time();
@@ -792,8 +792,7 @@ impl Pila {
                 .filter_map(|window| Some(window.wl_surface()?.into_owned()))
                 .collect(),
             corner_radius: self.config.corner_radius,
-            colors: self.config.colors,
-            ..Default::default()
+            ..Scene::blank(self.config.colors)
         }
     }
 

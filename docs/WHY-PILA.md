@@ -1,7 +1,7 @@
 # What sets Pila apart
 
 Pila is a stacking Wayland compositor in Rust, on Smithay's main branch, made to host
-layer-shell desktops: its own bar and launcher (in the configuration it writes on the first run), a bar, launcher and
+layer-shell desktops: its own bar and launcher (on by default), a bar, launcher and
 notifications from separate tools, or a full desktop shell. This page
 covers its design choices and how it differs from other compositors. Features are in the
 [README](../README.md#features), usage in the [manual](MANUAL.md), and each flow and invariant
@@ -208,7 +208,7 @@ Fedora and Nix; CI builds on each of them, and apart with the oldest supported R
 
 ## Desktop details
 
-Tap Mod alone for the launcher (Pila's own in the first run's configuration), Alt+Tab and Mod+Tab by recency, three- and four-finger swipes,
+Tap Mod alone for the launcher (Pila's own unless another is set), Alt+Tab and Mod+Tab by recency, three- and four-finger swipes,
 shake to find the pointer (named cursors drawn from the theme's larger sizes), urgency shown as
 an amber title bar, a visual bell, focus returned to the previous window, short animations that
 can be turned off globally or per app.

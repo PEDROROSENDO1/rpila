@@ -47,16 +47,16 @@ Login screens run it; from a TTY, run it after logging in.
 .B pila\-bar
 is Pila's bar: on every monitor, the workspaces (a click or the wheel switches), the focused
 window's title and a clock.
-The configuration Pila writes on the first run starts it from
+It's the default
 .BR autostart .
 .B pila\-bar \-\-help
 lists its options.
 .PP
 .B pila\-launcher
 is Pila's app launcher: the installed apps, searched as you type.
-The configuration Pila writes on the first run sets it as the
+It's the default
 .B launcher
-for Mod+D and tapping Mod.
+(Mod+D and tapping Mod).
 .B pila\-launcher \-\-help
 lists its options.
 .PP
@@ -82,7 +82,7 @@ Run the shell command
 .I CMD
 at startup, instead of the configuration's
 .B autostart
-(unset, nothing; the configuration written on the first run starts
+(which defaults to
 .BR pila\-bar ).
 .TP
 .BR \-\-config " " \fIFILE\fR
@@ -340,14 +340,9 @@ The configuration. Every option is described in
 installed with the documentation by Pila's packages; the first time Pila starts without the
 file (and without
 .BR \-\-config ),
-it writes that example there, every line commented out but
-.B launcher
-and
-.BR autostart ,
-which start
-.B pila\-launcher
-and
-.BR pila\-bar .
+it writes that example there.
+Its active values are the defaults, and nowhere else: Pila has it built in and takes from it every
+setting the configuration leaves out.
 .TP
 .IR ~/.local/state/pila/pila.log " (or " $XDG_STATE_HOME/pila/pila.log )
 The log of a session started by

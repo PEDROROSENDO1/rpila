@@ -28,8 +28,9 @@ too; see [Use of AI](README.md#use-of-ai) for the terms.
   only if it's bare-metal only or puts load on rendering.
 - A bug fix starts with a test that reproduces it, seen failing (or says why it can't be
   tested: bare metal, looks); the test stays in the suite.
-- Small commits, each one building and passing the tests. Keep `config.example.toml`, the
-  user manual (`docs/MANUAL.md`), the man page (`docs/pila.1`) and the `USAGE` text in
+- Small commits, each one building and passing the tests. A setting's default goes in
+  `config.example.toml`, as an active line, and nowhere in the code (a test checks). Keep
+  `config.example.toml`, the user manual (`docs/MANUAL.md`), the man page (`docs/pila.1`) and the `USAGE` text in
   `src/main.rs` in step with new settings, bindings and flags (tests check the bindings and
   flags).
 

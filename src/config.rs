@@ -3,16 +3,21 @@
 //! `config.example.toml` for every option; it's `EXAMPLE`, which `main`
 //! writes to the default path when nothing is there (`create_default_file`).
 //!
-//! The default bindings and gestures are `DEFAULT_BINDINGS` and
-//! `DEFAULT_GESTURES` (Mod is Super on a TTY and Alt nested, unless configured;
-//! see `mod`/`PILA_MOD`), told to users in `docs/MANUAL.md` and the man page,
-//! which tests check list every one; the actions are `NAMED_ACTIONS` and
-//! `ACTIONS_WITH_ARGUMENT`, which `config.example.toml` lists (checked too).
+//! The defaults are `EXAMPLE`'s active values, and nowhere else: a setting
+//! the user's file leaves out is taken from it (`Config::parse_with`), and
+//! one neither sets is an error (`need`), not a value written here. Only what
+//! depends on the machine (`mod`, `terminal`, the keymap) is worked out here
+//! when unset. The default bindings and gestures are `EXAMPLE`'s `[bindings]`
+//! and `[gestures]`, which come before the user's (Mod is Super on a TTY and
+//! Alt nested, unless configured; see `mod`/`PILA_MOD`), told to users in
+//! `docs/MANUAL.md` and the man page, which tests check list every one; the
+//! actions are `NAMED_ACTIONS` and `ACTIONS_WITH_ARGUMENT`, which
+//! `config.example.toml` lists (checked too).
 //! The mouse bindings: Mod+left drag moves a window, Mod+right drag resizes it
 //! from the nearest corner. A binding's key may also be a mouse wheel's notch
 //! (`WheelScrollDown`, ...: `Trigger::Wheel`, run by `input.rs`).
 //!
-//! `[bindings]` in the config adds to or replaces the keyboard bindings above
+//! `[bindings]` in the config adds to or replaces the default bindings
 //! (`"Mod+Shift+Return" = "spawn kitty -e htop"`, `"Mod+J" = "none"`); the
 //! modifiers of a binding must match the pressed ones exactly. The VT switch
 //! comes from the keymap (`XF86_Switch_VT_N` keysyms), so it's handled in the
@@ -43,75 +48,11 @@ use tracing::{info, warn};
 
 use crate::snap::KEYBOARD_STEP;
 
-/// The default bindings, as config strings (so they and the user's go
-/// through the same parser).
-const DEFAULT_BINDINGS: &[(&str, &str)] = &[
-    ("Mod+Return", "terminal"),
-    ("Mod+D", "launcher"),
-    // Mod tapped alone: pressed and released with nothing in between.
-    ("Mod", "launcher"),
-    ("Mod+Tab", "cycle-focus"),
-    ("Mod+J", "cycle-focus"),
-    ("Mod+Shift+Tab", "cycle-focus-back"),
-    // What other desktops use, whatever Mod is (the same combo when it's Alt).
-    ("Alt+Tab", "cycle-focus"),
-    ("Alt+Shift+Tab", "cycle-focus-back"),
-    ("Mod+M", "maximize"),
-    ("Mod+N", "minimize"),
-    ("Mod+F", "fullscreen"),
-    ("Mod+Left", "snap-left"),
-    ("Mod+Right", "snap-right"),
-    ("Mod+Up", "maximize"),
-    ("Mod+Down", "restore"),
-    ("Mod+Shift+Left", "move-left"),
-    ("Mod+Shift+Right", "move-right"),
-    ("Mod+Shift+Up", "move-up"),
-    ("Mod+Shift+Down", "move-down"),
-    ("Mod+Ctrl+Right", "grow-width"),
-    ("Mod+Ctrl+Left", "shrink-width"),
-    ("Mod+Ctrl+Down", "grow-height"),
-    ("Mod+Ctrl+Up", "shrink-height"),
-    ("Mod+C", "center"),
-    ("Mod+T", "toggle-always-on-top"),
-    ("Mod+P", "toggle-all-workspaces"),
-    ("Mod+H", "show-desktop"),
-    ("Mod+O", "focus-output next"),
-    ("Mod+Shift+O", "move-to-output next"),
-    ("Mod+Shift+S", "spawn grim -g \"$(slurp)\" - | wl-copy"),
-    (
-        "Mod+Ctrl+S",
-        "spawn mkdir -p ~/Pictures && grim -o \"$PILA_OUTPUT\" \
-         ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png",
-    ),
-    ("Mod+Page_Down", "workspace-next"),
-    ("Mod+Page_Up", "workspace-prev"),
-    ("Mod+Shift+Page_Down", "move-to-workspace-next"),
-    ("Mod+Shift+Page_Up", "move-to-workspace-prev"),
-    ("Mod+WheelScrollDown", "workspace-next"),
-    ("Mod+WheelScrollUp", "workspace-prev"),
-    ("Mod+Shift+WheelScrollDown", "move-to-workspace-next"),
-    ("Mod+Shift+WheelScrollUp", "move-to-workspace-prev"),
-    ("Mod+Shift+Q", "close"),
-    ("Mod+Shift+E", "quit"),
-];
-
-/// The default touchpad gestures (`gestures.rs`), as config strings.
-const DEFAULT_GESTURES: &[(&str, &str)] = &[
-    ("swipe-3-left", "cycle-focus"),
-    ("swipe-3-right", "cycle-focus-back"),
-    ("swipe-3-up", "maximize"),
-    ("swipe-3-down", "restore"),
-    ("swipe-4-left", "workspace-next"),
-    ("swipe-4-right", "workspace-prev"),
-];
-
 /// The largest `corner-radius` (logical pixels). A window's corners are
 /// further limited by its size and the title bar's height (`rounded.rs`).
 pub const MAX_CORNER_RADIUS: u32 = 64;
 
-/// How many workspaces there are unless `workspaces` says otherwise, and
-/// the most it may say.
-pub const DEFAULT_WORKSPACES: usize = 4;
+/// The most workspaces `workspaces` may ask for.
 pub const MAX_WORKSPACES: usize = 32;
 
 /// Which way a swipe went (the way the fingers moved).
@@ -663,9 +604,10 @@ impl<'de> Deserialize<'de> for BindingFile {
 }
 
 /// `[keyboard]`: passed to xkbcommon, plus key repeat.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyboardConfig {
+    /// Empty when unset (the layout, variant and model depend on the
+    /// machine): xkbcommon's defaults (and `XKB_DEFAULT_*`).
     pub layout: String,
     pub variant: String,
     pub model: String,
@@ -679,18 +621,46 @@ pub struct KeyboardConfig {
     pub numlock: bool,
 }
 
-impl Default for KeyboardConfig {
-    fn default() -> Self {
-        // Empty strings: xkbcommon's defaults (and `XKB_DEFAULT_*`).
-        Self {
-            layout: String::new(),
-            variant: String::new(),
-            model: String::new(),
-            options: None,
-            repeat_delay: 200,
-            repeat_rate: 25,
-            numlock: false,
-        }
+/// `[keyboard]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct KeyboardFile {
+    layout: Option<String>,
+    variant: Option<String>,
+    model: Option<String>,
+    options: Option<String>,
+    repeat_delay: Option<i32>,
+    repeat_rate: Option<i32>,
+    numlock: Option<bool>,
+}
+
+impl KeyboardFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            KeyboardFile {
+                layout,
+                variant,
+                model,
+                options,
+                repeat_delay,
+                repeat_rate,
+                numlock
+            }
+        )
+    }
+
+    fn validate(self) -> Result<KeyboardConfig, String> {
+        Ok(KeyboardConfig {
+            layout: self.layout.unwrap_or_default(),
+            variant: self.variant.unwrap_or_default(),
+            model: self.model.unwrap_or_default(),
+            options: self.options,
+            repeat_delay: need(self.repeat_delay, "keyboard.repeat-delay")?,
+            repeat_rate: need(self.repeat_rate, "keyboard.repeat-rate")?,
+            numlock: need(self.numlock, "keyboard.numlock")?,
+        })
     }
 }
 
@@ -762,7 +732,7 @@ pub enum ClickMethod {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PointerConfig {
-    /// Tap to click (touchpads; pila's default is on).
+    /// Tap to click (touchpads; on in `EXAMPLE`).
     pub tap: Option<bool>,
     pub natural_scroll: Option<bool>,
     /// -1 (slowest) to 1 (fastest).
@@ -776,6 +746,22 @@ pub struct PointerConfig {
 }
 
 impl PointerConfig {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            PointerConfig {
+                tap,
+                natural_scroll,
+                accel_speed,
+                accel_profile,
+                disable_while_typing,
+                click_method,
+                middle_emulation
+            }
+        )
+    }
+
     fn validate(self, section: &str) -> Result<Self, String> {
         if let Some(speed) = self.accel_speed {
             if !(-1.0..=1.0).contains(&speed) {
@@ -827,18 +813,6 @@ impl AnimationKind {
             AnimationKind::Workspace => "workspace",
         }
     }
-
-    /// Its duration in milliseconds unless configured.
-    fn default_duration(self) -> u32 {
-        match self {
-            AnimationKind::WindowOpen => 200,
-            AnimationKind::WindowClose => 180,
-            AnimationKind::Minimize => 200,
-            AnimationKind::Maximize => 220,
-            AnimationKind::Layer => 150,
-            AnimationKind::Workspace => 250,
-        }
-    }
 }
 
 /// The longest an animation may be configured to last, in milliseconds.
@@ -856,16 +830,6 @@ pub struct AnimationsConfig {
     speed: f64,
     /// `enabled`: off, everything that would animate changes at once.
     enabled: bool,
-}
-
-impl Default for AnimationsConfig {
-    fn default() -> Self {
-        Self {
-            durations: AnimationKind::ALL.map(AnimationKind::default_duration),
-            speed: 1.0,
-            enabled: true,
-        }
-    }
 }
 
 impl AnimationsConfig {
@@ -894,7 +858,7 @@ impl AnimationsConfig {
 }
 
 /// One animation's entry in `[animations]`, as written: its duration in
-/// milliseconds, or `false` (off) / `true` (the default duration).
+/// milliseconds, or `false` (off) / `true` (`EXAMPLE`'s duration).
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(
     untagged,
@@ -920,8 +884,26 @@ struct AnimationsFile {
 }
 
 impl AnimationsFile {
+    fn or_example(self, example: Self) -> Self {
+        // `true`: the example's duration.
+        let entry = |user: Option<AnimationFile>, example| match user {
+            None | Some(AnimationFile::On(true)) => example,
+            user => user,
+        };
+        AnimationsFile {
+            enabled: self.enabled.or(example.enabled),
+            speed: self.speed.or(example.speed),
+            window_open: entry(self.window_open, example.window_open),
+            window_close: entry(self.window_close, example.window_close),
+            minimize: entry(self.minimize, example.minimize),
+            maximize: entry(self.maximize, example.maximize),
+            layer: entry(self.layer, example.layer),
+            workspace: entry(self.workspace, example.workspace),
+        }
+    }
+
     fn validate(self) -> Result<AnimationsConfig, String> {
-        let speed = self.speed.unwrap_or(1.0);
+        let speed = need(self.speed, "animations.speed")?;
         if !ANIMATION_SPEEDS.contains(&speed) {
             return Err(format!(
                 "[animations] speed {speed} is outside {}..{}",
@@ -929,7 +911,7 @@ impl AnimationsFile {
                 ANIMATION_SPEEDS.end()
             ));
         }
-        let all_on = self.enabled.unwrap_or(true);
+        let all_on = need(self.enabled, "animations.enabled")?;
         let entries = [
             self.window_open,
             self.window_close,
@@ -941,11 +923,14 @@ impl AnimationsFile {
         let mut durations = [0; 6];
         for ((kind, entry), duration) in AnimationKind::ALL.iter().zip(entries).zip(&mut durations)
         {
-            let ms = match entry {
-                None | Some(AnimationFile::On(true)) => kind.default_duration(),
-                Some(AnimationFile::On(false)) => 0,
-                Some(AnimationFile::Duration(ms @ 1..=MAX_ANIMATION_MS)) => ms,
-                Some(AnimationFile::Duration(ms)) => {
+            let key = format!("animations.{}", kind.key());
+            let ms = match need(entry, &key)? {
+                AnimationFile::On(true) => {
+                    return Err(format!("{key} = true: no duration to take"))
+                }
+                AnimationFile::On(false) => 0,
+                AnimationFile::Duration(ms @ 1..=MAX_ANIMATION_MS) => ms,
+                AnimationFile::Duration(ms) => {
                     return Err(format!(
                         "[animations] {} = {ms}: a duration is 1 to {MAX_ANIMATION_MS} ms \
                          (false turns it off)",
@@ -976,24 +961,8 @@ pub struct InputConfig {
     pub wheel_binding_cooldown: u32,
 }
 
-/// `wheel-binding-cooldown` unless configured, in milliseconds.
-pub const DEFAULT_WHEEL_BINDING_COOLDOWN: u32 = 150;
 /// The longest `wheel-binding-cooldown`, in milliseconds.
 const MAX_WHEEL_BINDING_COOLDOWN: u32 = 1000;
-
-impl Default for InputConfig {
-    fn default() -> Self {
-        Self {
-            // Tap-to-click was always on; keep it unless the file says no.
-            touchpad: PointerConfig {
-                tap: Some(true),
-                ..Default::default()
-            },
-            mouse: PointerConfig::default(),
-            wheel_binding_cooldown: DEFAULT_WHEEL_BINDING_COOLDOWN,
-        }
-    }
-}
 
 /// `[[output]]`: settings for one monitor, matched by connector name
 /// (`eDP-1`, `DP-1`, `HDMI-A-1`, ...; `winit` is the nested window) or by the
@@ -1221,7 +1190,26 @@ impl OutputFile {
     }
 }
 
-/// The file's layout, before validation.
+/// `user`'s fields, each one it leaves unset taken from `example`'s.
+macro_rules! or_example {
+    ($user:expr, $example:expr, $Type:ident { $($field:ident),* $(,)? }) => {{
+        let (user, example) = ($user, $example);
+        $Type { $($field: user.$field.or(example.$field)),* }
+    }};
+}
+use or_example;
+
+/// A setting's value, which the user's file or else `EXAMPLE` sets: there are
+/// no defaults in the code, so one neither sets is an error (a test makes
+/// sure `EXAMPLE` sets every one).
+fn need<T>(value: Option<T>, key: &str) -> Result<T, String> {
+    value.ok_or_else(|| {
+        format!("{key} isn't set, and the built-in config.example.toml doesn't set it either")
+    })
+}
+
+/// The file's layout, before validation: everything optional, as the user's
+/// file may leave anything out (`EXAMPLE` fills it in).
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct ConfigFile {
@@ -1229,8 +1217,8 @@ struct ConfigFile {
     mod_key: Option<String>,
     terminal: Option<String>,
     launcher: Option<String>,
-    autostart: Vec<String>,
-    keyboard: KeyboardConfig,
+    autostart: Option<Vec<String>>,
+    keyboard: KeyboardFile,
     default_bindings: Option<bool>,
     bindings: BTreeMap<String, BindingFile>,
     gestures: BTreeMap<String, String>,
@@ -1246,7 +1234,7 @@ struct ConfigFile {
     colors: ColorsFile,
     animations: AnimationsFile,
     cursor: CursorFile,
-    xwayland: XwaylandConfig,
+    xwayland: XwaylandFile,
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
     #[serde(rename = "layer-rule")]
@@ -1298,43 +1286,7 @@ pub struct Colors {
     pub snap_preview: [f32; 4],
 }
 
-impl Default for Colors {
-    fn default() -> Self {
-        // Neutral dark greys; focus is shown by the bar and icon brightness.
-        // Written as config.example.toml shows them, and made exactly as
-        // `parse_color` makes those.
-        Self {
-            bar: hex(0x2f3136, 0xff),
-            bar_inactive: hex(0x26272b, 0xff),
-            bar_urgent: hex(0x8a5712, 0xff),
-            icon: rgb(hex(0xdfe1e5, 0xff)),
-            icon_inactive: rgb(hex(0x80838a, 0xff)),
-            hover: rgb(hex(0x3f4249, 0xff)),
-            hover_icon: rgb(hex(0xf2f3f5, 0xff)),
-            close_hover: rgb(hex(0xc42b1c, 0xff)),
-            close_hover_icon: rgb(hex(0xffffff, 0xff)),
-            background: hex(0x1f2126, 0xff),
-            snap_preview: hex(0x4477cc, 0x4d),
-        }
-    }
-}
-
-/// `#rrggbbaa`, premultiplied, as `parse_color` reads it.
-fn hex(rgb: u32, alpha: u8) -> [f32; 4] {
-    let channel = |shift: u32| ((rgb >> shift) & 0xff) as f32 / 255.0;
-    let a = if alpha == 0xff {
-        1.0
-    } else {
-        alpha as f32 / 255.0
-    };
-    [channel(16) * a, channel(8) * a, channel(0) * a, a]
-}
-
-fn rgb([r, g, b, _]: [f32; 4]) -> [f32; 3] {
-    [r, g, b]
-}
-
-/// `[colors]` as written: unset ones keep `Colors`' defaults.
+/// `[colors]` as written: unset ones are `EXAMPLE`'s.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct ColorsFile {
@@ -1352,44 +1304,46 @@ struct ColorsFile {
 }
 
 impl ColorsFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            ColorsFile {
+                bar,
+                bar_inactive,
+                bar_urgent,
+                icon,
+                icon_inactive,
+                hover,
+                hover_icon,
+                close_hover,
+                close_hover_icon,
+                background,
+                snap_preview
+            }
+        )
+    }
+
     fn validate(self) -> Result<Colors, String> {
-        let defaults = Colors::default();
-        let rgba = |name: &str, text: Option<String>, default: [f32; 4], alpha: bool| {
-            text.map_or(Ok(default), |text| {
-                parse_color(&format!("colors.{name}"), &text, alpha)
-            })
+        let rgba = |name: &str, text: Option<String>, alpha: bool| {
+            let name = format!("colors.{name}");
+            parse_color(&name, &need(text, &name)?, alpha)
         };
-        let rgb = |name: &str, text: Option<String>, default: [f32; 3]| {
-            text.map_or(Ok(default), |text| {
-                parse_color(&format!("colors.{name}"), &text, false).map(|[r, g, b, _]| [r, g, b])
-            })
+        let rgb = |name: &str, text: Option<String>| {
+            rgba(name, text, false).map(|[r, g, b, _]| [r, g, b])
         };
         Ok(Colors {
-            bar: rgba("bar", self.bar, defaults.bar, false)?,
-            bar_inactive: rgba(
-                "bar-inactive",
-                self.bar_inactive,
-                defaults.bar_inactive,
-                false,
-            )?,
-            bar_urgent: rgba("bar-urgent", self.bar_urgent, defaults.bar_urgent, false)?,
-            icon: rgb("icon", self.icon, defaults.icon)?,
-            icon_inactive: rgb("icon-inactive", self.icon_inactive, defaults.icon_inactive)?,
-            hover: rgb("hover", self.hover, defaults.hover)?,
-            hover_icon: rgb("hover-icon", self.hover_icon, defaults.hover_icon)?,
-            close_hover: rgb("close-hover", self.close_hover, defaults.close_hover)?,
-            close_hover_icon: rgb(
-                "close-hover-icon",
-                self.close_hover_icon,
-                defaults.close_hover_icon,
-            )?,
-            background: rgba("background", self.background, defaults.background, false)?,
-            snap_preview: rgba(
-                "snap-preview",
-                self.snap_preview,
-                defaults.snap_preview,
-                true,
-            )?,
+            bar: rgba("bar", self.bar, false)?,
+            bar_inactive: rgba("bar-inactive", self.bar_inactive, false)?,
+            bar_urgent: rgba("bar-urgent", self.bar_urgent, false)?,
+            icon: rgb("icon", self.icon)?,
+            icon_inactive: rgb("icon-inactive", self.icon_inactive)?,
+            hover: rgb("hover", self.hover)?,
+            hover_icon: rgb("hover-icon", self.hover_icon)?,
+            close_hover: rgb("close-hover", self.close_hover)?,
+            close_hover_icon: rgb("close-hover-icon", self.close_hover_icon)?,
+            background: rgba("background", self.background, false)?,
+            snap_preview: rgba("snap-preview", self.snap_preview, true)?,
         })
     }
 }
@@ -1417,18 +1371,7 @@ pub struct CursorConfig {
 /// The cursor sizes `[cursor] size` takes, in logical pixels.
 pub const CURSOR_SIZES: std::ops::RangeInclusive<u32> = 8..=256;
 
-impl Default for CursorConfig {
-    fn default() -> Self {
-        Self {
-            shake_to_find: true,
-            shake_magnification: 3.0,
-            theme: None,
-            size: None,
-        }
-    }
-}
-
-/// `[cursor]` as written: unset ones keep `CursorConfig`'s defaults.
+/// `[cursor]` as written: unset ones are `EXAMPLE`'s.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct CursorFile {
@@ -1439,11 +1382,21 @@ struct CursorFile {
 }
 
 impl CursorFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            CursorFile {
+                shake_to_find,
+                shake_magnification,
+                theme,
+                size
+            }
+        )
+    }
+
     fn validate(self) -> Result<CursorConfig, String> {
-        let defaults = CursorConfig::default();
-        let magnification = self
-            .shake_magnification
-            .unwrap_or(defaults.shake_magnification);
+        let magnification = need(self.shake_magnification, "cursor.shake-magnification")?;
         if !SHAKE_MAGNIFICATIONS.contains(&magnification) {
             return Err(format!(
                 "cursor.shake-magnification = {magnification}: must be {} to {}",
@@ -1466,7 +1419,7 @@ impl CursorFile {
             ));
         }
         Ok(CursorConfig {
-            shake_to_find: self.shake_to_find.unwrap_or(defaults.shake_to_find),
+            shake_to_find: need(self.shake_to_find, "cursor.shake-to-find")?,
             shake_magnification: magnification,
             theme: self.theme,
             size: self.size,
@@ -1478,8 +1431,7 @@ impl CursorFile {
 pub const XWAYLAND_IDLE_TIMEOUTS: std::ops::RangeInclusive<u32> = 1..=3600;
 
 /// `[xwayland]`: how Pila runs Xwayland (`xwayland.rs`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct XwaylandConfig {
     /// X11 apps can run: an X display is reserved for them and Xwayland
     /// started when one connects. Off, nothing X is set up, and turned off
@@ -1491,24 +1443,37 @@ pub struct XwaylandConfig {
     pub idle_timeout: Option<u32>,
 }
 
-impl Default for XwaylandConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            idle_timeout: None,
-        }
-    }
+/// `[xwayland]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct XwaylandFile {
+    enabled: Option<bool>,
+    idle_timeout: Option<u32>,
 }
 
-impl XwaylandConfig {
-    fn validate(self) -> Result<Self, String> {
+impl XwaylandFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            XwaylandFile {
+                enabled,
+                idle_timeout
+            }
+        )
+    }
+
+    fn validate(self) -> Result<XwaylandConfig, String> {
         match self.idle_timeout {
             Some(seconds) if !XWAYLAND_IDLE_TIMEOUTS.contains(&seconds) => Err(format!(
                 "xwayland.idle-timeout = {seconds}: must be {} to {} seconds",
                 XWAYLAND_IDLE_TIMEOUTS.start(),
                 XWAYLAND_IDLE_TIMEOUTS.end()
             )),
-            _ => Ok(self),
+            idle_timeout => Ok(XwaylandConfig {
+                enabled: need(self.enabled, "xwayland.enabled")?,
+                idle_timeout,
+            }),
         }
     }
 }
@@ -1528,19 +1493,7 @@ pub struct ShadowConfig {
     pub inactive_color: [f32; 4],
 }
 
-impl Default for ShadowConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            size: 24,
-            offset: (0, 6),
-            color: [0.0, 0.0, 0.0, 0.4],
-            inactive_color: [0.0, 0.0, 0.0, 0.2],
-        }
-    }
-}
-
-/// `[shadow]` as written: unset ones keep `ShadowConfig`'s defaults.
+/// `[shadow]` as written: unset ones are `EXAMPLE`'s.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct ShadowFile {
@@ -1552,39 +1505,48 @@ struct ShadowFile {
 }
 
 impl ShadowFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(
+            self,
+            example,
+            ShadowFile {
+                enabled,
+                size,
+                offset,
+                color,
+                inactive_color
+            }
+        )
+    }
+
     fn validate(self) -> Result<ShadowConfig, String> {
-        let defaults = ShadowConfig::default();
-        let size = self.size.unwrap_or(defaults.size);
+        let size = need(self.size, "shadow.size")?;
         if !(0..=MAX_SHADOW).contains(&size) {
             return Err(format!("shadow.size = {size}: must be 0 to {MAX_SHADOW}"));
         }
-        let offset = self.offset.map_or(defaults.offset, |[x, y]| (x, y));
+        let [x, y] = need(self.offset, "shadow.offset")?;
+        let offset = (x, y);
         if [offset.0, offset.1].iter().any(|v| v.abs() > MAX_SHADOW) {
             return Err(format!(
                 "shadow.offset = [{}, {}]: must be -{MAX_SHADOW} to {MAX_SHADOW}",
                 offset.0, offset.1
             ));
         }
-        let color = |name: &str, text: Option<String>, default| {
-            text.map_or(Ok(default), |text| {
-                parse_color(&format!("shadow.{name}"), &text, true)
-            })
+        let color = |name: &str, text: Option<String>| {
+            let name = format!("shadow.{name}");
+            parse_color(&name, &need(text, &name)?, true)
         };
         Ok(ShadowConfig {
-            enabled: self.enabled.unwrap_or(defaults.enabled),
+            enabled: need(self.enabled, "shadow.enabled")?,
             size,
             offset,
-            color: color("color", self.color, defaults.color)?,
-            inactive_color: color(
-                "inactive-color",
-                self.inactive_color,
-                defaults.inactive_color,
-            )?,
+            color: color("color", self.color)?,
+            inactive_color: color("inactive-color", self.inactive_color)?,
         })
     }
 }
 
-/// `[input]` as written: unset sections keep `InputConfig`'s defaults.
+/// `[input]` as written: unset ones are `EXAMPLE`'s.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct InputFile {
@@ -1602,11 +1564,11 @@ pub struct Config {
     pub default_mod: ModKey,
     /// `None`: the first of `TERMINALS` that is installed (`terminal_command`).
     pub terminal: Option<String>,
-    /// `None`: no launcher (unset, or `launcher = ""`). The file Pila writes
-    /// on the first run sets `pila-launcher` (`EXAMPLE`).
+    /// `None`: no launcher (`launcher = ""`; unset, `EXAMPLE`'s
+    /// `pila-launcher`).
     pub launcher: Option<String>,
-    /// Commands run at startup (when no `-c` is given). The file Pila writes
-    /// on the first run sets `pila-bar` (`EXAMPLE`).
+    /// Commands run at startup (when no `-c` is given; unset, `EXAMPLE`'s
+    /// `pila-bar`).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<Binding>,
@@ -1619,19 +1581,19 @@ pub struct Config {
     /// Window corner radius in logical pixels; 0 is square (`rounded.rs`).
     pub corner_radius: u32,
     /// Whether monitors on the seat's other GPUs are used, drawn on the
-    /// primary and copied over (`udev/secondary.rs`). Off unless asked for:
+    /// primary and copied over (`udev/secondary.rs`). Off in `EXAMPLE`:
     /// untried on real hardware.
     pub other_gpus: bool,
     /// Whether a client's buffer that is all an output shows (a fullscreen
     /// video or game) goes to the screen as it is, with no frame of Pila's
-    /// own (`udev/draw.rs::frame_flags`). On unless turned off.
+    /// own (`udev/draw.rs::frame_flags`).
     pub direct_scanout: bool,
     /// Whether a fullscreen window that asks for it (wp-tearing-control: a
     /// game with vsync off) has its frames shown at once, torn, rather than at
-    /// the next vblank (`tearing.rs`). On unless turned off.
+    /// the next vblank (`tearing.rs`).
     pub tearing: bool,
     /// Whether a frame is drawn as close to its vblank as it safely can be,
-    /// for less latency (`udev/render_late.rs`). On unless turned off.
+    /// for less latency (`udev/render_late.rs`).
     pub render_late: bool,
     pub shadow: ShadowConfig,
     pub colors: Colors,
@@ -1680,15 +1642,16 @@ fn env_override(name: &str) -> Option<String> {
 }
 
 impl Default for Config {
+    /// `EXAMPLE` as it is.
     fn default() -> Self {
-        Self::from_toml("", &|_| None).expect("the defaults are valid")
+        Self::from_toml("", &|_| None).expect("the example is valid")
     }
 }
 
-/// `config.example.toml`: every option, all commented out but `launcher` and
-/// `autostart`, which start Pila's own launcher and bar. Pila writes it to
-/// the default path when nothing is there (`create_default_file`), so a first
-/// run has them; with no file at all, or a file of one's own, they're unset.
+/// `config.example.toml`: every option, the defaults active and the examples
+/// commented out. It's the only place the defaults are written: what a user's
+/// file leaves out is taken from it (`Config::parse_with`). Pila writes it to
+/// the default path when nothing is there (`create_default_file`).
 pub const EXAMPLE: &str = include_str!("../config.example.toml");
 
 /// Write `EXAMPLE` to `path`, creating its directories, unless something is
@@ -1775,38 +1738,70 @@ impl Config {
         env: &dyn Fn(&str) -> Option<String>,
         default_mod: ModKey,
     ) -> Result<Self, String> {
-        let file: ConfigFile = toml::from_str(text).map_err(|err| toml_error(text, &err))?;
+        Self::parse_with(text, EXAMPLE, env, default_mod)
+    }
 
-        let mod_key = match env("PILA_MOD").or(file.mod_key) {
+    /// `parse` with `example` for the defaults: every setting `text` leaves
+    /// out is `example`'s, and the bindings and gestures are `example`'s and
+    /// then `text`'s.
+    fn parse_with(
+        text: &str,
+        example: &str,
+        env: &dyn Fn(&str) -> Option<String>,
+        default_mod: ModKey,
+    ) -> Result<Self, String> {
+        let file: ConfigFile = toml::from_str(text).map_err(|err| toml_error(text, &err))?;
+        let example: ConfigFile = toml::from_str(example).map_err(|err| {
+            format!(
+                "the built-in config.example.toml: {}",
+                toml_error(example, &err)
+            )
+        })?;
+
+        let mod_key = match env("PILA_MOD").or(file.mod_key).or(example.mod_key) {
             Some(name) => ModKey::parse(&name)?,
             None => default_mod,
         };
-        let terminal = env("PILA_TERMINAL").or(file.terminal);
-        // "" (or blank) is none, as unset is.
+        let terminal = env("PILA_TERMINAL").or(file.terminal).or(example.terminal);
+        // "" (or blank) is none.
         let launcher = env("PILA_LAUNCHER")
             .or(file.launcher)
+            .or(example.launcher)
             .filter(|launcher| !launcher.trim().is_empty());
+        // Unset in both: nothing to start.
+        let autostart = file.autostart.or(example.autostart).unwrap_or_default();
 
-        let workspaces = match file.workspaces {
-            None => DEFAULT_WORKSPACES,
-            Some(n @ 1..=MAX_WORKSPACES) => n,
-            Some(n) => return Err(format!("workspaces = {n}: must be 1 to {MAX_WORKSPACES}")),
+        let workspaces = match need(file.workspaces.or(example.workspaces), "workspaces")? {
+            n @ 1..=MAX_WORKSPACES => n,
+            n => return Err(format!("workspaces = {n}: must be 1 to {MAX_WORKSPACES}")),
         };
-        let corner_radius = match file.corner_radius {
-            None => 0,
-            Some(r @ 0..=MAX_CORNER_RADIUS) => r,
-            Some(r) => {
+        let corner_radius = match need(
+            file.corner_radius.or(example.corner_radius),
+            "corner-radius",
+        )? {
+            r @ 0..=MAX_CORNER_RADIUS => r,
+            r => {
                 return Err(format!(
                     "corner-radius = {r}: must be 0 to {MAX_CORNER_RADIUS}"
                 ))
             }
         };
+        let flag = |user: Option<bool>, example: Option<bool>, key| need(user.or(example), key);
+        let other_gpus = flag(file.other_gpus, example.other_gpus, "other-gpus")?;
+        let direct_scanout = flag(
+            file.direct_scanout,
+            example.direct_scanout,
+            "direct-scanout",
+        )?;
+        let tearing = flag(file.tearing, example.tearing, "tearing")?;
+        let render_late = flag(file.render_late, example.render_late, "render-late")?;
 
-        let shadow = file.shadow.validate()?;
-        let colors = file.colors.validate()?;
-        let animations = file.animations.validate()?;
-        let cursor = file.cursor.validate()?;
-        let xwayland = file.xwayland.validate()?;
+        let keyboard = file.keyboard.or_example(example.keyboard).validate()?;
+        let shadow = file.shadow.or_example(example.shadow).validate()?;
+        let colors = file.colors.or_example(example.colors).validate()?;
+        let animations = file.animations.or_example(example.animations).validate()?;
+        let cursor = file.cursor.or_example(example.cursor).validate()?;
+        let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
         let window_rules = file
             .window_rules
             .into_iter()
@@ -1814,13 +1809,17 @@ impl Config {
             .map(|(i, rule)| rule.validate(i + 1, workspaces))
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Defaults first, then the user's: a user binding replaces a default
-        // one for the same combo, and "none" removes it. Mod+N and
-        // Mod+Shift+N only exist for the workspaces there are (up to 9), so
-        // the other digits still reach the apps. `default-bindings = false`
-        // leaves out every default, gestures included: only the user's are
-        // left (a greeter's compositor, a scheme of one's own).
-        let with_defaults = file.default_bindings.unwrap_or(true);
+        // The example's first, then the user's: a user binding replaces one
+        // of the example's for the same combo, and "none" removes it. Mod+N
+        // and Mod+Shift+N only exist for the workspaces there are (up to 9),
+        // so the other digits still reach the apps. `default-bindings =
+        // false` leaves out the example's and the digits, gestures included:
+        // only the user's are left (a greeter's compositor, a scheme of one's
+        // own).
+        let with_defaults = need(
+            file.default_bindings.or(example.default_bindings),
+            "default-bindings",
+        )?;
         let mut bindings: Vec<Binding> = Vec::new();
         let workspace_bindings: Vec<(String, String)> = (1..=workspaces.min(9))
             .flat_map(|n| {
@@ -1830,13 +1829,15 @@ impl Config {
                 ]
             })
             .collect();
-        let defaults = DEFAULT_BINDINGS.iter().map(|&(k, a)| (k, a)).chain(
-            workspace_bindings
-                .iter()
-                .map(|(k, a)| (k.as_str(), a.as_str())),
-        );
-        let defaults = defaults
-            .map(|(k, a)| (k, a, false))
+        let defaults = example
+            .bindings
+            .iter()
+            .map(|(k, b)| (k.as_str(), b.action.as_str(), b.repeat))
+            .chain(
+                workspace_bindings
+                    .iter()
+                    .map(|(k, a)| (k.as_str(), a.as_str(), false)),
+            )
             .filter(|_| with_defaults);
         let user = file
             .bindings
@@ -1865,9 +1866,10 @@ impl Config {
 
         // Same for gestures.
         let mut gestures: Vec<(Gesture, Action)> = Vec::new();
-        let defaults = DEFAULT_GESTURES
+        let defaults = example
+            .gestures
             .iter()
-            .map(|&(g, a)| (g, a))
+            .map(|(g, a)| (g.as_str(), a.as_str()))
             .filter(|_| with_defaults);
         let user = file.gestures.iter().map(|(g, a)| (g.as_str(), a.as_str()));
         for (written, action) in defaults.chain(user) {
@@ -1897,29 +1899,29 @@ impl Config {
             }
         }
 
-        let defaults = InputConfig::default();
+        // Each device's options one by one: an unset one is the example's.
+        let pointer = |user: Option<PointerConfig>, example: Option<PointerConfig>, section| {
+            let config = match (user, example) {
+                (Some(user), Some(example)) => user.or_example(example),
+                (user, example) => need(user.or(example), &format!("[input.{section}]"))?,
+            };
+            config.validate(section)
+        };
         let input = InputConfig {
-            touchpad: match file.input.touchpad {
-                // An unset `tap` keeps pila's default (on).
-                Some(touchpad) => PointerConfig {
-                    tap: touchpad.tap.or(defaults.touchpad.tap),
-                    ..touchpad
-                }
-                .validate("touchpad")?,
-                None => defaults.touchpad,
-            },
-            mouse: match file.input.mouse {
-                Some(mouse) => mouse.validate("mouse")?,
-                None => defaults.mouse,
-            },
-            wheel_binding_cooldown: match file.input.wheel_binding_cooldown {
-                Some(ms) if ms > MAX_WHEEL_BINDING_COOLDOWN => {
+            touchpad: pointer(file.input.touchpad, example.input.touchpad, "touchpad")?,
+            mouse: pointer(file.input.mouse, example.input.mouse, "mouse")?,
+            wheel_binding_cooldown: match need(
+                file.input
+                    .wheel_binding_cooldown
+                    .or(example.input.wheel_binding_cooldown),
+                "input.wheel-binding-cooldown",
+            )? {
+                ms if ms > MAX_WHEEL_BINDING_COOLDOWN => {
                     return Err(format!(
                         "[input] wheel-binding-cooldown = {ms}: it's 0 to {MAX_WHEEL_BINDING_COOLDOWN} ms"
                     ))
                 }
-                Some(ms) => ms,
-                None => defaults.wheel_binding_cooldown,
+                ms => ms,
             },
         };
 
@@ -1928,18 +1930,18 @@ impl Config {
             default_mod,
             terminal,
             launcher,
-            autostart: file.autostart,
-            keyboard: file.keyboard,
+            autostart,
+            keyboard,
             bindings,
             gestures,
             outputs,
             input,
             workspaces,
             corner_radius,
-            other_gpus: file.other_gpus.unwrap_or(false),
-            direct_scanout: file.direct_scanout.unwrap_or(true),
-            tearing: file.tearing.unwrap_or(true),
-            render_late: file.render_late.unwrap_or(true),
+            other_gpus,
+            direct_scanout,
+            tearing,
+            render_late,
             shadow,
             colors,
             animations,
@@ -2203,18 +2205,20 @@ mod tests {
     }
 
     #[test]
-    fn no_launcher_and_no_autostart_unless_set() {
-        // Pila starts neither of its own by itself: the file it writes on
-        // the first run sets them (`the_example_sets_pila_launcher_and_pila_bar`).
+    fn launcher_and_autostart_left_out_are_the_examples() {
+        // As every setting: pila-launcher and pila-bar come from
+        // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.launcher, None);
-        assert!(config.autostart.is_empty());
-        // "" (or blank) is no launcher too; PILA_LAUNCHER still wins over
-        // the file.
+        assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
+        assert_eq!(config.autostart, ["pila-bar"]);
+        // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
+        // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
             let config = Config::from_toml(text, &no_env).unwrap();
             assert_eq!(config.launcher, None, "{text}");
         }
+        let config = Config::from_toml("autostart = []", &no_env).unwrap();
+        assert!(config.autostart.is_empty());
         let env = |name: &str| (name == "PILA_LAUNCHER").then(|| "fuzzel".to_string());
         let config = Config::from_toml(r#"launcher = """#, &env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
@@ -2538,11 +2542,6 @@ mod tests {
 
     #[test]
     fn wheel_binding_cooldown_is_0_to_1000_ms() {
-        let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(
-            config.input.wheel_binding_cooldown,
-            DEFAULT_WHEEL_BINDING_COOLDOWN
-        );
         for ms in [0, 1000] {
             let text = format!("[input]\nwheel-binding-cooldown = {ms}");
             let config = Config::from_toml(&text, &no_env).unwrap();
@@ -2610,7 +2609,8 @@ mod tests {
         assert_eq!(config.colors.bar, [1.0, 0.0, 0.0, 1.0]);
         let alpha = 128.0 / 255.0;
         assert_eq!(config.colors.snap_preview, [alpha, 0.0, 0.0, alpha]);
-        assert_eq!(config.colors.icon, Colors::default().icon);
+        // The others are the example's.
+        assert_eq!(config.colors.icon, Config::default().colors.icon);
     }
 
     #[test]
@@ -2630,7 +2630,6 @@ mod tests {
     #[test]
     fn shadows_are_on_by_default_and_bounded() {
         let shadow = Config::from_toml("", &no_env).unwrap().shadow;
-        assert_eq!(shadow, ShadowConfig::default());
         assert!(shadow.enabled);
         assert!(Config::from_toml("[shadow]\nsize = 65", &no_env).is_err());
         assert!(Config::from_toml("[shadow]\nsize = -1", &no_env).is_err());
@@ -2681,9 +2680,7 @@ mod tests {
     #[test]
     fn shake_to_find_is_on_by_default_and_bounded() {
         let cursor = Config::from_toml("", &no_env).unwrap().cursor;
-        assert_eq!(cursor, CursorConfig::default());
         assert!(cursor.shake_to_find);
-        assert_eq!(cursor.shake_magnification, 3.0);
         let config = Config::from_toml(
             "[cursor]\nshake-to-find = false\nshake-magnification = 2.0",
             &no_env,
@@ -2833,7 +2830,8 @@ mod tests {
     fn workspaces_have_a_count_and_bindings() {
         use WorkspaceTarget::{Index, Next, Prev};
         let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.workspaces, DEFAULT_WORKSPACES);
+        // config.example.toml's four.
+        assert_eq!(config.workspaces, 4);
         let alt = mods(false, true, false, false);
         let alt_shift = mods(false, true, true, false);
         assert_eq!(
@@ -3047,8 +3045,9 @@ mod tests {
     fn the_manual_and_man_page_list_every_default_binding() {
         let manual = include_str!("../docs/MANUAL.md");
         let man = include_str!("../docs/pila.1").replace("\\-", "-");
-        let defaults = DEFAULT_BINDINGS.iter().chain(DEFAULT_GESTURES);
-        for (keys, _) in defaults {
+        let example: ConfigFile = toml::from_str(EXAMPLE).unwrap();
+        let defaults = example.bindings.keys().chain(example.gestures.keys());
+        for keys in defaults {
             assert!(
                 manual.contains(&format!("`{keys}`")),
                 "docs/MANUAL.md doesn't list the default {keys:?}"
@@ -3060,99 +3059,129 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_example_sets_pila_launcher_and_pila_bar() {
-        // Its values are all commented out, so what's active can't drift
-        // from the defaults, but the two that start Pila's own launcher and
-        // bar in the file a first run writes: only those and table headers
-        // are left, which keep an uncommented line in its table.
-        let set = [
-            r#"launcher = "pila-launcher""#,
-            r#"autostart = ["pila-bar"]"#,
-        ];
-        let example = EXAMPLE;
-        for (n, line) in example.lines().enumerate() {
-            let line = line.trim();
-            let header = line.starts_with('[') && line.ends_with(']');
-            assert!(
-                line.is_empty() || line.starts_with('#') || header || set.contains(&line),
-                "config.example.toml:{}: {line:?} isn't commented out",
-                n + 1
-            );
-        }
-        let parsed = Config::from_toml(example, &no_env).unwrap();
-        assert_eq!(parsed.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(parsed.autostart, ["pila-bar"]);
-        // And nothing else.
-        let only_those = Config::from_toml(&set.join("\n"), &no_env).unwrap();
-        assert_eq!(format!("{parsed:?}"), format!("{only_those:?}"));
+    /// `config` with its bindings and gestures in one order, for comparing
+    /// configs whose bindings came in another.
+    fn sorted(mut config: Config) -> String {
+        config.bindings.sort_by_key(|b| format!("{b:?}"));
+        config.gestures.sort_by_key(|g| format!("{g:?}"));
+        format!("{config:?}")
     }
 
     #[test]
-    fn the_example_defaults_are_the_defaults() {
-        // Each setting marked "(default)", and each one in a table whose
-        // values "are the defaults", taken alone out of its comment, leaves
-        // the config as the example sets it.
-        let example = format!("{:?}", Config::from_toml(EXAMPLE, &no_env).unwrap());
+    fn every_default_comes_from_the_example() {
+        // The code has none of its own: each active setting of the example
+        // taken out of it leaves an empty file's config without that
+        // setting, an error, rather than falling back to a value in the code.
+        // Not the bindings and gestures (taking one out takes it away), nor
+        // `launcher` and `autostart`, which may be unset (none, nothing), nor
+        // the devices' options (unset, libinput's for the device).
         let lines: Vec<&str> = EXAMPLE.lines().collect();
-        let mut all_defaults = false;
+        let mut table = String::new();
         let mut checked = 0;
         for (n, line) in lines.iter().enumerate() {
             if line.starts_with('[') {
-                // "All of them are the defaults" sits in the comment above.
-                let above: Vec<&str> = lines[..n]
-                    .iter()
-                    .rev()
-                    .map_while(|l| l.strip_prefix('#'))
-                    .collect();
-                let comment = above.iter().rev().map(|l| l.trim()).collect::<Vec<_>>();
-                all_defaults = comment.join(" ").contains("are the defaults");
+                table = line.trim_matches(['[', ']']).to_string();
                 continue;
             }
-            let Some(setting) = line.strip_prefix("# ") else {
+            let Some((key, _)) = line.split_once(" = ") else {
                 continue;
             };
-            let is_setting = setting
-                .split_once(" = ")
-                .is_some_and(|(key, _)| key.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
-            if !is_setting || !(line.contains("(default)") || all_defaults) {
+            let free = ["bindings", "gestures", "input.touchpad", "input.mouse"]
+                .contains(&table.as_str())
+                || (table.is_empty() && ["launcher", "autostart"].contains(&key));
+            if line.starts_with('#') || free {
                 continue;
             }
-            let mut text = lines.clone();
-            text[n] = setting;
-            let parsed = Config::from_toml(&text.join("\n"), &no_env)
-                .unwrap_or_else(|err| panic!("config.example.toml:{}: {err}", n + 1));
-            assert_eq!(
-                format!("{parsed:?}"),
-                example,
-                "config.example.toml:{}: {setting:?} isn't the default",
+            let mut without = lines.clone();
+            without.remove(n);
+            let err = Config::parse_with("", &without.join("\n"), &no_env, ModKey::Alt)
+                .err()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "config.example.toml:{}: without {line:?}, the code has a value of its own",
+                        n + 1
+                    )
+                });
+            let name = if table.is_empty() {
+                key.to_string()
+            } else {
+                format!("{table}.{key}")
+            };
+            assert!(
+                err.contains(&format!("{name} isn't set")) || err.contains(&format!("[{table}]")),
+                "config.example.toml:{}: {err}",
                 n + 1
             );
             checked += 1;
         }
-        // At least as many as config.example.toml marked when this was
-        // written: the lines are still found.
+        // At least as many as config.example.toml had when this was written:
+        // the lines are still found.
         assert!(checked >= 38, "only {checked} defaults found");
     }
 
     #[test]
-    fn example_defaults_uncomment_into_their_tables() {
-        // A tester took the `#` off a line of the defaults list, which then
+    fn the_example_as_ones_own_file_changes_nothing() {
+        // Pila writes it on the first run: its bindings then come twice,
+        // once as the defaults and once as the file's own, to the same end.
+        let empty = Config::from_toml("", &no_env).unwrap();
+        let example = Config::from_toml(EXAMPLE, &no_env).unwrap();
+        assert_eq!(sorted(example), sorted(empty));
+    }
+
+    #[test]
+    fn a_file_with_only_some_settings_keeps_the_examples_others() {
+        let config = Config::from_toml(
+            "workspaces = 6\n[shadow]\nsize = 10\n[input.touchpad]\nnatural-scroll = true\n[bindings]\n\"Mod+X\" = \"close\"\n",
+            &no_env,
+        )
+        .unwrap();
+        let example = Config::default();
+        assert_eq!(config.workspaces, 6);
+        assert_eq!(config.shadow.size, 10);
+        assert_eq!(config.shadow.offset, example.shadow.offset);
+        assert_eq!(config.input.touchpad.natural_scroll, Some(true));
+        assert_eq!(config.input.touchpad.tap, example.input.touchpad.tap);
+        let alt = mods(false, true, false, false);
+        assert_eq!(
+            config.action_for(Keysym::x, &alt),
+            Some(Action::CloseFocused)
+        );
+        assert_eq!(
+            config.action_for(Keysym::Return, &alt),
+            Some(Action::Terminal)
+        );
+        // `true` is the example's duration.
+        let on = Config::from_toml("[animations]\nwindow-open = true", &no_env).unwrap();
+        assert_eq!(on.animations, example.animations);
+        // default-bindings = false leaves out the example's bindings.
+        let own = Config::from_toml(
+            "default-bindings = false\n[bindings]\n\"Mod+X\" = \"close\"\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(own.bindings.len(), 1);
+        assert!(own.gestures.is_empty());
+    }
+
+    #[test]
+    fn example_lines_uncomment_into_their_tables() {
+        // A tester took the `#` off a line of the bindings' list, which then
         // sat above [bindings] and so landed in [input.mouse].
         let example = EXAMPLE;
         let uncomment = |line: &str| {
             assert!(example.contains(line), "{line:?} not in the example");
-            example.replacen(line, line.trim_start_matches('#'), 1)
+            example.replacen(line, line.trim_start_matches("# "), 1)
         };
-        let config = Config::from_toml(&uncomment(r#"#   "Mod+Shift+Q" = "close""#), &no_env)
-            .unwrap_or_else(|err| panic!("a default binding uncommented: {err}"));
+        let text = uncomment(r#"# "Mod+Shift+Return" = "spawn kitty -e htop""#);
+        let config = Config::from_toml(&text, &no_env)
+            .unwrap_or_else(|err| panic!("an example binding uncommented: {err}"));
         assert!(config
             .bindings
             .iter()
-            .any(|b| b.action == Action::CloseFocused));
-        let text = uncomment(r#"#   "swipe-3-left"  = "cycle-focus""#);
+            .any(|b| b.action == Action::Spawn("kitty -e htop".into())));
+        let text = uncomment(r#"# "swipe-4-up" = "snap-left""#);
         if let Err(err) = Config::from_toml(&text, &no_env) {
-            panic!("a default gesture uncommented: {err}");
+            panic!("an example gesture uncommented: {err}");
         }
     }
 
@@ -3217,7 +3246,7 @@ mod tests {
     fn keymaps_xkbcommon_doesnt_know_are_found() {
         let kb = |layout: &str| KeyboardConfig {
             layout: layout.into(),
-            ..KeyboardConfig::default()
+            ..Config::default().keyboard
         };
         assert_eq!(check_keymap(&kb("us")), Ok(()));
         let err = check_keymap(&kb("en")).unwrap_err();
@@ -3229,7 +3258,7 @@ mod tests {
         let kb = KeyboardConfig {
             layout: "en".into(),
             variant: "altgr-intl".into(),
-            ..KeyboardConfig::default()
+            ..Config::default().keyboard
         };
         assert_eq!(
             keymap_description(&kb),
@@ -3238,7 +3267,7 @@ mod tests {
         let kb = KeyboardConfig {
             layout: "us,es".into(),
             options: Some("grp:alt_shift_toggle".into()),
-            ..KeyboardConfig::default()
+            ..Config::default().keyboard
         };
         assert_eq!(
             keymap_description(&kb),

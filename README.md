@@ -11,8 +11,7 @@
 
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
 Windows float and overlap, with server-side title bars, like a classic desktop. It comes with
-a bar and an app launcher of its own (`pila-bar`, `pila-launcher`, set in the configuration it
-writes on the first run); the rest
+a bar and an app launcher of its own (`pila-bar`, `pila-launcher`, on by default); the rest
 (wallpapers, notifications, lock screens), or another bar and launcher, come from the usual
 Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
@@ -86,7 +85,7 @@ A short report helps even if everything works:
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
   between monitors; switching by recent use (Mod+Tab, Alt+Tab); tapping Mod alone opens the
   launcher, your own or Pila's (`pila-launcher`, the default: the installed apps, searched as
-  you type); a bar of Pila's own (`pila-bar`, in the first run's configuration: workspaces, the focused
+  you type); a bar of Pila's own (`pila-bar`, on by default: workspaces, the focused
   window's title and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; a shadow under each window (`[shadow]`); optional
@@ -336,12 +335,11 @@ sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp 
 
 ### Desktop shells and tools
 
-Pila draws windows and title bars, and comes with a bar (`pila-bar`) and a launcher
-(`pila-launcher`), which the configuration it writes on the first run sets in `autostart` and
-`launcher`. The rest of a
+Pila draws windows and title bars, and comes with a bar (`pila-bar`, the default `autostart`) and
+a launcher (`pila-launcher`, the default `launcher`). The rest of a
 desktop comes from the usual Wayland tools: notifications (mako), wallpaper (swaybg), lock screen
 and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), or another bar
-and launcher (waybar, fuzzel), started from `autostart`. A full desktop shell provides all of these at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
+and launcher (waybar, fuzzel), started from `autostart` (which then replaces the default: list `pila-bar` there to keep it). A full desktop shell provides all of these at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
 turns them back on): shells that don't recognize Pila may run `wlr-randr --off` without naming an
 output, which fails.
 

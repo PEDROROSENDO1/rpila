@@ -418,7 +418,7 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 }
 
 #[test]
-fn the_config_written_on_the_first_run_starts_pila_bar_and_opens_pila_launcher() {
+fn pila_bar_and_pila_launcher_come_from_the_example_config() {
     use std::os::unix::fs::PermissionsExt;
     // A pila-bar and a pila-launcher on PATH that say they ran.
     let bin = std::env::temp_dir().join(format!("pila-own-bin-{}", std::process::id()));
@@ -446,10 +446,22 @@ fn the_config_written_on_the_first_run_starts_pila_bar_and_opens_pila_launcher()
     pila.combo("Super+d");
     assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
 
-    // A file of one's own without them: neither, though both are installed.
+    // A file of one's own that leaves them out: the built-in example's, as
+    // every setting it leaves out.
     let mut pila = TestPila::start_with(Options {
         default_config_path: true,
         config: "# mine\n".into(),
+        env: vec![("PATH".into(), path.clone())],
+        ..Options::default()
+    });
+    assert_eq!(pila.wait_file("pila-bar"), "pila-bar\n");
+    pila.combo("Super+d");
+    assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
+
+    // `launcher = ""` and `autostart = []`: neither, though both are installed.
+    let mut pila = TestPila::start_with(Options {
+        default_config_path: true,
+        config: "launcher = \"\"\nautostart = []\n".into(),
         env: vec![("PATH".into(), path)],
         ..Options::default()
     });
