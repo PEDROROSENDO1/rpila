@@ -17,6 +17,10 @@ tearing = true
 render-late = true
 default-bindings = true
 
+[environment]
+QT_IM_MODULES = "wayland;fcitx;ibus"
+QT_QPA_PLATFORMTHEME = false
+
 [shadow]
 enabled = true
 size = 24

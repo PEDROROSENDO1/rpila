@@ -193,6 +193,11 @@ impl Pila {
         {
             self.cursor_theme = crate::cursor::CursorTheme::load(&self.config.cursor);
         }
+        // What Pila starts from now on gets it (`session_env`); on bare
+        // metal, the bus and systemd too.
+        if old.environment != self.config.environment {
+            self.export_environment();
+        }
         self.queue_redraw();
     }
 

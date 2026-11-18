@@ -1062,6 +1062,10 @@ Key flows and invariants:
   the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet
   or not; none with `[xwayland] enabled = false`), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
   and `PILA_SOCKET` (`ipc.rs`); `spawn` adds `PILA_OUTPUT`, the output under the pointer.
+  `[environment]` (`Config::environment`: set or removed, the example's then the user's) goes on
+  first, so those (`config::PILA_ENV`, which parsing leaves out of it with a warning) and
+  `[cursor]`'s `XCURSOR_*` win; Pila's own process environment isn't changed. A reload that
+  changes it exports it again (`export_environment`, below).
   Other compositors' IPC sockets and markers (`OTHER_COMPOSITORS_ENV`: `NIRI_SOCKET`,
   `SWAYSOCK`, `HYPRLAND_INSTANCE_SIGNATURE`, …) are removed, for a Pila started from inside
   another session: desktop shells pick their compositor backend by them.
@@ -1071,7 +1075,7 @@ Key flows and invariants:
   `~/.config/xdg-desktop-portal-wlr/` or `/etc/xdg` (xdpw ignores `XDG_CONFIG_DIRS`;
   `scripts/install` puts both in `/etc/xdg`). On a TTY, before the startup programs, Pila
   exports that environment to the D-Bus session bus (`export_environment`, `SESSION_ENV`, with
-  `PILA_SOCKET` for shells started as services): on the systemd
+  `PILA_SOCKET` for shells started as services, and the variables `[environment]` sets): on the systemd
   user bus (a login session) also to `systemd --user`, which starts the portals and
   pipewire there (`--systemd`); on a private bus (`scripts/tty`, `dbus-run-session`) the
   bus alone, so a test instance leaves the login session's services alone. The export

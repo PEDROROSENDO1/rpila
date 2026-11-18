@@ -1190,6 +1190,67 @@ impl OutputFile {
     }
 }
 
+/// An `[environment]` value as written: the variable's value, or `false` to
+/// remove it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(
+    untagged,
+    expecting = "a string (the variable's value), or false (to remove it)"
+)]
+enum EnvFile {
+    Set(String),
+    Remove(bool),
+}
+
+/// The variables Pila gives what it starts itself (`Pila::session_env`,
+/// `Pila::spawn`), which `[environment]` can't change: the session needs
+/// them as they are.
+pub const PILA_ENV: [&str; 6] = [
+    "WAYLAND_DISPLAY",
+    "DISPLAY",
+    "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_TYPE",
+    "PILA_SOCKET",
+    "PILA_OUTPUT",
+];
+
+/// `[environment]`, validated: each variable with its value, `None` to
+/// remove it; Pila's own (`PILA_ENV`) left out, with a warning each.
+fn environment(
+    entries: BTreeMap<String, EnvFile>,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<(String, Option<String>)>, String> {
+    let mut environment = Vec::new();
+    for (name, value) in entries {
+        if name.is_empty() || name.contains(['=', '\0']) {
+            return Err(format!(
+                "[environment] {name:?}: a variable's name can't be empty or have \"=\""
+            ));
+        }
+        let value = match value {
+            EnvFile::Set(value) if value.contains('\0') => {
+                return Err(format!("[environment] {name}: a value can't have a NUL"))
+            }
+            EnvFile::Set(value) => Some(value),
+            EnvFile::Remove(false) => None,
+            EnvFile::Remove(true) => {
+                return Err(format!(
+                    "[environment] {name} = true: a value is a string (\"true\"), or false \
+                     to remove the variable"
+                ))
+            }
+        };
+        if PILA_ENV.contains(&name.as_str()) {
+            warnings.push(format!(
+                "[environment] {name}: Pila sets it itself for what it starts; left as Pila sets it"
+            ));
+            continue;
+        }
+        environment.push((name, value));
+    }
+    Ok(environment)
+}
+
 /// `user`'s fields, each one it leaves unset taken from `example`'s.
 macro_rules! or_example {
     ($user:expr, $example:expr, $Type:ident { $($field:ident),* $(,)? }) => {{
@@ -1235,6 +1296,7 @@ struct ConfigFile {
     animations: AnimationsFile,
     cursor: CursorFile,
     xwayland: XwaylandFile,
+    environment: BTreeMap<String, EnvFile>,
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
     #[serde(rename = "layer-rule")]
@@ -1610,6 +1672,9 @@ pub struct Config {
     /// meant (an `[[output]]` named twice): shown by `--check-config` and in
     /// a notification when it's loaded.
     pub warnings: Vec<String>,
+    /// `[environment]`: variables for everything Pila starts, set (`Some`)
+    /// or removed (`None`), before Pila's own (`PILA_ENV`).
+    pub environment: Vec<(String, Option<String>)>,
 }
 
 /// Terminals tried in order when `terminal` isn't set.
@@ -1888,6 +1953,10 @@ impl Config {
             .map(OutputFile::validate)
             .collect::<Result<Vec<_>, _>>()?;
         let mut warnings = Vec::new();
+        // The example's, then the user's over them.
+        let mut entries = example.environment;
+        entries.extend(file.environment);
+        let environment = environment(entries, &mut warnings)?;
         for (i, output) in outputs.iter().enumerate() {
             // Once a name, at its second section.
             let before = outputs[..i].iter().filter(|o| o.name == output.name);
@@ -1950,6 +2019,7 @@ impl Config {
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
+            environment,
         })
     }
 
@@ -2222,6 +2292,42 @@ mod tests {
         let env = |name: &str| (name == "PILA_LAUNCHER").then(|| "fuzzel".to_string());
         let config = Config::from_toml(r#"launcher = """#, &env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
+    }
+
+    #[test]
+    fn environment_sets_removes_and_leaves_pilas_own() {
+        let config = Config::from_toml(
+            "[environment]\nLANGUAGE = \"zh_CN:zh\"\nQT_QPA_PLATFORMTHEME = false\nEMPTY = \"\"\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(
+            config.environment,
+            [
+                ("EMPTY".to_string(), Some(String::new())),
+                ("LANGUAGE".to_string(), Some("zh_CN:zh".to_string())),
+                ("QT_QPA_PLATFORMTHEME".to_string(), None),
+            ]
+        );
+        assert!(config.warnings.is_empty());
+        // None by default.
+        assert!(Config::default().environment.is_empty());
+        // Pila's own: left out, with a warning, not an error.
+        for name in PILA_ENV {
+            let text = format!("[environment]\n{name} = \"x\"\nKEPT = \"y\"\n");
+            let config = Config::from_toml(&text, &no_env).unwrap();
+            assert_eq!(
+                config.environment,
+                [("KEPT".to_string(), Some("y".to_string()))]
+            );
+            assert_eq!(config.warnings.len(), 1, "{:?}", config.warnings);
+            assert!(config.warnings[0].contains(name), "{:?}", config.warnings);
+        }
+        let err = |text: &str| Config::from_toml(text, &no_env).unwrap_err();
+        assert!(err("[environment]\n\"A=B\" = \"x\"").contains("can't be empty or have"));
+        assert!(err("[environment]\n\"\" = \"x\"").contains("can't be empty or have"));
+        assert!(err("[environment]\nA = true").contains("a value is a string"));
+        assert!(err("[environment]\nA = 3").contains("a string (the variable's value)"));
     }
 
     #[test]
@@ -3183,6 +3289,10 @@ mod tests {
         if let Err(err) = Config::from_toml(&text, &no_env) {
             panic!("an example gesture uncommented: {err}");
         }
+        let text = uncomment(r#"# LANGUAGE = "zh_CN:zh_Hans:zh"    # e.g."#);
+        let config = Config::from_toml(&text, &no_env)
+            .unwrap_or_else(|err| panic!("an example variable uncommented: {err}"));
+        assert_eq!(config.environment.len(), 1);
     }
 
     #[test]

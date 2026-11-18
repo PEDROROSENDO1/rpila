@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **`[environment]`:** environment variables for everything Pila starts (autostart, bindings, the
+  terminal and the launcher), `NAME = "value"`, or `NAME = false` to remove one Pila was started
+  with; a saved change reaches what starts from then on. On a TTY they also go to the D-Bus
+  session bus and systemd's user manager. Pila's own variables (`WAYLAND_DISPLAY`, `DISPLAY`, ...)
+  stay as Pila sets them, with a warning if the section names one.
+
 ## 0.7.0 (2026-11-18)
 
 - **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`

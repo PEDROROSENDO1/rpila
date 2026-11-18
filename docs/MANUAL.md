@@ -349,8 +349,9 @@ Apps reach it through the text-input-v3 protocol, with nothing to set up: GTK 3 
 later, foot and kitty. Don't set `GTK_IM_MODULE` or `QT_IM_MODULE`: fcitx5's own modules talk to it
 over D-Bus instead, past Pila. Chromium and
 Electron apps need `--enable-wayland-ime --wayland-text-input-version=3`. X11 apps (through
-Xwayland) use XIM, which needs `XMODIFIERS=@im=fcitx` in the session's environment: in
-`/etc/environment`, or wherever your system sets the login environment.
+Xwayland) use XIM, which needs `XMODIFIERS=@im=fcitx` in their environment: under `[environment]`
+(see [Building your desktop](#building-your-desktop)), or wherever your system sets the login
+environment.
 
 Pila's keybindings come first: a key Pila uses never reaches the input method. The candidate window
 shows below the text cursor, or above it when there's no room below, clear of your panels. The lock
@@ -426,6 +427,24 @@ Xwayland); by default its own bar, `pila-bar`, and no terminal. `autostart = []`
 nothing. Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
+
+**Environment variables** for everything Pila starts (`autostart`, bindings, the terminal and the
+launcher) go under `[environment]`; `false` removes one Pila was started with:
+
+```toml
+[environment]
+LANGUAGE = "zh_CN:zh_Hans:zh"
+XMODIFIERS = "@im=fcitx"
+QT_QPA_PLATFORMTHEME = false
+```
+
+A saved change reaches the programs started from then on. On a TTY the variables also go to the
+D-Bus session bus and, in a login session, to systemd's user manager, so the services they start
+(portals, apps started over D-Bus) get them too. The variables Pila sets itself (`WAYLAND_DISPLAY`,
+`DISPLAY`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, `PILA_SOCKET`, `PILA_OUTPUT`) stay as Pila
+sets them, with a warning if the section names one, and so do `XCURSOR_THEME` and `XCURSOR_SIZE`
+when `[cursor]` sets them. Pila itself doesn't read the section: its own settings (such as the
+keymap) are in the rest of the file.
 
 **A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
 in one program: start it from `autostart` (in place of `pila-bar`), and point

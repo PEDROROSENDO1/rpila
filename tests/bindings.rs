@@ -646,6 +646,50 @@ fn spawned_commands_get_the_session_environment() {
     }
 }
 
+/// `[environment]` reaches what Pila starts, a reload changes it for what
+/// starts next, and Pila's own variables stay Pila's.
+#[test]
+fn the_environment_section_reaches_what_pila_starts() {
+    let config = |value: &str| {
+        format!(
+            "[environment]\nLANGUAGE = \"{value}\"\nINHERITED = false\nWAYLAND_DISPLAY = \"nope\"\n\
+             [bindings]\n\"Mod+x\" = \"spawn env > $XDG_RUNTIME_DIR/env\"\n"
+        )
+    };
+    let mut pila = TestPila::start_with(Options {
+        config: config("zh_CN:zh"),
+        env: vec![("INHERITED".into(), "from the session".into())],
+        ..Options::default()
+    });
+    let env_of_x = |pila: &mut TestPila| {
+        let _ = std::fs::remove_file(pila.dir.join("env"));
+        pila.combo("Super+x");
+        let env = pila.wait_file("env");
+        move |name: &str| {
+            env.lines()
+                .find_map(|l| l.strip_prefix(&format!("{name}=")))
+                .map(str::to_string)
+        }
+    };
+    let var = env_of_x(&mut pila);
+    assert_eq!(var("LANGUAGE").as_deref(), Some("zh_CN:zh"));
+    assert_eq!(var("INHERITED"), None);
+    assert_eq!(
+        var("WAYLAND_DISPLAY").as_deref(),
+        Some(pila.display.as_str())
+    );
+    pila.wait_log("summary=\"Config warning\"");
+    assert!(pila
+        .log()
+        .contains("[environment] WAYLAND_DISPLAY: Pila sets it itself"));
+
+    pila.wait_log("watching the config for changes");
+    pila.write_config(&config("es_CR:es"));
+    pila.wait_log("summary=\"Config reloaded with a warning\"");
+    let var = env_of_x(&mut pila);
+    assert_eq!(var("LANGUAGE").as_deref(), Some("es_CR:es"));
+}
+
 /// Pila holds a descriptor or more per client, buffer and fence: it raises
 /// its own limit of open files to the hard one, and what it starts gets the
 /// limit Pila was started with (programs using `select()` break past 1024).

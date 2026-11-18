@@ -1955,8 +1955,9 @@ impl Pila {
     ///
     /// The export runs in the background (a stuck bus mustn't freeze pila);
     /// `run_pending_startup` follows when it's done or after
-    /// `EXPORT_TIMEOUT`. Returns false if nothing was started.
-    fn export_environment(&mut self) -> bool {
+    /// `EXPORT_TIMEOUT`. Returns false if nothing was started. A reload that
+    /// changes `[environment]` exports again (nothing then waits for it).
+    pub(crate) fn export_environment(&mut self) -> bool {
         if !self.backend.as_ref().is_some_and(Backend::is_session) {
             return false;
         }
@@ -1971,6 +1972,10 @@ impl Pila {
             cmd.arg("--systemd");
         }
         cmd.args(SESSION_ENV);
+        // `[environment]`'s, for what the bus and systemd start (a removed
+        // one stays as the bus has it).
+        let set = self.config.environment.iter().filter(|(_, v)| v.is_some());
+        cmd.args(set.map(|(name, _)| name));
         // The cursor `[cursor]` sets, for apps that draw their own.
         if self.config.cursor.theme.is_some() {
             cmd.arg("XCURSOR_THEME");
@@ -2033,7 +2038,9 @@ impl Pila {
     /// signal source (`main.rs`), and a blocked mask survives exec, so
     /// programs would otherwise ignore `kill` and Ctrl+C, and so would
     /// everything they start. It gets the limit of open files Pila was
-    /// started with (`raise_file_limit`).
+    /// started with (`raise_file_limit`). `[environment]` comes first, so
+    /// the variables Pila sets itself (`config::PILA_ENV`, and `[cursor]`'s)
+    /// stay as Pila sets them.
     pub(crate) fn session_env(&self, cmd: &mut Command) {
         let file_limit = STARTING_FILE_LIMIT.get().copied();
         // SAFETY: between fork and exec only async-signal-safe calls are
@@ -2056,6 +2063,12 @@ impl Pila {
         cmd.stdin(Stdio::null());
         if let Ok(stderr) = std::io::stderr().as_fd().try_clone_to_owned() {
             cmd.stdout(Stdio::from(stderr));
+        }
+        for (name, value) in &self.config.environment {
+            match value {
+                Some(value) => cmd.env(name, value),
+                None => cmd.env_remove(name),
+            };
         }
         cmd.env("WAYLAND_DISPLAY", &self.socket_name)
             .env("XDG_CURRENT_DESKTOP", DESKTOP_NAME)
