@@ -4,7 +4,7 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated for **0.6.1** (2026-11-17). Pila is alpha and a daily driver on its author's
+Last updated for **0.7.0** (2026-11-18). Pila is alpha and a daily driver on its author's
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells and tools (waybar and friends), bare metal with direct scanout, all covered by
 992 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
@@ -14,7 +14,7 @@ doesn't speak yet.
 
 Small, testable in CI, no new hardware needed.
 
-Nothing open: 0.6.1 took what was here.
+Nothing open: 0.7.0 took what was here.
 
 ## Next
 

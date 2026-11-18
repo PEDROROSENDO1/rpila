@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-18)
 
 - **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`
   files) with their icons, searched as you type; Return or a click starts one, Escape closes

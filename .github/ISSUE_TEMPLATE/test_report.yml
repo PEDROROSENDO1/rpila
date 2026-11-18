@@ -23,7 +23,7 @@ body:
     attributes:
       label: Pila version
       description: The output of `pila --version`.
-      placeholder: pila 0.6.1 (v0.6.1)
+      placeholder: pila 0.7.0 (v0.7.0)
     validations:
       required: true
   - type: dropdown
