@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The arrows step through halves and quarters:** `Mod+Left` fills the left half, then
+  `Mod+Up` or `Mod+Down` takes its top or bottom quarter, `Mod+Right` moves a quarter across,
+  and the opposite arrow comes back to the half; toward the side a window is already against
+  restores it, `Mod+Up` on a top quarter maximizes. From a window that isn't snapped the arrows
+  do what they did (halves, maximize, restore a maximized one). It's the new action
+  `snap <left|right|up|down>`; a configuration written by an earlier Pila keeps its arrows as
+  they were, and the manual shows how to get them back.
 - **A systemd session, as niri's:** with systemd, `pila-session` runs Pila as the user service
   `pila.service`, bound to `graphical-session.target`, so the user services of the graphical
   session (`WantedBy=graphical-session.target`) and the XDG autostart entries

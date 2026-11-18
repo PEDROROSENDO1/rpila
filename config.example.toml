@@ -230,9 +230,11 @@ tap = true                       # tap to click
 # the previous window; hold the modifiers and repeat for older ones),
 # cycle-focus-back, minimize (Mod+Tab brings the window back), maximize,
 # fullscreen, snap-left, snap-right, snap-top, snap-bottom, snap-top-left,
-# snap-top-right, snap-bottom-left, snap-bottom-right, restore, move-left,
-# move-right, move-up,
-# move-down, grow-width, shrink-width, grow-height, shrink-height, center,
+# snap-top-right, snap-bottom-left, snap-bottom-right,
+# snap <left|right|up|down> (one step from where the window is: a half, then a
+# quarter; toward the side it's against restores, up from a top quarter
+# maximizes), restore, move-left, move-right, move-up, move-down, grow-width,
+# shrink-width, grow-height, shrink-height, center,
 # toggle-always-on-top (above the others), toggle-all-workspaces,
 # show-desktop (minimize the workspace's windows; again, bring them back),
 # focus-output <next|prev>, move-to-output <next|prev>,
@@ -260,10 +262,10 @@ tap = true                       # tap to click
 "Mod+M" = "maximize"
 "Mod+N" = "minimize"
 "Mod+F" = "fullscreen"
-"Mod+Left" = "snap-left"           # again: restore
-"Mod+Right" = "snap-right"
-"Mod+Up" = "maximize"
-"Mod+Down" = "restore"             # undo a snap or maximize
+"Mod+Left" = "snap left"           # a half; with Mod+Up/Down a quarter
+"Mod+Right" = "snap right"
+"Mod+Up" = "snap up"               # floating: maximize
+"Mod+Down" = "snap down"           # maximized: restore
 "Mod+Shift+Left" = "move-left"     # 40 px
 "Mod+Shift+Right" = "move-right"
 "Mod+Shift+Up" = "move-up"

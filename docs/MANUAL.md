@@ -76,11 +76,12 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Tab`, `Mod+J` | Switch to the previous window; keep Mod held and press again for older ones |
 | `Mod+Shift+Tab` | The same, the other way |
 | `Alt+Tab`, `Alt+Shift+Tab` | The same as `Mod+Tab` and `Mod+Shift+Tab`, whatever Mod is |
-| `Mod+M`, `Mod+Up` | Maximize; again, restore |
+| `Mod+M` | Maximize; again, restore |
 | `Mod+N` | Minimize |
 | `Mod+F` | Fullscreen, or leave it |
-| `Mod+Left`, `Mod+Right` | Fill the left or right half of the screen; again, restore |
-| `Mod+Down` | Restore a snapped or maximized window |
+| `Mod+Left`, `Mod+Right` | Fill the left or right half of the screen (of a quarter: the other quarter beside it); toward the side the window is already against, restore |
+| `Mod+Up` | Maximize; from a half, its top quarter; from a bottom quarter, the half; from a top quarter, maximize |
+| `Mod+Down` | Restore a maximized window; from a half, its bottom quarter; from a top quarter, the half; from a bottom one, restore |
 | `Mod+Shift+Left`, `Mod+Shift+Right`, `Mod+Shift+Up`, `Mod+Shift+Down` | Move the window 40 pixels |
 | `Mod+Ctrl+Right`, `Mod+Ctrl+Down` | Make the window wider, taller |
 | `Mod+Ctrl+Left`, `Mod+Ctrl+Up` | Make it narrower, shorter |
@@ -121,18 +122,27 @@ elsewhere closes it.
 
 **Snapping.** Drag a window with the pointer at the left or right edge of a monitor to make it
 fill that half, near a corner to fill that quarter, or at the top edge to maximize it. A preview
-shows where it would go before you let go. `Mod+Left` and `Mod+Right` do the halves from the
-keyboard. The top and bottom halves are the actions `snap-top` and `snap-bottom` (handy on a
-monitor turned on its side), and the quarters `snap-top-left`, `snap-top-right`,
-`snap-bottom-left` and `snap-bottom-right`, with no default binding: `Mod+Up` maximizes and
-`Mod+Down` restores. A snapped window remembers where it was: snapping the same side again,
-`Mod+Down`, or dragging it away brings it back. To have the up and down arrows do halves
-instead (snapping the same side again still restores):
+shows where it would go before you let go.
+
+From the keyboard, the arrows with `Mod` step from where the window is (the action
+`snap <left|right|up|down>`): `Mod+Left` fills the left half, then `Mod+Up` or `Mod+Down` takes
+its top or bottom quarter, `Mod+Right` moves a quarter across to the other one, and the opposite
+arrow brings a quarter back to the half. `Mod+Up` on a top quarter, or on a window that isn't
+snapped, maximizes it; `Mod+Down` on a maximized window restores it. A snapped window remembers
+where it was: the arrow toward the side it's already against, `Mod+Down` past the bottom, the
+action `restore`, or dragging it away brings it back.
+
+Each half and quarter is also an action of its own, for bindings that go straight there:
+`snap-left`, `snap-right`, `snap-top` and `snap-bottom` (handy on a monitor turned on its side),
+`snap-top-left`, `snap-top-right`, `snap-bottom-left` and `snap-bottom-right` (snapping the same
+one again restores). For the arrows as they used to be, halves and maximize only:
 
 ```toml
 [bindings]
-"Mod+Up" = "snap-top"
-"Mod+Down" = "snap-bottom"
+"Mod+Left" = "snap-left"
+"Mod+Right" = "snap-right"
+"Mod+Up" = "maximize"
+"Mod+Down" = "restore"
 ```
 
 **Maximized and fullscreen.** `Mod+M` and `Mod+Up` maximize (the window fills the monitor, minus

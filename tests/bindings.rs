@@ -272,8 +272,8 @@ fn a_maximized_or_fullscreen_window_snaps_out_of_it() {
 }
 
 #[test]
-fn mod_down_undoes_a_snap() {
-    let (mut pila, _client, _, before) = one_window("");
+fn the_restore_action_undoes_a_snap() {
+    let (mut pila, _client, _, before) = one_window("[bindings]\n\"Mod+Down\" = \"restore\"\n");
     pila.combo("Super+Left");
     pila.wait("snapped", |s| {
         window_in(s, "a").unwrap()["geometry"]["w"] == 640
@@ -283,6 +283,109 @@ fn mod_down_undoes_a_snap() {
         window_in(s, "a").unwrap()["geometry"]["w"] == 400
     });
     assert_eq!(geometry_of(&mut pila, "a"), before);
+}
+
+/// Waits for window "a" to be snapped to `side` (`None`: not snapped) with
+/// `geometry`.
+fn wait_snapped(pila: &mut TestPila, side: Option<&str>, geometry: (i64, i64, i64, i64)) {
+    let what = format!("snapped {side:?} at {geometry:?}");
+    pila.wait(&what, |s| {
+        let w = window_in(s, "a").unwrap();
+        let snapped = match side {
+            Some(side) => w["snapped"] == side,
+            None => w["snapped"].is_null(),
+        };
+        snapped && rect(&w["geometry"]) == geometry
+    });
+}
+
+/// The arrows go from a half to a quarter and on around the corners, the
+/// way back to a half, and down past the bottom restores the old size.
+#[test]
+fn mod_arrows_compose_halves_into_quarters() {
+    let (mut pila, client, window, before) = one_window("");
+    let half_h = 400 - BAR;
+    pila.combo("Super+Left");
+    wait_snapped(&mut pila, Some("left"), (0, BAR, 640, 800 - BAR));
+    pila.combo("Super+Up");
+    wait_snapped(&mut pila, Some("top-left"), (0, BAR, 640, half_h));
+    let c = client.wait_configure(window, "tiled top-left", |c| {
+        c.has(states::TILED_LEFT) && !c.has(states::TILED_BOTTOM)
+    });
+    assert!(
+        c.has(states::TILED_TOP) && !c.has(states::TILED_RIGHT),
+        "{c:?}"
+    );
+    pila.combo("Super+Right");
+    wait_snapped(&mut pila, Some("top-right"), (640, BAR, 640, half_h));
+    pila.combo("Super+Down");
+    wait_snapped(&mut pila, Some("right"), (640, BAR, 640, 800 - BAR));
+    pila.combo("Super+Down");
+    wait_snapped(
+        &mut pila,
+        Some("bottom-right"),
+        (640, 400 + BAR, 640, half_h),
+    );
+    pila.combo("Super+Down");
+    wait_snapped(&mut pila, None, before);
+    client.wait_configure(window, "untiled", |c| {
+        !c.has(states::TILED_RIGHT) && !c.has(states::TILED_BOTTOM)
+    });
+}
+
+/// Up from a top quarter maximizes; Down from there brings back the size from
+/// before the first snap.
+#[test]
+fn mod_up_from_a_top_quarter_maximizes() {
+    let (mut pila, client, window, before) = one_window("");
+    pila.combo("Super+Right");
+    wait_snapped(&mut pila, Some("right"), (640, BAR, 640, 800 - BAR));
+    pila.combo("Super+Up");
+    wait_snapped(&mut pila, Some("top-right"), (640, BAR, 640, 400 - BAR));
+    pila.combo("Super+Up");
+    pila.wait("maximized", |s| {
+        let w = window_in(s, "a").unwrap();
+        w["maximized"] == true && w["snapped"].is_null() && w["geometry"]["w"] == 1280
+    });
+    client.wait_configure(window, "maximized", |c| c.has(states::MAXIMIZED));
+    // Up again: already as high as it goes.
+    pila.combo("Super+Up");
+    pila.stays(
+        "still maximized",
+        std::time::Duration::from_millis(200),
+        |s| rect(&window_in(s, "a").unwrap()["geometry"]) == (0, BAR, 1280, 800 - BAR),
+    );
+    pila.combo("Super+Down");
+    wait_snapped(&mut pila, None, before);
+    assert_eq!(pila.window("a")["maximized"], false);
+}
+
+/// Toward the side a quarter is already against restores it, as the same
+/// half again does.
+#[test]
+fn mod_arrow_toward_the_side_a_quarter_is_against_restores() {
+    let (mut pila, _client, _, before) = one_window("");
+    pila.combo("Super+Left");
+    wait_snapped(&mut pila, Some("left"), (0, BAR, 640, 800 - BAR));
+    pila.combo("Super+Down");
+    wait_snapped(
+        &mut pila,
+        Some("bottom-left"),
+        (0, 400 + BAR, 640, 400 - BAR),
+    );
+    pila.combo("Super+Left");
+    wait_snapped(&mut pila, None, before);
+}
+
+/// The other bindings may name the action too.
+#[test]
+fn snap_takes_a_direction() {
+    let (mut pila, _client, _, _) =
+        one_window("[bindings]\n\"Mod+h\" = \"snap left\"\n\"Mod+k\" = \"snap up\"\n");
+    pila.combo("Super+h");
+    wait_snapped(&mut pila, Some("left"), (0, BAR, 640, 800 - BAR));
+    pila.combo("Super+k");
+    wait_snapped(&mut pila, Some("top-left"), (0, BAR, 640, 400 - BAR));
 }
 
 /// Moving a snapped window with the keyboard takes it out of the snap: it

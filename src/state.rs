@@ -1880,6 +1880,11 @@ impl Pila {
             Action::SwitchLayout(target) => self.switch_layout(target),
             Action::PowerOffMonitors => self.power_off_monitors(),
             Action::PowerOnMonitors => self.power_on_monitors(),
+            Action::SnapToward(dir) => {
+                if let Some(window) = self.focused_window() {
+                    self.snap_toward(&window, dir);
+                }
+            }
             Action::Restore => {
                 if let Some(window) = self.focused_window() {
                     self.restore_window_size(&window);

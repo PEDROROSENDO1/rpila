@@ -1250,7 +1250,11 @@ Key flows and invariants:
   move/resize/center go through `apply_rect`, which also configures X11 windows.
   `Side` also names the top and bottom halves (`snap-top`, `snap-bottom`, from the keyboard
   only) and the four quarters (`snap-top-left`, ... or a drag near a corner: `edge_target`);
-  each is tiled on the edges it touches.
+  each is tiled on the edges it touches. `snap <direction>` (the default Mod+arrows,
+  `Pila::snap_toward`) takes one step from where the window is (floating, maximized,
+  fullscreen or snapped: `Placement`) on the grid of halves and quarters, the table being the
+  pure `snap::step`; its result goes through `snap_window`, `set_fill_state` or
+  `restore_window_size`, so it needs no geometry of its own.
 - **Window menu** (`window_menu.rs`): opened by a right press on Pila's title bar
   (`on_decoration_press`, at the pointer rounded down, so the pointer is inside it) or by
   `show_window_menu` (checked like a move request, `check_grab`, or with the serial of that

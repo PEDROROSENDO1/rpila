@@ -3,7 +3,8 @@
 //!
 //! A snapped window fills a half of its output's usable area (left, right, top
 //! or bottom) or a quarter (below its title bar). It remembers where it was before (`SnapState`), so
-//! snapping the same side again, Mod+Down, or dragging it away restores that.
+//! snapping the same side again, `restore`, or dragging it away restores that. The arrows
+//! (`snap <direction>`, Mod+arrows) step from a half to a quarter and around (`step`).
 //! xdg windows are told they're tiled (`TiledLeft`/`TiledRight` plus top and
 //! bottom), so client-side decorations can drop their shadows.
 //!
@@ -74,6 +75,104 @@ impl Side {
 
     fn touches_bottom(self) -> bool {
         !matches!(self, Side::Top | Side::TopLeft | Side::TopRight)
+    }
+
+    /// Which part of the width and of the height it takes.
+    fn spans(self) -> (Span, Span) {
+        let span = |start, end| match (start, end) {
+            (true, true) => Span::Whole,
+            (true, false) => Span::Start,
+            _ => Span::End,
+        };
+        (
+            span(self.touches_left(), self.touches_right()),
+            span(self.touches_top(), self.touches_bottom()),
+        )
+    }
+
+    /// The side that takes these parts; `None` for the whole output.
+    fn from_spans(h: Span, v: Span) -> Option<Side> {
+        use Span::*;
+        Some(match (h, v) {
+            (Whole, Whole) => return None,
+            (Start, Whole) => Side::Left,
+            (End, Whole) => Side::Right,
+            (Whole, Start) => Side::Top,
+            (Whole, End) => Side::Bottom,
+            (Start, Start) => Side::TopLeft,
+            (End, Start) => Side::TopRight,
+            (Start, End) => Side::BottomLeft,
+            (End, End) => Side::BottomRight,
+        })
+    }
+}
+
+/// Part of a width or height: the first half, all of it, the second half.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Span {
+    Start,
+    Whole,
+    End,
+}
+
+/// The arrow of `snap <direction>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+/// Where a window is, for `step`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    Floating,
+    Maximized,
+    Fullscreen,
+    Snapped(Side),
+}
+
+/// What `snap <direction>` does to a window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Snap(Side),
+    Maximize,
+    /// Back to the size from before the snap or maximize.
+    Restore,
+    Nothing,
+}
+
+/// One arrow's step on the grid of halves and quarters: left and right take
+/// that half of the width (keeping the top or bottom of a quarter or half),
+/// up and down go one row up or down (a half to a quarter, a quarter to a
+/// half); toward the side a window is already against restores it, up past
+/// the top maximizes and down past the bottom restores. From a floating
+/// window up maximizes, as from a maximized one down restores.
+pub fn step(from: Placement, dir: Direction) -> Step {
+    use Direction::*;
+    use Span::*;
+    let (h, v) = match (from, dir) {
+        (Placement::Snapped(side), _) => side.spans(),
+        (_, Left) => return Step::Snap(Side::Left),
+        (_, Right) => return Step::Snap(Side::Right),
+        (Placement::Floating, Up) => return Step::Maximize,
+        (Placement::Maximized, Down) => return Step::Restore,
+        _ => return Step::Nothing,
+    };
+    let to = |h, v| Side::from_spans(h, v).map_or(Step::Maximize, Step::Snap);
+    match (dir, v) {
+        (Left, _) if h == Start => Step::Restore,
+        (Left, _) => to(Start, v),
+        (Right, _) if h == End => Step::Restore,
+        (Right, _) => to(End, v),
+        (Up, Start) => Step::Maximize,
+        (Up, Whole) => to(h, Start),
+        (Up, End) => to(h, Whole),
+        (Down, End) => Step::Restore,
+        (Down, Whole) => to(h, End),
+        (Down, Start) if h == Whole => Step::Restore,
+        (Down, Start) => to(h, Whole),
     }
 }
 
@@ -298,7 +397,27 @@ impl Pila {
         Some(before)
     }
 
-    /// Mod+Down: undo a snap or a maximize.
+    /// `snap <direction>` (Mod+arrows): one `step` from where it is.
+    pub fn snap_toward(&mut self, window: &Window, dir: Direction) {
+        if self.is_locked() {
+            return;
+        }
+        let (maximized, fullscreen) = fill_state(window);
+        let from = match snapped_side(window) {
+            Some(side) => Placement::Snapped(side),
+            None if fullscreen => Placement::Fullscreen,
+            None if maximized => Placement::Maximized,
+            None => Placement::Floating,
+        };
+        match step(from, dir) {
+            Step::Snap(side) => self.snap_window(window, side),
+            Step::Maximize => self.set_fill_state(window, true, false),
+            Step::Restore => self.restore_window_size(window),
+            Step::Nothing => {}
+        }
+    }
+
+    /// The `restore` action: undo a snap or a maximize.
     pub fn restore_window_size(&mut self, window: &Window) {
         if snapped_side(window).is_some() {
             self.unsnap_window(window, None);
@@ -433,5 +552,58 @@ mod tests {
         assert_eq!(at(4479.0, 1439.0), corner(Side::BottomRight));
         // Along the bottom away from the corners: nothing.
         assert_eq!(at(3000.0, 1439.0), None);
+    }
+
+    #[test]
+    fn arrows_step_through_halves_and_quarters() {
+        use Direction::{Down, Left as L, Right as R, Up};
+        use Placement::*;
+        use Side::*;
+        use Step::{Maximize, Nothing, Restore, Snap};
+        let cases = [
+            // Floating, maximized, fullscreen: left and right take a half.
+            (Floating, [Snap(Left), Snap(Right), Maximize, Nothing]),
+            (Maximized, [Snap(Left), Snap(Right), Nothing, Restore]),
+            (Fullscreen, [Snap(Left), Snap(Right), Nothing, Nothing]),
+            // Halves.
+            (
+                Snapped(Left),
+                [Restore, Snap(Right), Snap(TopLeft), Snap(BottomLeft)],
+            ),
+            (
+                Snapped(Right),
+                [Snap(Left), Restore, Snap(TopRight), Snap(BottomRight)],
+            ),
+            (
+                Snapped(Top),
+                [Snap(TopLeft), Snap(TopRight), Maximize, Restore],
+            ),
+            (
+                Snapped(Bottom),
+                [Snap(BottomLeft), Snap(BottomRight), Maximize, Restore],
+            ),
+            // Quarters.
+            (
+                Snapped(TopLeft),
+                [Restore, Snap(TopRight), Maximize, Snap(Left)],
+            ),
+            (
+                Snapped(TopRight),
+                [Snap(TopLeft), Restore, Maximize, Snap(Right)],
+            ),
+            (
+                Snapped(BottomLeft),
+                [Restore, Snap(BottomRight), Snap(Left), Restore],
+            ),
+            (
+                Snapped(BottomRight),
+                [Snap(BottomLeft), Restore, Snap(Right), Restore],
+            ),
+        ];
+        for (from, expected) in cases {
+            for (dir, want) in [L, R, Up, Down].into_iter().zip(expected) {
+                assert_eq!(step(from, dir), want, "{from:?} {dir:?}");
+            }
+        }
     }
 }

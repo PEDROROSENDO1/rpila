@@ -46,7 +46,7 @@ use smithay::{
 };
 use tracing::{info, warn};
 
-use crate::snap::KEYBOARD_STEP;
+use crate::snap::{Direction, KEYBOARD_STEP};
 
 /// The largest `corner-radius` (logical pixels). A window's corners are
 /// further limited by its size and the title bar's height (`rounded.rs`).
@@ -295,6 +295,8 @@ pub enum Action {
     SnapTopRight,
     SnapBottomLeft,
     SnapBottomRight,
+    /// One step on the grid of halves and quarters (`snap::step`).
+    SnapToward(Direction),
     /// Undo a snap or a maximize.
     Restore,
     /// Move by (x, y) / resize by (w, h) logical pixels.
@@ -411,6 +413,16 @@ impl Action {
                 },
             };
         }
+        // "snap left", ... ("snap-left" is a named action).
+        if let Some(dir) = text.strip_prefix("snap ") {
+            return match dir.trim() {
+                "left" => Ok(Some(Action::SnapToward(Direction::Left))),
+                "right" => Ok(Some(Action::SnapToward(Direction::Right))),
+                "up" => Ok(Some(Action::SnapToward(Direction::Up))),
+                "down" => Ok(Some(Action::SnapToward(Direction::Down))),
+                other => Err(format!("snap {other:?}: must be left, right, up or down")),
+            };
+        }
         // "focus-output next", "move-to-output-prev".
         for (prefix, make) in [
             ("move-to-output", Action::MoveToOutput as fn(_) -> _),
@@ -485,6 +497,7 @@ const ACTIONS_WITH_ARGUMENT: &[&str] = &[
     "workspace <n|next|prev>",
     "move-to-workspace <n|next|prev>",
     "switch-layout <n|next|prev>",
+    "snap <left|right|up|down>",
 ];
 
 /// Every action as a config may write it, for messages.
@@ -534,6 +547,7 @@ action_examples! {
     Action::SnapTopRight => Action::SnapTopRight,
     Action::SnapBottomLeft => Action::SnapBottomLeft,
     Action::SnapBottomRight => Action::SnapBottomRight,
+    Action::SnapToward(_) => Action::SnapToward(Direction::Up),
     Action::Restore => Action::Restore,
     Action::MoveWindow(..) => Action::MoveWindow(KEYBOARD_STEP, 0),
     Action::ResizeWindow(..) => Action::ResizeWindow(KEYBOARD_STEP, 0),
@@ -2205,7 +2219,13 @@ mod tests {
         }
         assert_eq!(Action::parse("none"), Ok(None));
         let err = Action::parse("explode").unwrap_err();
-        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev> or none)"), "{err}");
+        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev>, snap <left|right|up|down> or none)"), "{err}");
+        assert_eq!(
+            Action::parse("snap up"),
+            Ok(Some(Action::SnapToward(Direction::Up)))
+        );
+        let err = Action::parse("snap sideways").unwrap_err();
+        assert!(err.contains("must be left, right, up or down"), "{err}");
     }
 
     #[test]
@@ -2295,6 +2315,42 @@ mod tests {
     }
 
     #[test]
+    fn environment_has_wayland_defaults_a_file_can_remove() {
+        let value = |config: &Config, name: &str| {
+            config
+                .environment
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, value)| value.clone())
+        };
+        let defaults = Config::default();
+        for (name, expected) in [
+            ("QT_QPA_PLATFORM", "wayland;xcb"),
+            ("ELECTRON_OZONE_PLATFORM_HINT", "auto"),
+            ("MOZ_ENABLE_WAYLAND", "1"),
+            ("_JAVA_AWT_WM_NONREPARENTING", "1"),
+        ] {
+            assert_eq!(
+                value(&defaults, name),
+                Some(Some(expected.to_string())),
+                "{name}"
+            );
+        }
+        // A file's own value wins; false removes a default.
+        let config = Config::from_toml(
+            "[environment]\nQT_QPA_PLATFORM = \"xcb\"\nMOZ_ENABLE_WAYLAND = false\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(value(&config, "QT_QPA_PLATFORM"), Some(Some("xcb".into())));
+        assert_eq!(value(&config, "MOZ_ENABLE_WAYLAND"), Some(None));
+        assert_eq!(
+            value(&config, "ELECTRON_OZONE_PLATFORM_HINT"),
+            Some(Some("auto".into()))
+        );
+    }
+
+    #[test]
     fn environment_sets_removes_and_leaves_pilas_own() {
         let config = Config::from_toml(
             "[environment]\nLANGUAGE = \"zh_CN:zh\"\nQT_QPA_PLATFORMTHEME = false\nEMPTY = \"\"\n",
@@ -2332,42 +2388,6 @@ mod tests {
         assert!(err("[environment]\n\"\" = \"x\"").contains("can't be empty or have"));
         assert!(err("[environment]\nA = true").contains("a value is a string"));
         assert!(err("[environment]\nA = 3").contains("a string (the variable's value)"));
-    }
-
-    #[test]
-    fn environment_has_wayland_defaults_a_file_can_remove() {
-        let value = |config: &Config, name: &str| {
-            config
-                .environment
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, value)| value.clone())
-        };
-        let defaults = Config::default();
-        for (name, expected) in [
-            ("QT_QPA_PLATFORM", "wayland;xcb"),
-            ("ELECTRON_OZONE_PLATFORM_HINT", "auto"),
-            ("MOZ_ENABLE_WAYLAND", "1"),
-            ("_JAVA_AWT_WM_NONREPARENTING", "1"),
-        ] {
-            assert_eq!(
-                value(&defaults, name),
-                Some(Some(expected.to_string())),
-                "{name}"
-            );
-        }
-        // A file's own value wins; false removes a default.
-        let config = Config::from_toml(
-            "[environment]\nQT_QPA_PLATFORM = \"xcb\"\nMOZ_ENABLE_WAYLAND = false\n",
-            &no_env,
-        )
-        .unwrap();
-        assert_eq!(value(&config, "QT_QPA_PLATFORM"), Some(Some("xcb".into())));
-        assert_eq!(value(&config, "MOZ_ENABLE_WAYLAND"), Some(None));
-        assert_eq!(
-            value(&config, "ELECTRON_OZONE_PLATFORM_HINT"),
-            Some(Some("auto".into()))
-        );
     }
 
     #[test]
