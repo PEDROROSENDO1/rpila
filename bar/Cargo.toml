@@ -1,0 +1,29 @@
+[package]
+name = "pila-bar"
+version = "0.6.1"
+edition = "2021"
+rust-version = "1.89"
+repository = "https://github.com/igalmarino/pila"
+description = "Pila's bar: workspaces, the focused window's title and a clock (iced, layer shell)"
+license = "GPL-3.0-or-later"
+publish = false
+# pila-launcher's workspace: its Cargo.lock and target directory.
+workspace = "../launcher"
+
+[dependencies]
+# As pila-launcher: software rendering (tiny-skia on wl_shm), no GPU set up,
+# libwayland-client loaded at runtime (`wayland-dlopen`).
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "wayland",
+    "thread-pool",
+    "crisp",
+] }
+iced_layershell = { version = "0.19.1", default-features = false }
+# The clock: the local time and strftime, in the user's LC_TIME.
+libc = "0.2"
+# The desktop's state, on a connection of its own (`desktop.rs`): versions
+# iced_layershell already brings.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

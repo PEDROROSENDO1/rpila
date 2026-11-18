@@ -65,6 +65,16 @@ with a click on a row. `fcitx5-launcher` types `nihao` into its search field thr
 as below: the candidate window is the launcher's, by its search field, and a space puts 你好
 there. Run them after changing the launcher, the layer shell or input methods.
 
+`bar` drives `pila-bar` (`run_bar`; skipped where it isn't built in `launcher/target/release`,
+or `PILA_BAR_BIN`), started by the workload: its layer surface lies along the top edge, as wide
+as the output, with its exclusive zone (the output's `usable` area) and no keyboard, and a
+maximized foot fills the rest; a click on the second workspace's button goes there, the wheel
+over the bar goes on from where a binding of Pila's left the workspace (so the bar followed
+ext-workspace) and stops at the last; an output added gets a bar of its own as wide as it, one
+removed takes its bar along with the process still running; `--bottom` puts it along the
+bottom edge. `bar.png` shows it. Run it after changing the bar, the layer shell, ext-workspace or
+foreign-toplevel.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes

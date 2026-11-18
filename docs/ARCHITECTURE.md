@@ -717,6 +717,26 @@ Key flows and invariants:
   (`exec::in_terminal`), reaped on a thread. iced_layershell speaks text-input-v3, so input
   methods type into the search field. Its pure parts have unit tests in the crate;
   `scripts/apps launcher` drives the real thing on a headless Pila.
+- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, opt-in (started from
+  `autostart`): the workspaces, the focused window's title and a clock. Like the launcher, a
+  separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
+  `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
+  tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same
+  protocols. An iced_layershell daemon in `AllScreens` mode (`ui::run`): a layer surface per
+  output (Top, anchored to the top or, with `--bottom`, the bottom edge and both sides, height
+  `ui::HEIGHT` and as much exclusive zone, no keyboard, namespace `pila-bar`), opened for each
+  output that comes and dropped with each that goes; every surface shows the same, since Pila's
+  workspaces span all outputs. The desktop comes from a Wayland connection of the bar's own on a
+  thread (`desktop::updates`): ext-workspace for the workspaces (by coordinates, hidden ones
+  left out; groups ignored) and wlr-foreign-toplevel-management for the title (the toplevel
+  with `Activated`, its app id when it has no title). `desktop::Model` applies the events as the
+  protocols say (a workspace's at the manager's `done`, a toplevel's at its own) and knows
+  nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
+  wheel (a notch, or `PIXELS_PER_STEP` of a touchpad) activates a workspace through
+  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The clock
+  (`clock::ticks`) is a thread that reads the local time each second through strftime in the
+  user's `LC_TIME` and wakes the bar only when the text changes. `scripts/apps bar` drives it on
+  a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

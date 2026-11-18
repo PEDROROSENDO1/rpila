@@ -1914,6 +1914,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
+name = "pila-bar"
+version = "0.6.1"
+dependencies = [
+ "iced",
+ "iced_layershell",
+ "libc",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "pila-launcher"
 version = "0.6.1"
 dependencies = [

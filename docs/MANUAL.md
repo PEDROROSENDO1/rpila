@@ -463,6 +463,19 @@ once afterwards. Its layer surface's namespace is `pila-launcher`, for a `[[laye
 shows the icons apps install in the `hicolor` theme or `pixmaps`, not those of your icon theme.
 Input methods such as fcitx5 type into its search field.
 
+**Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
+workspaces, the focused window's title and a clock. A click on a workspace goes to it, and the
+wheel over the bar to the next or previous one. Start it from `autostart`:
+
+```toml
+autostart = ["pila-bar"]
+```
+
+`--bottom` puts it along the bottom edge, and `--clock FORMAT` sets the clock as strftime(3)
+writes it, in your `LC_TIME` language (default `'%a %e %b  %H:%M'`; `''` leaves the clock out).
+A monitor connected later gets its bar too. Its layer surfaces' namespace is `pila-bar`, for a
+`[[layer-rule]]`. It has no tray, battery or network: for those, waybar.
+
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
 wl-clipboard (`wl-copy`, `wl-paste`), wtype, wlr-randr and wlopm (monitors), fcitx5 (input

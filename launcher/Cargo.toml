@@ -30,5 +30,8 @@ iced_layershell = { version = "0.19.1", default-features = false }
 
 # A workspace of its own, with its own Cargo.lock: iced_layershell needs a
 # winit-core beta older than the one Smithay pins, and one lock file can't
-# hold both.
+# hold both. pila-bar (../bar) shares it: one lock, one target directory, one
+# build of iced for both.
 [workspace]
+members = [".", "../bar"]
+default-members = [".", "../bar"]

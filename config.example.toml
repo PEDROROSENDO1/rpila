@@ -33,7 +33,7 @@
 # X11 apps among them start Xwayland as they connect. Unset, the terminal.
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
-#     "waybar",
+#     "waybar",                    # or pila-bar, installed with Pila
 #     "mako",
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",

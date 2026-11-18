@@ -83,7 +83,8 @@ A short report helps even if everything works:
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
   between monitors; switching by recent use (Mod+Tab, Alt+Tab); tapping Mod alone opens the
   launcher, your own or Pila's (`pila-launcher`, opt-in: the installed apps, searched as you
-  type); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
+  type); a bar of Pila's own (`pila-bar`, opt-in: workspaces, the focused window's title and a
+  clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
@@ -329,7 +330,7 @@ sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp 
 ### Desktop shells and tools
 
 Pila draws windows and title bars only; the rest of a desktop comes from the usual Wayland
-tools: a bar (waybar), launcher (fuzzel, or Pila's own `pila-launcher`), notifications (mako), wallpaper (swaybg), lock
+tools: a bar (waybar, or Pila's own `pila-bar`), launcher (fuzzel, or Pila's own `pila-launcher`), notifications (mako), wallpaper (swaybg), lock
 screen and idle (swaylock, swayidle), night light (wlsunset), clipboard (wl-clipboard), all
 started from `autostart`. A full desktop shell provides all of these
 at once. To turn screens off on idle, use `pila msg action power-off-monitors` (any input
