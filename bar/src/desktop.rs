@@ -1,6 +1,9 @@
-//! The desktop the bar shows: the workspaces (ext-workspace), followed on a
-//! Wayland connection of the bar's own, on a thread: each change the
-//! compositor finishes (`done`) reaches the bar as a new `Desktop`.
+//! The desktop the bar shows: the workspaces (ext-workspace) and the outputs,
+//! followed on an event queue of the bar's own, on a thread: each change the
+//! compositor finishes (`done`) reaches the bar as a new `Desktop`, and each
+//! output to open or close a surface on as an `outputs::Change`. The queue is
+//! on iced_layershell's connection (`ui::run` makes it), so the `WlOutput`s
+//! sent are ones the layer shell can open surfaces on.
 //!
 //! `Model` turns the protocol's events into that state; it knows nothing of
 //! Wayland (its keys are the handles), so it's tested on its own.
@@ -8,14 +11,16 @@
 use wayland_client::{
     event_created_child,
     globals::{registry_queue_init, GlobalListContents},
-    protocol::wl_registry,
-    Connection, Dispatch, QueueHandle, WEnum,
+    protocol::{wl_output, wl_registry},
+    Connection, Dispatch, Proxy, QueueHandle, WEnum,
 };
 use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_group_handle_v1::{self, ExtWorkspaceGroupHandleV1},
     ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1},
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
+
+use crate::outputs::{Change, Outputs};
 
 /// What the bar shows of the desktop. `W` names a workspace (its handle).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,16 +179,23 @@ pub enum Update {
     /// Workspaces can be switched (the compositor has ext-workspace).
     Switcher(Switcher),
     Desktop(Desktop<ExtWorkspaceHandleV1>),
+    /// An output to show the bar on, or one whose bar goes.
+    Output(Change<wl_output::WlOutput>),
 }
 
-/// The desktop's updates, from a thread with a connection of its own. It
-/// ends with the connection (the compositor gone: the bar's own goes too).
-pub fn updates() -> impl iced::futures::Stream<Item = Update> {
+/// The desktop's updates, from a thread with an event queue of its own on
+/// `connection`, for the outputs `wanted` names (all if none). It ends with
+/// the connection (the compositor gone: the bar goes too).
+pub fn updates(
+    connection: Connection,
+    wanted: Vec<String>,
+) -> impl iced::futures::Stream<Item = Update> {
     let (sender, receiver) = iced::futures::channel::mpsc::unbounded();
     let spawned = std::thread::Builder::new()
         .name("pila-bar-desktop".into())
         .spawn(move || {
-            if let Err(err) = follow(|update| sender.unbounded_send(update).is_ok()) {
+            let send = |update| sender.unbounded_send(update).is_ok();
+            if let Err(err) = follow(&connection, wanted, send) {
                 eprintln!("pila-bar: {err}");
             }
         });
@@ -195,16 +207,55 @@ pub fn updates() -> impl iced::futures::Stream<Item = Update> {
 
 struct State {
     model: Model<ExtWorkspaceHandleV1>,
+    outputs: Outputs<wl_output::WlOutput>,
+    /// What to tell the bar about the outputs, in order.
+    output_changes: Vec<Change<wl_output::WlOutput>>,
 }
 
-/// Connect, bind what's there and send each change until the connection
-/// ends or `send` says no one listens.
-fn follow(mut send: impl FnMut(Update) -> bool) -> Result<(), String> {
-    let connection =
-        Connection::connect_to_env().map_err(|err| format!("can't connect to Wayland: {err}"))?;
-    let (globals, mut queue) = registry_queue_init::<State>(&connection)
+/// The wl_output versions bound: `done` from 2, `name` from 4.
+const WL_OUTPUT: std::ops::RangeInclusive<u32> = 2..=4;
+
+/// Bind an output, its global's name as its data (for `global_remove`).
+fn bind_output(
+    state: &mut State,
+    registry: &wl_registry::WlRegistry,
+    qh: &QueueHandle<State>,
+    name: u32,
+    version: u32,
+) {
+    let version = version.min(*WL_OUTPUT.end());
+    let output = registry.bind::<wl_output::WlOutput, _, _>(name, version, qh, name);
+    state.outputs.added(output);
+}
+
+/// Bind what's there and send each change until the connection ends or
+/// `send` says no one listens.
+fn follow(
+    connection: &Connection,
+    wanted: Vec<String>,
+    mut send: impl FnMut(Update) -> bool,
+) -> Result<(), String> {
+    let (globals, mut queue) = registry_queue_init::<State>(connection)
         .map_err(|err| format!("can't list the globals: {err}"))?;
     let qh = queue.handle();
+    let mut state = State {
+        model: Model::default(),
+        outputs: Outputs::new(wanted),
+        output_changes: Vec::new(),
+    };
+    for global in globals.contents().clone_list() {
+        if global.interface == wl_output::WlOutput::interface().name
+            && global.version >= *WL_OUTPUT.start()
+        {
+            bind_output(
+                &mut state,
+                globals.registry(),
+                &qh,
+                global.name,
+                global.version,
+            );
+        }
+    }
     let workspaces = globals
         .bind::<ExtWorkspaceManagerV1, _, _>(&qh, 1..=1, ())
         .ok();
@@ -220,14 +271,16 @@ fn follow(mut send: impl FnMut(Update) -> bool) -> Result<(), String> {
             return Ok(());
         }
     }
-    let mut state = State {
-        model: Model::default(),
-    };
     let mut shown = Desktop::default();
     loop {
         queue
             .blocking_dispatch(&mut state)
             .map_err(|err| format!("lost the compositor: {err}"))?;
+        for change in state.output_changes.drain(..) {
+            if !send(Update::Output(change)) {
+                return Ok(());
+            }
+        }
         let desktop = state.model.desktop();
         if desktop != shown {
             shown = desktop.clone();
@@ -240,13 +293,61 @@ fn follow(mut send: impl FnMut(Update) -> bool) -> Result<(), String> {
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     fn event(
-        _: &mut Self,
-        _: &wl_registry::WlRegistry,
-        _: wl_registry::Event,
+        state: &mut Self,
+        registry: &wl_registry::WlRegistry,
+        event: wl_registry::Event,
         _: &GlobalListContents,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_registry::Event::Global {
+                name,
+                interface,
+                version,
+            } if interface == wl_output::WlOutput::interface().name
+                && version >= *WL_OUTPUT.start() =>
+            {
+                bind_output(state, registry, qh, name, version)
+            }
+            wl_registry::Event::GlobalRemove { name } => {
+                let output = state
+                    .outputs
+                    .keys()
+                    .find(|o| o.data::<u32>() == Some(&name))
+                    .cloned();
+                if let Some(output) = output {
+                    if let Some(change) = state.outputs.removed(&output) {
+                        state.output_changes.push(change);
+                    }
+                    if output.version() >= 3 {
+                        output.release();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<wl_output::WlOutput, u32> for State {
+    fn event(
+        state: &mut Self,
+        output: &wl_output::WlOutput,
+        event: wl_output::Event,
+        _: &u32,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        match event {
+            wl_output::Event::Name { name } => state.outputs.named(output, name),
+            wl_output::Event::Done => {
+                if let Some(change) = state.outputs.done(output) {
+                    state.output_changes.push(change);
+                }
+            }
+            _ => {}
+        }
     }
 }
 

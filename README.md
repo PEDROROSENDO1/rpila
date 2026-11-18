@@ -87,8 +87,8 @@ A short report helps even if everything works:
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
   between monitors; switching by recent use (Mod+Tab, Alt+Tab); tapping Mod alone opens the
   launcher, your own or Pila's (`pila-launcher`, the default: the installed apps, searched as
-  you type); a bar of Pila's own (`pila-bar`, on by default: workspaces and a
-  clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
+  you type); a bar of Pila's own (`pila-bar`, on by default: workspaces, the
+  battery and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).

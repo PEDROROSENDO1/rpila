@@ -50,7 +50,9 @@ PILA_BAR_BIN; skipped where it isn't), started in the run:
     or previous one, starting from where a binding of Pila's left it (the
     bar follows ext-workspace), and never past the last;
   - a monitor that comes gets a bar of its own, one that goes takes its bar
-    along and the bar runs on; with --bottom, along the bottom edge.
+    along and the bar runs on; with --bottom, along the bottom edge;
+  - --height 40 --output HDMI-A-1: no bar until that monitor comes, then a
+    bar 40 high on it alone, back when it's plugged in again.
 
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
@@ -485,6 +487,30 @@ class Workload:
                        (g["y"], g["h"]) == (1080 - BAR_HEIGHT, BAR_HEIGHT)
                        and (usable["y"], usable["h"]) == (0, 1080 - BAR_HEIGHT), f"at {g}, usable {usable}")
         self.stop_bar(bar, "gone again")
+
+        # Only on the monitor named, as high as asked, also once it comes back.
+        bar = self.start_bar("--height", "40", "--output", "HDMI-A-1")
+        time.sleep(2)
+        self.check("pila-bar --output HDMI-A-1 opens nothing while there's no HDMI-A-1",
+                   not self.bars(self.state()) and bar.poll() is None,
+                   f"layers {self.bars(self.state())}, exit status {bar.poll()}")
+        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
+        shown = lambda s: [(l["output"], l["geometry"] and l["geometry"]["h"]) for l in self.bars(s)] \
+            == [("HDMI-A-1", 40)]
+        state = self.wait(shown, 10)
+        self.check("then a bar on HDMI-A-1 alone, 40 high", state is not None, f"layers {self.bars(self.state())}")
+        if state is not None:
+            layer = next(l for l in self.bars(state))
+            self.check("whose exclusive zone is its height", layer["exclusive_zone"] == 40,
+                       f"zone {layer['exclusive_zone']}")
+        self.ctl(cmd="output_remove", name="HDMI-A-1")
+        self.wait(lambda s: not self.bars(s), 5)
+        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
+        state = self.wait(shown, 10)
+        self.check("unplugged and plugged again, it's back", state is not None,
+                   f"layers {self.bars(self.state())}")
+        self.ctl(cmd="output_remove", name="HDMI-A-1")
+        self.stop_bar(bar, "and gone with it")
         return self.finish()
 
     # --- pila-launcher ---

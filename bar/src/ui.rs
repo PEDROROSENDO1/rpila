@@ -1,12 +1,13 @@
-//! The bar: a layer surface on every monitor (Top, along the top or bottom
-//! edge, with an exclusive zone so windows keep clear of it), showing the
-//! workspaces and the clock.
+//! The bar: a layer surface on every monitor, or those `--output` names (Top,
+//! along the top or bottom edge, with an exclusive zone so windows keep
+//! clear of it), showing the workspaces and the clock.
 //!
-//! An iced_layershell daemon in `AllScreens` mode: it opens a surface on
-//! each output there is and on each one that comes, and drops a surface
-//! whose output goes. Every surface shows the same: Pila's workspaces span
-//! all its outputs. The desktop (`desktop.rs`) and the clock (`clock.rs`)
-//! come in as streams from threads of their own.
+//! An iced_layershell daemon that starts with no surface: the desktop thread
+//! (`desktop.rs`, on the same Wayland connection) says which outputs get one
+//! (`outputs.rs`), and the bar opens a surface on each and drops it when its
+//! output goes. Every surface shows the same: Pila's workspaces span all its
+//! outputs. The desktop and the clock (`clock.rs`) come in as streams from
+//! threads of their own.
 
 use std::process::ExitCode;
 
@@ -16,27 +17,25 @@ use iced::{
     window, Alignment, Border, Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_layershell::{
-    reexport::{Anchor, KeyboardInteractivity, Layer},
+    reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption},
     settings::{LayerShellSettings, Settings, StartMode},
     to_layer_message,
 };
+use wayland_client::{protocol::wl_output::WlOutput, Connection};
 use wayland_protocols::ext::workspace::v1::client::ext_workspace_handle_v1::ExtWorkspaceHandleV1;
 
 use crate::{
-    args::Args,
+    args::{self, Args},
+    battery::{self, Battery},
     clock,
     desktop::{self, Desktop, Switcher, Update},
+    outputs::Change,
     style,
 };
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
 pub const NAMESPACE: &str = "pila-bar";
 
-/// The bar's height, its exclusive zone.
-pub const HEIGHT: u32 = 28;
-/// A workspace's button, for names of one or two characters (longer ones
-/// get what they need): a square block as high as the bar.
-pub const BUTTON_WIDTH: f32 = 28.0;
 /// The line along the edge that faces the windows.
 const EDGE: f32 = 1.0;
 /// How far a touchpad scrolls (in pixels) for one workspace.
@@ -47,6 +46,7 @@ const PIXELS_PER_STEP: f32 = 40.0;
 pub enum Message {
     Update(Update),
     Clock(String),
+    Battery(Battery),
     /// A click on a workspace (its place in the bar).
     Activate(usize),
     Wheel(mouse::ScrollDelta),
@@ -56,33 +56,62 @@ struct Bar {
     desktop: Desktop<ExtWorkspaceHandleV1>,
     switcher: Option<Switcher>,
     clock: String,
+    /// None with no battery, or `--no-battery`.
+    battery: Option<Battery>,
     /// A touchpad's scroll not yet a workspace's worth.
     scrolled: f32,
     /// Along the bottom edge: the line facing the windows goes on top.
     bottom: bool,
+    /// The bar's height, and a workspace's square block.
+    height: u32,
+    /// The surfaces open, by output.
+    surfaces: Vec<(WlOutput, window::Id)>,
+}
+
+/// The text size for a bar `height` high: `style::TEXT_SIZE` at the default
+/// height, and as much bigger or smaller as the bar is.
+pub fn text_size(height: u32) -> f32 {
+    (style::TEXT_SIZE * height as f32 / args::DEFAULT_HEIGHT as f32).round()
 }
 
 pub fn run(args: Args) -> ExitCode {
-    let format = args.clock.clone();
-    let bottom = args.bottom;
+    // One connection for iced_layershell and the desktop thread: the
+    // outputs that thread binds are ones the layer shell can use.
+    let connection = match Connection::connect_to_env() {
+        Ok(connection) => connection,
+        Err(err) => {
+            eprintln!("pila-bar: can't connect to Wayland: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let Args {
+        bottom,
+        clock: format,
+        height,
+        outputs,
+        battery: show_battery,
+    } = args;
+    let desktop_connection = connection.clone();
     let boot = move || {
         let bar = Bar {
             desktop: Desktop::default(),
             switcher: None,
             clock: String::new(),
+            battery: None,
             scrolled: 0.0,
             bottom,
+            height,
+            surfaces: Vec::new(),
         };
-        let mut tasks = vec![Task::run(desktop::updates(), Message::Update)];
+        let updates = desktop::updates(desktop_connection.clone(), outputs.clone());
+        let mut tasks = vec![Task::run(updates, Message::Update)];
         if !format.is_empty() {
             tasks.push(Task::run(clock::ticks(format.clone()), Message::Clock));
         }
+        if show_battery {
+            tasks.push(Task::run(battery::updates(), Message::Battery));
+        }
         (bar, Task::batch(tasks))
-    };
-    let edge = if args.bottom {
-        Anchor::Bottom
-    } else {
-        Anchor::Top
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Bar::update, Bar::view)
         .subscription(Bar::subscription)
@@ -94,17 +123,13 @@ pub fn run(args: Args) -> ExitCode {
         })
         .settings(Settings {
             layer_settings: LayerShellSettings {
-                anchor: edge | Anchor::Left | Anchor::Right,
-                layer: Layer::Top,
-                exclusive_zone: HEIGHT as i32,
-                // The width of the output.
-                size: Some((0, HEIGHT)),
-                keyboard_interactivity: KeyboardInteractivity::None,
-                start_mode: StartMode::AllScreens,
+                // No surface until the desktop thread names an output.
+                start_mode: StartMode::Background,
                 ..Default::default()
             },
             default_font: style::FONT,
-            default_text_size: style::TEXT_SIZE.into(),
+            default_text_size: text_size(height).into(),
+            with_connection: Some(connection.into()),
             ..Default::default()
         })
         .run();
@@ -126,7 +151,15 @@ impl Bar {
         match message {
             Message::Update(Update::Switcher(switcher)) => self.switcher = Some(switcher),
             Message::Update(Update::Desktop(desktop)) => self.desktop = desktop,
+            Message::Update(Update::Output(Change::Open(output))) => return self.open(output),
+            Message::Update(Update::Output(Change::Close(output))) => {
+                if let Some(index) = self.surfaces.iter().position(|(o, _)| o == &output) {
+                    let (_, id) = self.surfaces.remove(index);
+                    return Task::done(Message::RemoveWindow(id));
+                }
+            }
             Message::Clock(clock) => self.clock = clock,
+            Message::Battery(battery) => self.battery = Some(battery),
             Message::Activate(index) => self.activate(index),
             Message::Wheel(delta) => {
                 let (steps, rest) = wheel_steps(self.scrolled, delta);
@@ -148,6 +181,29 @@ impl Bar {
         Task::none()
     }
 
+    /// A surface on `output`, along its edge.
+    fn open(&mut self, output: WlOutput) -> Task<Message> {
+        let edge = if self.bottom {
+            Anchor::Bottom
+        } else {
+            Anchor::Top
+        };
+        let (id, open) = Message::layershell_open(NewLayerShellSettings {
+            // The width of the output.
+            size: Some((0, self.height)),
+            layer: Layer::Top,
+            anchor: edge | Anchor::Left | Anchor::Right,
+            exclusive_zone: Some(self.height as i32),
+            margin: None,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            output_option: OutputOption::Output(output.clone()),
+            events_transparent: false,
+            namespace: Some(NAMESPACE.to_string()),
+        });
+        self.surfaces.push((output, id));
+        open
+    }
+
     fn activate(&self, index: usize) {
         if let (Some(switcher), Some(workspace)) =
             (&self.switcher, self.desktop.workspaces.get(index))
@@ -162,10 +218,9 @@ impl Bar {
                 .workspaces
                 .iter()
                 .enumerate()
-                .map(|(index, w)| button(index, &w.name, w.active, w.urgent)),
+                .map(|(index, w)| button(index, &w.name, w.active, w.urgent, self.height)),
         )
         .height(Length::Fill);
-        // The workspaces on the left, the clock on the right.
         let left = container(workspaces)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -180,7 +235,27 @@ impl Bar {
         .align_x(Alignment::End)
         .align_y(Alignment::Center)
         .clip(true);
-        let bar = row![left, clock].height(Length::Fill);
+        let battery = self.battery.map(|battery| {
+            let low = battery.low();
+            container(
+                text(battery.text())
+                    .wrapping(text::Wrapping::None)
+                    .color(if low { style::TEXT_BRIGHT } else { style::TEXT }),
+            )
+            .padding([0, 10])
+            .height(Length::Fill)
+            .align_y(Alignment::Center)
+            .style(move |_| match low {
+                true => container::Style::default().background(style::URGENT),
+                false => container::Style::default(),
+            })
+        });
+        // The workspaces on the left; the battery and the clock on the right.
+        let mut bar = row![left].height(Length::Fill);
+        if let Some(battery) = battery {
+            bar = bar.push(battery);
+        }
+        let bar = bar.push(clock);
         let edge = container(Space::new())
             .width(Length::Fill)
             .height(EDGE)
@@ -201,7 +276,13 @@ impl Bar {
 /// A workspace's button, a square block: the active one in the accent
 /// color, an urgent one in the attention color, the others plain until
 /// hovered.
-fn button<'a>(index: usize, name: &'a str, active: bool, urgent: bool) -> Element<'a, Message> {
+fn button<'a>(
+    index: usize,
+    name: &'a str,
+    active: bool,
+    urgent: bool,
+    height: u32,
+) -> Element<'a, Message> {
     let label = text(name).wrapping(text::Wrapping::None);
     let block = button_widget(
         container(label)
@@ -212,7 +293,7 @@ fn button<'a>(index: usize, name: &'a str, active: bool, urgent: bool) -> Elemen
     .on_press(Message::Activate(index))
     .height(Length::Fill);
     let block = if name.chars().count() <= 2 {
-        block.width(BUTTON_WIDTH).padding(0)
+        block.width(height as f32).padding(0)
     } else {
         block.padding([0, 10])
     };

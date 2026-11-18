@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an arrow up
+  while charging, amber at 15% or less while running down (a mouse's battery isn't counted);
+  `--no-battery` leaves it out.
+- **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
+  its text growing with it, and shown only on the monitors `--output NAME` names (once per
+  monitor), including when one is plugged in later.
 - **APT and DNF repositories:** Pila's `.deb` and `.rpm` are now in signed repositories on
   GitHub Pages, so Debian, Ubuntu and Fedora install it once and update it with the system
   (README, "Debian, Ubuntu and Fedora"). The `.rpm` is built on the oldest Fedora maintained

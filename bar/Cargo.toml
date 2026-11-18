@@ -4,7 +4,7 @@ version = "0.7.1"
 edition = "2021"
 rust-version = "1.89"
 repository = "https://github.com/igalmarino/pila"
-description = "Pila's bar: workspaces, the focused window's title and a clock (iced, layer shell)"
+description = "Pila's bar: workspaces and a clock (iced, layer shell)"
 license = "GPL-3.0-or-later"
 publish = false
 # pila-launcher's workspace: its Cargo.lock and target directory.

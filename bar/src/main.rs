@@ -1,10 +1,12 @@
 //! `pila-bar`: a bar for Pila (or any compositor with the layer shell and
-//! ext-workspace). A layer surface on every monitor showing the workspaces
-//! and a clock (`ui.rs`, iced).
+//! ext-workspace). A layer surface on every monitor showing the workspaces,
+//! the battery and a clock (`ui.rs`, iced).
 
 mod args;
+mod battery;
 mod clock;
 mod desktop;
+mod outputs;
 #[path = "../../launcher/src/style.rs"]
 mod style;
 mod ui;

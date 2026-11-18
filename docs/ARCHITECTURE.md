@@ -735,20 +735,29 @@ Key flows and invariants:
   their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
   out by color.
 - **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, the default
-  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left and a clock on the right. Like the launcher, a
+  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the battery and a clock on the right. Like the launcher, a
   separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
   `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
   tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same
-  protocols. An iced_layershell daemon in `AllScreens` mode (`ui::run`): a layer surface per
-  output (Top, anchored to the top or, with `--bottom`, the bottom edge and both sides, height
-  `ui::HEIGHT` and as much exclusive zone, no keyboard, namespace `pila-bar`), opened for each
-  output that comes and dropped with each that goes; every surface shows the same, since Pila's
-  workspaces span all outputs. The desktop comes from a Wayland connection of the bar's own on a
-  thread (`desktop::updates`): ext-workspace (by coordinates, hidden ones left out; groups
-  ignored), its only protocol besides the layer shell. `desktop::Model` applies the events as the
+  protocols. An iced_layershell daemon that starts with no surface (`ui::run`) and opens a layer surface
+  per output (`Bar::open`: Top, anchored to the top or, with `--bottom`, the bottom edge and both
+  sides, `--height` high (`args::DEFAULT_HEIGHT`, text sized by `ui::text_size`) and as much
+  exclusive zone, no keyboard, namespace `pila-bar`) for each output that comes, or each that
+  `--output` names, and drops it with its output; every surface shows the same, since Pila's
+  workspaces span all outputs. The desktop comes from an event queue of the bar's own on a
+  thread (`desktop::updates`), on iced_layershell's connection (`with_connection`), so the
+  `wl_output`s it binds go straight to `OutputOption::Output`: layershellev's `AllScreens`
+  makes a surface before an output's name is known, and its `OutputName` looks names up in a
+  cache that can lag behind. That thread follows the outputs (wl_output 4's names;
+  `outputs::Outputs` says which to open and close, unit tested) and ext-workspace (by
+  coordinates, hidden ones left out; groups ignored), its only protocol besides the layer shell. `desktop::Model` applies the events as the
   protocol says (at the manager's `done`) and knows nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
   wheel (a notch, or `PIXELS_PER_STEP` of a touchpad) activates a workspace through
-  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The clock
+  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The battery
+  (`battery::updates`, unless `--no-battery`) is a thread that reads `/sys/class/power_supply`
+  every 5 s (batteries whose `scope` isn't `Device`, so no mouse's; together by what they hold,
+  `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;
+  with no battery there's no thread. The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the
   user's `LC_TIME` and wakes the bar only when the text changes. `scripts/apps bar` drives it on
   a headless Pila.

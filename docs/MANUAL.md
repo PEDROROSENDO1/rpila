@@ -524,7 +524,7 @@ in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods
 type into its search field.
 
 **Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
-workspaces on the left and a clock on the right, in the colors of Pila's own title bars. A click on a workspace goes to it, and the
+workspaces on the left and the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars. A click on a workspace goes to it, and the
 wheel over the bar to the next or previous one. It's the default `autostart`; with other
 programs, list it among them:
 
@@ -534,8 +534,13 @@ autostart = ["pila-bar --bottom", "mako"]
 
 `--bottom` puts it along the bottom edge, and `--clock FORMAT` sets the clock as strftime(3)
 writes it, in your `LC_TIME` language (default `'%a %e %b  %H:%M'`; `''` leaves the clock out).
-A monitor connected later gets its bar too. Its layer surfaces' namespace is `pila-bar`, for a
-`[[layer-rule]]`. It has no tray, battery or network: for those, waybar.
+`--height PIXELS` makes it 16 to 96 pixels high instead of 28, its text growing with it, and
+`--output NAME` puts it on that monitor alone (named as `pila msg outputs` shows; once per
+monitor for several). A monitor connected later gets its bar too, if it's one of those. The
+battery shows how full the laptop's batteries are together, with an arrow up while charging,
+and turns amber at 15% or less while running down; a mouse's or a headset's battery isn't
+counted, and `--no-battery` leaves it out. Its layer surfaces' namespace is `pila-bar`, for a
+`[[layer-rule]]`. It has no network or volume: for those, waybar.
 
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
