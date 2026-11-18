@@ -543,8 +543,9 @@ battery shows how full the laptop's batteries are together, with an arrow up whi
 and turns amber at 15% or less while running down; a mouse's or a headset's battery isn't
 counted, and `--no-battery` leaves it out. With an icon font installed, a Nerd Font (its symbols
 alone, `Symbols Nerd Font`, are enough) or Font Awesome, both packaged by most distributions, the
-battery shows its icon too: its level in quarters, a bolt
-while charging, a plug while plugged in and not charging; without one, words and numbers alone. The tray shows the icons apps put there (fcitx5,
+battery shows its icon too, one icon: with a Nerd Font its level by tens, with a bolt beside it
+while charging; with Font Awesome, which has fewer, its level by quarters, in the accent color
+while charging. Without one, words and numbers alone. The tray shows the icons apps put there (fcitx5,
 network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
 does what the app does on a click, the middle button its second action, the wheel what it does
 with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it).

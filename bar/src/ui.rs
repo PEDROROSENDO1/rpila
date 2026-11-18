@@ -63,7 +63,7 @@ pub enum Message {
     Clock(String),
     Battery(Battery),
     /// The icon font installed, if any.
-    IconFont(Option<iced::Font>),
+    IconFont(Option<glyphs::IconFont>),
     /// Pila's colors, new or changed.
     Style(Style),
     Tray(tray::Update),
@@ -87,7 +87,7 @@ struct Bar {
     /// None with no battery, or `--no-battery`.
     battery: Option<Battery>,
     /// An icon font (`glyphs.rs`): icons where there'd be words.
-    icon_font: Option<iced::Font>,
+    icon_font: Option<glyphs::IconFont>,
     /// A touchpad's scroll not yet a workspace's worth.
     scrolled: f32,
     /// Along the bottom edge: the line facing the windows goes on top.
@@ -423,8 +423,18 @@ impl Bar {
             // With an icon font, its icon and the percentage; else the
             // percentage, with an arrow up while charging.
             let shown: Element<'_, Message> = match self.icon_font {
-                Some(font) => row![
-                    text(glyphs::battery(&battery)).font(font).color(color),
+                Some(icons) => row![
+                    {
+                        let icon = glyphs::battery(&battery, icons.tens);
+                        let icon_color = if icon.accent && !low {
+                            st.accent
+                        } else {
+                            color
+                        };
+                        text(icon.glyph.to_string())
+                            .font(icons.font)
+                            .color(icon_color)
+                    },
                     text(format!("{}%", battery.percent)).color(color),
                 ]
                 .spacing(6)
