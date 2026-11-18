@@ -363,6 +363,18 @@ in
 .B PILA_SOCKET
 for the programs Pila starts.
 .TP
+.I /usr/lib/systemd/user/pila.service
+.TQ
+.I /usr/lib/systemd/user/pila\-shutdown.target
+With systemd,
+.B pila\-session
+runs Pila as this user service, bound to
+.BR graphical\-session.target ,
+which starts the session's user services and XDG autostart entries once Pila is ready and
+stops them when it quits;
+.B PILA_NO_SYSTEMD=1
+makes it start Pila itself instead.
+.TP
 .I /etc/xdg/xdg\-desktop\-portal/pila\-portals.conf
 .TQ
 .I /etc/xdg/xdg\-desktop\-portal\-wlr/pila

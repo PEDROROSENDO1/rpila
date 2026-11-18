@@ -138,6 +138,11 @@ rustPlatform.buildRustPackage {
     install -Dm644 resources/session/pila.desktop $out/share/wayland-sessions/pila.desktop
     substituteInPlace $out/share/wayland-sessions/pila.desktop \
       --replace-fail '@BINDIR@' "$out/bin"
+    # For NixOS's `systemd.packages`; without them pila-session runs pila itself.
+    install -Dm644 resources/session/pila.service resources/session/pila-shutdown.target \
+      -t $out/lib/systemd/user
+    substituteInPlace $out/lib/systemd/user/pila.service \
+      --replace-fail '@BINDIR@' "$out/bin"
     install -Dm644 resources/icons/pila.svg $out/share/icons/hicolor/scalable/apps/pila.svg
     install -Dm644 resources/xdg/xdg-desktop-portal/pila-portals.conf \
       -t $out/share/xdg-desktop-portal

@@ -6,6 +6,9 @@
 #   BINDIR       $PREFIX/bin
 #   DATADIR      $PREFIX/share
 #   SYSCONFDIR   /etc           (the portal configs go in $SYSCONFDIR/xdg)
+#   SYSTEMDUSERUNITDIR  $PREFIX/lib/systemd/user  (pila.service; systemd
+#                               looks in /usr/lib and /usr/local/lib; files
+#                               nothing reads where there's no systemd)
 #   DESTDIR      empty          (a staging root, e.g. for a distro package)
 #
 # shellcheck shell=bash
@@ -14,6 +17,7 @@ PREFIX="${PREFIX:-/usr/local}"
 BINDIR="${BINDIR:-$PREFIX/bin}"
 DATADIR="${DATADIR:-$PREFIX/share}"
 SYSCONFDIR="${SYSCONFDIR:-/etc}"
+SYSTEMDUSERUNITDIR="${SYSTEMDUSERUNITDIR:-$PREFIX/lib/systemd/user}"
 DESTDIR="${DESTDIR:-}"
 # pila-check's helpers, where it looks for them: share/pila/check next to the
 # directory it's in.
@@ -32,6 +36,8 @@ install_files=(
     "scripts/capture-stream:$CHECKDIR/capture-stream:644"
     "docs/pila.1:$DATADIR/man/man1/pila.1:644"
     "resources/session/pila.desktop:$DATADIR/wayland-sessions/pila.desktop:644"
+    "resources/session/pila.service:$SYSTEMDUSERUNITDIR/pila.service:644"
+    "resources/session/pila-shutdown.target:$SYSTEMDUSERUNITDIR/pila-shutdown.target:644"
     "resources/icons/pila.svg:$DATADIR/icons/hicolor/scalable/apps/pila.svg:644"
     "resources/xdg/xdg-desktop-portal/pila-portals.conf:$SYSCONFDIR/xdg/xdg-desktop-portal/pila-portals.conf:644"
     "resources/xdg/xdg-desktop-portal-wlr/pila:$SYSCONFDIR/xdg/xdg-desktop-portal-wlr/pila:644"
@@ -42,6 +48,7 @@ install_dirs=(
     "$CHECKDIR"
     "$(dirname "$CHECKDIR")"
     "$DATADIR/wayland-sessions"
+    "$SYSTEMDUSERUNITDIR"
     "$SYSCONFDIR/xdg/xdg-desktop-portal"
     "$SYSCONFDIR/xdg/xdg-desktop-portal-wlr"
 )

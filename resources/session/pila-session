@@ -8,6 +8,16 @@
 # so the portals (screen sharing), pipewire and the rest
 # of the user services find it.
 #
+# With systemd's user manager (and pila.service installed where it looks),
+# Pila runs as that service, as niri does: this imports the login's
+# environment into the manager (libseat finds the session by XDG_SESSION_ID
+# there), starts pila.service and waits for it. The service is bound to
+# graphical-session.target, which starts the user services that hang from it
+# and the XDG autostart entries once Pila tells systemd it's ready; when Pila
+# exits, pila-shutdown.target stops them and Pila's variables leave the
+# manager's environment. PILA_NO_SYSTEMD=1 skips that and runs pila
+# directly, as without systemd.
+#
 # Without systemd there may be no per-user bus; then this starts one for the
 # session (dbus-run-session).
 #
@@ -16,12 +26,19 @@
 # dev container mounts as /run/host-pila, and to the system log: the journal
 # (journalctl -t pila -b) with systemd, otherwise syslog through logger if
 # there is one.
+#
+#   pila-session             the login session (the display manager's command)
+#   pila-session --service   pila.service's command: the log, then pila
 set -euo pipefail
 
 # The binary installed next to this script; the display manager's PATH may
 # not include it.
 pila="$(dirname "$(readlink -f "$0")")/pila"
 [ -x "$pila" ] || pila=pila
+
+# What Pila exports to systemd (SESSION_ENV in src/state.rs), taken back when
+# the session ends.
+session_env=(WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE PILA_SOCKET)
 
 # A session bus: the systemd user bus if there is one, else a new one.
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
@@ -30,6 +47,54 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
     elif command -v dbus-run-session >/dev/null; then
         exec dbus-run-session -- "$0" "$@"
     fi
+fi
+
+# Whether this is the login session and systemd's user manager can run it.
+systemd_session() {
+    [ "${1:-}" != --service ] && [ -z "${PILA_NO_SYSTEMD:-}" ] &&
+        command -v systemctl >/dev/null &&
+        systemctl --user show-environment >/dev/null 2>&1 &&
+        systemctl --user cat pila.service >/dev/null 2>&1
+}
+
+if systemd_session "$@"; then
+    if systemctl --user -q is-active pila.service; then
+        echo "pila-session: a Pila session is already running (pila.service)" >&2
+        exit 1
+    fi
+    systemctl --user reset-failed pila.service 2>/dev/null || true
+    # The login's environment, for Pila and the services of the session: the
+    # session (XDG_SESSION_ID, XDG_SEAT, XDG_VTNR), PATH, the locale, ...
+    # Named, as systemctl wants them; not the shell's own.
+    names=()
+    while read -r name; do
+        case "$name" in
+            _ | SHLVL | PWD | OLDPWD) ;;
+            *) names+=("$name") ;;
+        esac
+    done < <(compgen -e)
+    systemctl --user import-environment "${names[@]}" ||
+        echo "pila-session: systemctl --user import-environment failed" >&2
+    if command -v dbus-update-activation-environment >/dev/null; then
+        dbus-update-activation-environment --all ||
+            echo "pila-session: dbus-update-activation-environment failed" >&2
+    fi
+
+    # The display manager ends the session by stopping its scope, where this
+    # runs and pila.service doesn't: stop the service then. The wait is for a
+    # job in the background, so the trap runs when the signal comes.
+    systemctl --user --wait start pila.service &
+    waiter=$!
+    trap 'systemctl --user stop pila.service' TERM HUP INT
+    status=0
+    while kill -0 "$waiter" 2>/dev/null; do
+        wait "$waiter" || status=$?
+    done
+    trap - TERM HUP INT
+
+    systemctl --user start --job-mode=replace-irreversibly pila-shutdown.target || true
+    systemctl --user unset-environment "${session_env[@]}" || true
+    exit "$status"
 fi
 
 dir="${XDG_STATE_HOME:-$HOME/.local/state}/pila"
@@ -71,4 +136,9 @@ logfile() {
     } >"$1"
 }
 
+if [ "${1:-}" = --service ]; then
+    # pila becomes the service's main process (exec keeps the PID), and its
+    # stderr reaches the journal through tee.
+    exec "$pila" --backend udev 2> >(tee >(logfile "$dir/pila.log") >&2)
+fi
 exec "$pila" --backend udev 2> >(tee >(logfile "$dir/pila.log") | syslog)

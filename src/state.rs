@@ -1936,8 +1936,12 @@ impl Pila {
         }
     }
 
-    /// The startup programs still waiting, if any (`start_session`).
+    /// The startup programs still waiting, if any (`start_session`). The
+    /// first call is when the session is ready: the environment is exported
+    /// (or that timed out), so systemd hears it now (`sd_notify::ready`, once)
+    /// and starts `graphical-session.target` with it.
     fn run_pending_startup(&mut self) {
+        crate::sd_notify::ready();
         let commands = std::mem::take(&mut self.pending_startup);
         self.spawn_all(&commands);
     }
@@ -2076,6 +2080,9 @@ impl Pila {
         for var in OTHER_COMPOSITORS_ENV {
             cmd.env_remove(var);
         }
+        // systemd's socket for `pila.service` is Pila's alone: a child that
+        // speaks the protocol would answer for Pila.
+        cmd.env_remove(crate::sd_notify::NOTIFY_SOCKET);
         match &self.ipc_socket {
             Some(path) => cmd.env("PILA_SOCKET", path),
             None => cmd.env_remove("PILA_SOCKET"),

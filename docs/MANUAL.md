@@ -49,6 +49,16 @@ This manual says how to use Pila and set it up. Every configuration option is de
 At startup Pila runs the programs in `autostart`, or else its own bar, `pila-bar`; no terminal
 opens by itself: Mod+Return opens one.
 
+**With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
+`graphical-session.target` as GNOME's, KDE's and niri's sessions are: once Pila is ready, the
+user services of the graphical session start (those enabled with
+`WantedBy=graphical-session.target`), and so do the XDG autostart entries in
+`~/.config/autostart` and `/etc/xdg/autostart` (skipping those whose `OnlyShowIn` leaves Pila
+out); they stop when Pila quits. A program both there and in `autostart` starts twice. Pila's
+log is then also `journalctl --user -u pila`, and a second login while a Pila session runs is
+refused. `PILA_NO_SYSTEMD=1` makes `pila-session` start Pila itself instead, as it does without
+systemd, where there's no such target.
+
 To leave, press **Mod+Shift+E**: Pila quits and you're back at the login screen or the TTY. If the
 screen stops responding, **Ctrl+Alt+F1** to **F12** switch to another virtual terminal, where you
 can log in and run `pkill pila`.
@@ -424,7 +434,9 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
 Xwayland); by default its own bar, `pila-bar`, and no terminal. `autostart = []` starts
-nothing. Everything
+nothing. With systemd, a program with a user service can start with the session that way
+instead, restarted if it crashes and stopped when Pila quits: `systemctl --user enable
+waybar.service` (in place of `waybar` in `autostart`). Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those
 programs ask.
 

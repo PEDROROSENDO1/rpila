@@ -1,5 +1,5 @@
 //! Config reloads: each section applied while running, invalid files kept
-//! out, autostart not run again.
+//! out, autostart not run again, systemd told once that the session is ready.
 
 mod common;
 
@@ -274,6 +274,35 @@ fn autostart_runs_once_not_on_reload() {
     pila.wait_log("config reloaded");
     std::thread::sleep(std::time::Duration::from_millis(200));
     assert_eq!(pila.wait_file("autostart"), "started\n");
+}
+
+#[test]
+fn pila_tells_systemd_once_it_is_ready_and_keeps_its_socket_from_children() {
+    use std::os::linux::net::SocketAddrExt;
+    use std::os::unix::net::{SocketAddr, UnixDatagram};
+    // An abstract name, as systemd's own is.
+    let name = format!("pila-test-notify-{}", std::process::id());
+    let systemd = UnixDatagram::bind_addr(&SocketAddr::from_abstract_name(&name).unwrap()).unwrap();
+    systemd.set_read_timeout(Some(TIMEOUT)).unwrap();
+    let mut pila = TestPila::start_with(Options {
+        config: "autostart = [\"env > $XDG_RUNTIME_DIR/env\"]\n".into(),
+        env: vec![("NOTIFY_SOCKET".into(), format!("@{name}"))],
+        ..Options::default()
+    });
+    let mut message = [0; 64];
+    let len = systemd.recv(&mut message).expect("READY=1 from pila");
+    assert_eq!(&message[..len], b"READY=1");
+    let env = pila.wait_file("env");
+    assert!(
+        !env.lines().any(|l| l.starts_with("NOTIFY_SOCKET=")),
+        "NOTIFY_SOCKET reached the startup program:\n{env}"
+    );
+    // Only once, also after a reload.
+    pila.write_config("autostart = []\n");
+    pila.wait_log("config reloaded");
+    pila.settle();
+    systemd.set_nonblocking(true).unwrap();
+    assert!(systemd.recv(&mut message).is_err(), "a second message");
 }
 
 #[test]

@@ -633,7 +633,6 @@ fn pila_check_judges_a_log_says_how_to_use_it_and_needs_its_helpers() {
 /// A copy of `pila-session` next to a fake pila running `body`, with no real
 /// system log: (the session script, the directory it logs to).
 fn session_copy(name: &str, body: &str) -> (Command, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("pila-session-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let bin = dir.join("bin");
@@ -657,10 +656,14 @@ fn session_copy(name: &str, body: &str) -> (Command, std::path::PathBuf) {
             bin.join("systemd-cat"),
             "#!/bin/sh\nexec cat >/dev/null\n".to_string(),
         ),
+        // No user manager, unless a test says otherwise (`systemd_stub`).
+        (bin.join("systemctl"), "#!/bin/sh\nexit 1\n".to_string()),
+        (
+            bin.join("dbus-update-activation-environment"),
+            "#!/bin/sh\nexit 0\n".to_string(),
+        ),
     ] {
-        std::fs::write(&path, text).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        wait_until_executable(&path);
+        write_executable(&path, &text);
     }
     let mut command = Command::new("bash");
     command
@@ -674,6 +677,37 @@ fn session_copy(name: &str, body: &str) -> (Command, std::path::PathBuf) {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     (command, dir.join("state/pila"))
+}
+
+fn write_executable(path: &std::path::Path, text: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, text).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    wait_until_executable(path);
+}
+
+/// A `systemctl` for `session_copy`'s session (in `dir`, its state
+/// directory's grandparent) with a user manager that has `pila.service`,
+/// running (`active`) or not: it writes each call's arguments to
+/// `dir/systemctl`, and its `--wait start` runs `start` (the service's life).
+fn systemd_stub(dir: &std::path::Path, active: bool, start: &str) {
+    let calls = dir.join("systemctl");
+    write_executable(
+        &dir.join("bin/systemctl"),
+        &format!(
+            // No arguments: `wait_until_executable`'s run.
+            "#!/bin/sh\n\
+             [ $# -gt 0 ] || exit 0\n\
+             echo \"$*\" >> '{calls}'\n\
+             case \"$*\" in\n\
+             *is-active*) exit {active} ;;\n\
+             *--wait\\ start*) {start} ;;\n\
+             esac\n\
+             exit 0\n",
+            calls = calls.display(),
+            active = if active { 0 } else { 1 },
+        ),
+    );
 }
 
 /// Wait for `text` in the session log; whether it came in time.
@@ -725,4 +759,131 @@ fn the_session_log_stops_at_its_limit() {
     let _ = std::fs::remove_dir_all(dir.parent().unwrap().parent().unwrap());
     assert!(said, "no word of the limit in a log of {size} bytes");
     assert!((LIMIT..LIMIT + 4096).contains(&size), "{size} bytes");
+}
+
+#[test]
+fn under_systemd_the_session_runs_as_pila_service_and_cleans_up_after_it() {
+    let (mut command, state) = session_copy("systemd", "touch \"$XDG_STATE_HOME/ran\"");
+    let dir = state.parent().unwrap().parent().unwrap().to_path_buf();
+    systemd_stub(&dir, false, "exit 0");
+    let status = command.env("XDG_SESSION_ID", "7").status().unwrap();
+    let calls = std::fs::read_to_string(dir.join("systemctl")).unwrap_or_default();
+    let ran = dir.join("state/ran").exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(status.success(), "{status}\n{calls}");
+    assert!(!ran, "pila ran outside the service");
+    let calls: Vec<&str> = calls.lines().collect();
+    let position = |prefix: &str| {
+        calls
+            .iter()
+            .position(|c| c.starts_with(prefix))
+            .unwrap_or_else(|| panic!("no `systemctl {prefix}`: {calls:#?}"))
+    };
+    // The login's session reaches the manager (libseat looks for it there).
+    let import = position("--user import-environment");
+    assert!(
+        calls[import].split(' ').any(|n| n == "XDG_SESSION_ID"),
+        "{}",
+        calls[import]
+    );
+    let start = position("--user --wait start pila.service");
+    let shutdown = position("--user start --job-mode=replace-irreversibly pila-shutdown.target");
+    let unset = position("--user unset-environment");
+    assert!(
+        import < start && start < shutdown && shutdown < unset,
+        "{calls:#?}"
+    );
+    for name in [
+        "WAYLAND_DISPLAY",
+        "DISPLAY",
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_TYPE",
+        "PILA_SOCKET",
+    ] {
+        assert!(
+            calls[unset].split(' ').any(|n| n == name),
+            "{}",
+            calls[unset]
+        );
+    }
+}
+
+#[test]
+fn a_second_systemd_session_is_refused() {
+    let (mut command, state) = session_copy("second", "touch \"$XDG_STATE_HOME/ran\"");
+    let dir = state.parent().unwrap().parent().unwrap().to_path_buf();
+    systemd_stub(&dir, true, "exit 0");
+    let status = command.status().unwrap();
+    let calls = std::fs::read_to_string(dir.join("systemctl")).unwrap_or_default();
+    let ran = dir.join("state/ran").exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(status.code(), Some(1), "{calls}");
+    assert!(!ran);
+    assert!(!calls.contains("start"), "{calls}");
+}
+
+#[test]
+fn ending_the_login_session_stops_pila_service() {
+    let (mut command, state) = session_copy("terminate", "exit 0");
+    let dir = state.parent().unwrap().parent().unwrap().to_path_buf();
+    // The service runs until `systemctl stop` ends it.
+    let pid = dir.join("service.pid");
+    systemd_stub(
+        &dir,
+        false,
+        &format!("echo $$ > '{}'; exec sleep 30", pid.display()),
+    );
+    let stop = dir.join("bin/systemctl");
+    let stub = std::fs::read_to_string(&stop).unwrap().replace(
+        "esac",
+        &format!(
+            "*stop\\ pila.service*) kill \"$(cat '{}')\" ;;\nesac",
+            pid.display()
+        ),
+    );
+    write_executable(&stop, &stub);
+    let mut session = command.spawn().unwrap();
+    let started = std::time::Instant::now();
+    while !pid.exists() && started.elapsed() < std::time::Duration::from_secs(10) {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // What logind does to the session's scope.
+    unsafe { libc::kill(session.id() as i32, libc::SIGTERM) };
+    let status = session.wait().unwrap();
+    let calls = std::fs::read_to_string(dir.join("systemctl")).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+    let stopped = calls.find("--user stop pila.service");
+    let shutdown = calls.find("pila-shutdown.target");
+    assert!(stopped.is_some(), "{status}: {calls}");
+    assert!(shutdown > stopped, "{calls}");
+}
+
+#[test]
+fn pila_service_and_pila_no_systemd_run_pila_itself() {
+    for (name, arg, env) in [
+        ("service", Some("--service"), None),
+        ("no-systemd", None, Some(("PILA_NO_SYSTEMD", "1"))),
+    ] {
+        let (mut command, state) =
+            session_copy(name, "echo to the log >&2; touch \"$XDG_STATE_HOME/ran\"");
+        let dir = state.parent().unwrap().parent().unwrap().to_path_buf();
+        systemd_stub(&dir, false, "exit 0");
+        command.args(arg);
+        if let Some((key, value)) = env {
+            command.env(key, value);
+        }
+        let status = command.status().unwrap();
+        let ran = dir.join("state/ran").exists();
+        let logged = session_log_has(
+            &state.join("pila.log"),
+            "to the log",
+            std::time::Duration::from_secs(5),
+        );
+        let calls = std::fs::read_to_string(dir.join("systemctl")).unwrap_or_default();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(status.success(), "{name}: {status}");
+        assert!(ran, "{name}: pila didn't run");
+        assert!(logged, "{name}: nothing in pila.log");
+        assert!(calls.is_empty(), "{name}: {calls:?}");
+    }
 }

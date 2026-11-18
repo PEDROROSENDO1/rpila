@@ -111,7 +111,8 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   (with the host's cargo if there is one, else `--container`; `--no-build`) and installs it
   with `scripts/report` (as `pila-report`), `scripts/check` (as `pila-check`, its helpers in
   `share/pila/check`), the man page, `resources/session/` (the
-  `pila-session` wrapper and the `wayland-sessions` entry, whose `@BINDIR@` it fills in), the
+  `pila-session` wrapper, the `wayland-sessions` entry and the systemd user units it runs Pila as
+where there's systemd, whose `@BINDIR@` it fills in), the
   icon (`resources/icons/pila.svg`, also the logo's mark: `docs/logo/`) and the portal configs; `scripts/uninstall` removes them. Paths come from
   `scripts/install-paths` (`PREFIX`, `BINDIR`, `DATADIR`, `SYSCONFDIR`, `DESTDIR`), sourced
   by both. Its log is in the journal (`journalctl -t pila -b`) and in

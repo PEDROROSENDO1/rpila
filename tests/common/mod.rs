@@ -161,6 +161,8 @@ impl TestPila {
             "PILA_TERMINAL",
             "PILA_LAUNCHER",
             "DBUS_SESSION_BUS_ADDRESS",
+            // A test run from a systemd service would answer for it.
+            "NOTIFY_SOCKET",
             "XCURSOR_THEME",
             "XCURSOR_SIZE",
             // Crashes are logged with their backtrace without it.

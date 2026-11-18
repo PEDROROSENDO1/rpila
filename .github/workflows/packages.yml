@@ -119,6 +119,8 @@ jobs:
           test -f /usr/share/pila/check/capture-stream
           test -x /usr/bin/pila-session
           grep -F 'Exec=/usr/bin/pila-session' /usr/share/wayland-sessions/pila.desktop
+          grep -F 'ExecStart=/usr/bin/pila-session --service' /usr/lib/systemd/user/pila.service
+          test -f /usr/lib/systemd/user/pila-shutdown.target
           test -f /etc/xdg/xdg-desktop-portal/pila-portals.conf
           test -f /etc/xdg/xdg-desktop-portal-wlr/pila
       # If it starts, it's still running when its time is up. Xwayland is only

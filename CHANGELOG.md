@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **A systemd session, as niri's:** with systemd, `pila-session` runs Pila as the user service
+  `pila.service`, bound to `graphical-session.target`, so the user services of the graphical
+  session (`WantedBy=graphical-session.target`) and the XDG autostart entries
+  (`~/.config/autostart`) start once Pila is ready and stop when it quits, and Pila's variables
+  leave systemd's environment after the session. A second login while one runs is refused.
+  `PILA_NO_SYSTEMD=1` keeps the old way; without systemd nothing changes. The packages install
+  the units in `/usr/lib/systemd/user` (`scripts/install`: `SYSTEMDUSERUNITDIR`).
 - **`[environment]`:** environment variables for everything Pila starts (autostart, bindings, the
   terminal and the launcher), `NAME = "value"`, or `NAME = false` to remove one Pila was started
   with; a saved change reaches what starts from then on. On a TTY they also go to the D-Bus

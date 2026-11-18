@@ -21,6 +21,8 @@ contents:
     dst: /usr/share/pila/check/
   - src: stage/usr/share/wayland-sessions/*
     dst: /usr/share/wayland-sessions/
+  - src: stage/usr/lib/systemd/user/*
+    dst: /usr/lib/systemd/user/
   - src: stage/usr/share/icons/hicolor/scalable/apps/*
     dst: /usr/share/icons/hicolor/scalable/apps/
   - src: stage/usr/share/man/man1/*

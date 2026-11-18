@@ -1,0 +1,8 @@
+# Stops graphical-session.target and what hangs from it when Pila's session
+# ends (pila-session starts it after pila.service exits, however it exits).
+[Unit]
+Description=End of the Pila session
+DefaultDependencies=no
+StopWhenUnneeded=true
+Conflicts=graphical-session.target graphical-session-pre.target
+After=graphical-session.target graphical-session-pre.target

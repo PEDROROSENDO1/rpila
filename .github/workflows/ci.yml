@@ -56,6 +56,8 @@ jobs:
         run: |
           DESTDIR="$RUNNER_TEMP/stage" PREFIX=/usr scripts/install --no-build
           find "$RUNNER_TEMP/stage" -type f | sort
+          grep -F 'ExecStart=/usr/bin/pila-session --service' \
+            "$RUNNER_TEMP/stage/usr/lib/systemd/user/pila.service"
 
   scripts:
     name: Shell scripts

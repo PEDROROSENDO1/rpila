@@ -1,0 +1,25 @@
+# Pila's login session under systemd's user manager, started by pila-session
+# (which scripts/install installs with this unit). Bound to
+# graphical-session.target: the user services that hang from it (a bar,
+# notifications, an idle daemon, the XDG autostart entries in
+# ~/.config/autostart) start once Pila is ready and stop with it. Pila tells
+# systemd it's ready (sd_notify) after exporting its environment, so they
+# find WAYLAND_DISPLAY. Not started by hand: pila-session imports the login's
+# environment first and cleans up after it.
+[Unit]
+Description=Pila, a stacking Wayland compositor
+Documentation=man:pila(1)
+BindsTo=graphical-session.target
+Before=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=xdg-desktop-autostart.target
+Before=xdg-desktop-autostart.target
+
+[Service]
+Slice=session.slice
+Type=notify
+SyslogIdentifier=pila
+# The wrapper keeps ~/.local/state/pila/pila.log and then becomes pila (exec):
+# the service's main process, which is what systemd hears READY=1 from.
+ExecStart=@BINDIR@/pila-session --service

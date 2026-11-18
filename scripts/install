@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Install pila as a login session, on any distro and with any display manager
 # that reads wayland-sessions (GDM, SDDM, LightDM, greetd front ends, ...):
-# the release binary (and pila-launcher's and pila-bar's), the session wrapper, the session entry and its icon, and
-# the portal configs for screen sharing. Run it from your desktop session; sudo
+# the release binary (and pila-launcher's and pila-bar's), the session wrapper, the session entry and its icon,
+# the systemd user units the wrapper runs it as where there's systemd, and the
+# portal configs for screen sharing. Run it from your desktop session; sudo
 # asks once if the targets aren't writable. Afterwards log out and pick "pila"
 # in the login screen's session menu. After changing pila: run it again, then
 # log out and back in.
@@ -93,14 +94,20 @@ if [ -z "$DESTDIR" ]; then
     done
 fi
 
-# The session entry runs the wrapper by its installed path.
-desktop="$(mktemp)"
-trap 'rm -f "$desktop"' EXIT
-sed "s|@BINDIR@|$BINDIR|g" resources/session/pila.desktop >"$desktop"
+# The session entry and pila.service run the wrapper by its installed path.
+filled="$(mktemp -d)"
+trap 'rm -rf "$filled"' EXIT
+for file in pila.desktop pila.service; do
+    sed "s|@BINDIR@|$BINDIR|g" "resources/session/$file" >"$filled/$file"
+done
 
 for entry in "${install_files[@]}"; do
     IFS=: read -r source target mode <<<"$entry"
-    [ "$source" = resources/session/pila.desktop ] && source="$desktop"
+    case "$source" in
+        resources/session/pila.desktop | resources/session/pila.service)
+            source="$filled/$(basename "$source")"
+            ;;
+    esac
     target="$DESTDIR$target"
     # install unlinks the old file and creates a new one, so replacing the
     # binary of a running session is fine: it keeps its old inode.

@@ -1058,6 +1058,26 @@ Key flows and invariants:
   back doesn't allocate and blur everything anew (that missed a refresh on battery, back from
   another workspace); it goes when the window does. Shaders are
   compiled by `render::warm_up`, kept in the EGL context; a failure disables blur.
+- **Login session** (`resources/session/`, `sd_notify.rs`): the display manager runs
+  `pila-session`. Where `systemd --user` answers and has `pila.service` (installed in
+  `SYSTEMDUSERUNITDIR` by `scripts/install`), it runs Pila as that service, as niri does: it
+  refuses a second session while the service is active, imports the login's environment into
+  the manager (libseat's logind backend finds the session by `XDG_SESSION_ID` there, the
+  service being outside the session's scope; `PATH` and the locale are the services' too) and
+  into D-Bus activation, then `systemctl --user --wait start pila.service` in the background,
+  waited on so its trap runs: the display manager ends a session by stopping its scope, which
+  holds the script and not the service, and the trap stops the service. When the service ends,
+  `pila-shutdown.target` (conflicting with them) stops `graphical-session.target` and
+  `graphical-session-pre.target`, and `unset-environment` takes back `SESSION_ENV`. The
+  service (`Type=notify`, `BindsTo=`/`Before=graphical-session.target`,
+  `Before=xdg-desktop-autostart.target`) runs `pila-session --service`, which keeps `pila.log`
+  and execs Pila, so Pila is the main process; its stderr reaches the journal as the
+  service's (`SyslogIdentifier=pila`). Pila sends `READY=1` (`sd_notify::ready`, once, no
+  libsystemd) at the first `run_pending_startup`, after the export below or its timeout, so the
+  services of the target find `WAYLAND_DISPLAY`; `session_env` keeps `NOTIFY_SOCKET` from what
+  it starts. `PILA_NO_SYSTEMD`, no user manager or no unit: the wrapper runs Pila itself as
+  before (and `scripts/tty`, `scripts/check` never use the service). Per-app scopes
+  (`app-*.scope`, as niri's spawns get) aren't done.
 - **Session environment** (`Pila::spawn`, `start_session`): children get `WAYLAND_DISPLAY`,
   the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet
   or not; none with `[xwayland] enabled = false`), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`

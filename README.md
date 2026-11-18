@@ -285,8 +285,10 @@ what's on GitHub, so use it for a published version, and don't keep both install
 Log out, pick *Pila* (on GDM, the gear icon on the password screen), log in. The session
 uses the user's D-Bus bus (and `systemd --user` where there is one) like any other
 desktop, so portals, PipeWire and the keyring (unlocked by the display manager's PAM setup)
-just work. Without a per-user bus (e.g. elogind or seatd without systemd), the wrapper
-starts one for the session with `dbus-run-session`.
+just work. With systemd, Pila runs as the user service `pila.service`, bound to
+`graphical-session.target`, so the user services of the graphical session and the XDG
+autostart entries start with it and stop when it quits. Without a per-user bus (e.g. elogind
+or seatd without systemd), the wrapper starts one for the session with `dbus-run-session`.
 
 The log goes to `~/.local/state/pila/pila.log` (`$XDG_STATE_HOME/pila` if that's set; the
 previous run's is in `pila.log.old`).
