@@ -25,15 +25,19 @@
 
 # Mod+D and tapping Mod alone. Unset, they do nothing. pila-launcher,
 # installed with Pila, lists the installed apps, searched as you type
-# (--terminal for apps that run in one; default $TERMINAL).
-# launcher = "fuzzel"              # e.g.
+# (--terminal for apps that run in one; default $TERMINAL). Any other
+# launcher works too, such as fuzzel.
 # launcher = "pila-launcher --terminal foot"   # e.g.
 
 # Commands run at startup instead of the terminal (`pila -c` overrides them).
 # X11 apps among them start Xwayland as they connect. Unset, the terminal.
+# pila-bar, installed with Pila, is a bar on every monitor: the workspaces
+# (a click or the wheel switches), the focused window's title and a clock
+# (--bottom for the bottom edge, --clock FORMAT as strftime writes it). Any
+# other bar works too, such as waybar.
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
-#     "waybar",                    # or pila-bar, installed with Pila
+#     "pila-bar",
 #     "mako",
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
