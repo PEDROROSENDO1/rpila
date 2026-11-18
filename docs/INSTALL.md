@@ -229,11 +229,15 @@ distros):
 - `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
   lock screen doesn't need it
 - `pciutils`: `lspci`, with which `pila-report` names the GPU and its driver
+- an icon font, for the battery's icon in `pila-bar`: Nerd Fonts' symbols
+  (`ttf-nerd-fonts-symbols` on Arch) or any Nerd Font, or Font Awesome (`otf-font-awesome` on
+  Arch, `fonts-font-awesome` on Debian and Ubuntu, `fontawesome-fonts-all` on Fedora); without
+  one the bar shows text alone
 
 ```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils       # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify-bin xdg-utils wl-clipboard swaylock pciutils # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils     # Fedora
+sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils ttf-nerd-fonts-symbols   # Arch
+sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify-bin xdg-utils wl-clipboard swaylock pciutils fonts-font-awesome # Debian, Ubuntu
+sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils fontawesome-fonts-all  # Fedora
 ```
 
 The rest of a desktop (notifications, wallpaper, lock screen and idle, another bar or launcher)

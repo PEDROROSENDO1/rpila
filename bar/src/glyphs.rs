@@ -93,9 +93,10 @@ pub fn find() -> Option<Font> {
     })
 }
 
-/// The family names icon fonts go by.
+/// The family names icon fonts go by: Font Awesome 4 (Debian's and
+/// Ubuntu's) is `FontAwesome`, later ones `Font Awesome 6 Free` and so on.
 fn is_icon_family(family: &str) -> bool {
-    family.contains("Nerd Font") || family.starts_with("Font Awesome")
+    family.contains("Nerd Font") || family.replace(' ', "").starts_with("FontAwesome")
 }
 
 /// The likeliest icon font among `faces`: Nerd Fonts' symbols alone first
@@ -205,6 +206,11 @@ mod tests {
         // Font Awesome alone: its solid face.
         assert_eq!(pick_of(&faces[..3]), Some(face("Font Awesome 7 Free", 900)));
         assert_eq!(pick_of(&faces[..1]), None);
+        // Font Awesome 4, one face.
+        assert_eq!(
+            pick_of(&[face("DejaVu Sans", 400), face("FontAwesome", 400)]),
+            Some(face("FontAwesome", 400))
+        );
         let italic = Face {
             italic: true,
             ..face("Symbols Nerd Font", 400)

@@ -13,7 +13,9 @@
 - **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an arrow up
   while charging, amber at 15% or less while running down (a mouse's battery isn't counted);
   `--no-battery` leaves it out. With an icon font installed (a Nerd Font, or Font Awesome), its
-  icon shows too: the level in quarters, a bolt while charging, a plug when plugged in.
+  icon shows too: the level in quarters, a bolt while charging, a plug when plugged in. The
+  packages suggest one (`ttf-nerd-fonts-symbols` on Arch, Font Awesome on Debian, Ubuntu and
+  Fedora).
 - **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
   its text growing with it, and shown only on the monitors `--output NAME` names (once per
   monitor), including when one is plugged in later.
