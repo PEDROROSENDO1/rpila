@@ -576,7 +576,8 @@ fn pila_bar_and_pila_launcher_come_from_the_example_config() {
 
 #[test]
 fn mod_d_without_a_launcher_does_nothing() {
-    let (mut pila, client, _, _) = one_window("");
+    // `""` for none: a file that leaves it out gets the example's.
+    let (mut pila, client, _, _) = one_window("launcher = \"\"\n");
     pila.combo("Super+d");
     client.roundtrip();
     let state = pila.settle();
