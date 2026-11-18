@@ -13,6 +13,8 @@ on:
       - Cargo.toml
       - Cargo.lock
       - build.rs
+      - launcher/Cargo.toml
+      - launcher/Cargo.lock
       - package.nix
       - flake.nix
       - flake.lock
@@ -25,6 +27,8 @@ on:
       - Cargo.toml
       - Cargo.lock
       - build.rs
+      - launcher/Cargo.toml
+      - launcher/Cargo.lock
       - package.nix
       - flake.nix
       - flake.lock
@@ -60,7 +64,13 @@ jobs:
           rustup toolchain install "$msrv" --profile minimal
           rustup default "$msrv"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            . -> target
+            launcher -> target
       - run: cargo build --locked
+      # pila-launcher has the same rust-version.
+      - run: cargo build --locked --manifest-path launcher/Cargo.toml
 
   distros:
     name: Build on ${{ matrix.image }}
@@ -102,8 +112,13 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: ${{ matrix.image }}
+          workspaces: |
+            . -> target
+            launcher -> target
       - run: cargo build --locked
       - run: ./target/debug/pila --version
+      - run: cargo build --locked --manifest-path launcher/Cargo.toml
+      - run: ./launcher/target/debug/pila-launcher --version
 
   nix:
     name: Nix (package, smoke test)
@@ -116,6 +131,7 @@ jobs:
       - name: The package says which commit it is
         run: ./result/bin/pila --version | tee /dev/stderr | grep -F "$(git rev-parse --short=7 HEAD)"
       - run: ./result/bin/pila-report --help
+      - run: ./result/bin/pila-launcher --version
       - run: ./result/bin/pila-check --help && test -f result/share/pila/check/capture-stream
       - run: nix develop --command cargo --version
       # EGL's drivers, which a NixOS system provides, come from Mesa here. If
@@ -152,3 +168,4 @@ jobs:
         run: pacman -Syu --noconfirm --needed git rust cargo-audit
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - run: cargo audit
+      - run: cargo audit --file launcher/Cargo.lock

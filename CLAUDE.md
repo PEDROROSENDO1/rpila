@@ -46,6 +46,12 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
+- `pila-launcher` (`launcher/`) is a cargo workspace of its own, with its own `Cargo.lock`
+  (Smithay and iced_layershell need different winit betas): the same commands with
+  `--manifest-path launcher/Cargo.toml` (or run from `launcher/`); its binary lands in
+  `launcher/target/`. CI, the packages and `scripts/install` build both; a release bumps its
+  version with Pila's.
+
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,
   then clippy, a release build and the tests with `--locked` (a `Cargo.lock` out of date
   with `Cargo.toml` fails there, not locally), does a staged install and runs
@@ -247,6 +253,8 @@ global that exposes or controls other clients, input or outputs must get it too.
 The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
+`launcher/` is `pila-launcher`, an iced client of its own that reaches Pila only through
+Wayland (see "Launcher" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature

@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Install pila as a login session, on any distro and with any display manager
 # that reads wayland-sessions (GDM, SDDM, LightDM, greetd front ends, ...):
-# the release binary, the session wrapper, the session entry and its icon, and
+# the release binary (and pila-launcher's), the session wrapper, the session entry and its icon, and
 # the portal configs for screen sharing. Run it from your desktop session; sudo
 # asks once if the targets aren't writable. Afterwards log out and pick "pila"
 # in the login screen's session menu. After changing pila: run it again, then
 # log out and back in.
 #
-#   scripts/install              build the release binary, then install
-#   scripts/install --container  build it in the dev container (scripts/dev)
-#   scripts/install --no-build   install what's in target/release
+#   scripts/install              build the release binaries, then install
+#   scripts/install --container  build them in the dev container (scripts/dev)
+#   scripts/install --no-build   install what's in target/release and
+#                                launcher/target/release
 #
 # The build uses the host's cargo if there is one: a binary built in the dev
 # container (Arch) needs Arch's glibc and libraries, which other distros may
@@ -44,7 +45,10 @@ if [ "$build" = auto ]; then
 fi
 
 case "$build" in
-    native) cargo build --release ;;
+    native)
+        cargo build --release
+        cargo build --release --manifest-path launcher/Cargo.toml
+        ;;
     container)
         if [ -z "${DEVCONTAINER:-}" ]; then
             echo "Building in the dev container: the binary is linked against Arch's" >&2
@@ -52,10 +56,16 @@ case "$build" in
             echo "on the host instead, see README.md)." >&2
         fi
         scripts/dev cargo build --release
+        scripts/dev cargo build --release --manifest-path launcher/Cargo.toml
         ;;
 esac
 if [ ! -x target/release/pila ]; then
     echo "target/release/pila not found; build it first (cargo build --release)" >&2
+    exit 1
+fi
+if [ ! -x launcher/target/release/pila-launcher ]; then
+    echo "launcher/target/release/pila-launcher not found; build it first" >&2
+    echo "(cargo build --release --manifest-path launcher/Cargo.toml)" >&2
     exit 1
 fi
 

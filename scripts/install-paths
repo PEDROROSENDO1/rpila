@@ -22,6 +22,7 @@ CHECKDIR="$(dirname "$BINDIR")/share/pila/check"
 # source in the repository : installed path (before DESTDIR) : mode
 install_files=(
     "target/release/pila:$BINDIR/pila:755"
+    "launcher/target/release/pila-launcher:$BINDIR/pila-launcher:755"
     "resources/session/pila-session:$BINDIR/pila-session:755"
     "scripts/report:$BINDIR/pila-report:755"
     "scripts/check:$BINDIR/pila-check:755"

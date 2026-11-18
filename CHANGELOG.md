@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`pila-launcher`, an app launcher of Pila's own:** the installed apps (their `.desktop`
+  files) with their icons, searched as you type; Return or a click starts one, Escape closes
+  it. Opt-in: `launcher = "pila-launcher"` makes Mod+D and tapping Mod open it (`--terminal`
+  for apps that run in one). It stays in the background after the first use, so it opens at
+  once; input methods such as fcitx5 type into it. Written with iced, rendered in software: it
+  needs no new library, and the packages include it.
 - **`default-bindings = false`** leaves out every default binding and gesture, so only the
   config's own are left: for a scheme of one's own, or Pila as a login screen's compositor
   (greetd), where Mod+Return would otherwise open a terminal before anyone logs in. Switching

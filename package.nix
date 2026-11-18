@@ -23,6 +23,7 @@
 }:
 
 let
+  version = (lib.importTOML ./Cargo.toml).package.version;
   rustFlags = toString (
     map (arg: "-C link-arg=" + arg) [
       "-Wl,--push-state,--no-as-needed"
@@ -31,10 +32,40 @@ let
       "-Wl,--pop-state"
     ]
   );
+  # pila-launcher (launcher/): a cargo workspace of its own, with its own
+  # lock. It loads libwayland-client and libxkbcommon at runtime too.
+  launcher = rustPlatform.buildRustPackage {
+    pname = "pila-launcher";
+    inherit version;
+    src = lib.fileset.toSource {
+      root = ./launcher;
+      fileset = lib.fileset.unions [
+        ./launcher/Cargo.lock
+        ./launcher/Cargo.toml
+        ./launcher/src
+      ];
+    };
+    cargoLock.lockFile = ./launcher/Cargo.lock;
+    buildInputs = [
+      libxkbcommon
+      wayland
+    ];
+    env.RUSTFLAGS = toString (
+      map (arg: "-C link-arg=" + arg) [
+        "-Wl,--push-state,--no-as-needed"
+        "-lwayland-client"
+        "-lxkbcommon"
+        "-Wl,--pop-state"
+      ]
+    );
+    # CI runs its tests.
+    doCheck = false;
+    meta.mainProgram = "pila-launcher";
+  };
 in
 rustPlatform.buildRustPackage {
   pname = "pila";
-  version = (lib.importTOML ./Cargo.toml).package.version;
+  inherit version;
 
   src = lib.fileset.toSource {
     root = ./.;
@@ -89,6 +120,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   postInstall = ''
+    install -Dm755 ${launcher}/bin/pila-launcher -t $out/bin
     install -Dm755 resources/session/pila-session $out/bin/pila-session
     install -Dm755 scripts/report $out/bin/pila-report
     # pila-check finds its helpers in share/pila/check next to its bin.
@@ -116,6 +148,7 @@ rustPlatform.buildRustPackage {
     providedSessions = [ "pila" ];
     # For the flake's devShell.
     inherit rustFlags;
+    inherit launcher;
   };
 
   meta = {
