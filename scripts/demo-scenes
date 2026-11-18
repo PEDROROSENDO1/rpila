@@ -248,14 +248,19 @@ class Scene:
 KITTY = ["kitty", "--override", "background=#1e2030", "--override", "foreground=#c8d3f5",
          "--override", "cursor=#c8d3f5", "--override", "font_size=11",
          "--override", "remember_window_size=no", "--override", "confirm_os_window_close=0"]
-# The translucent terminal shows Pila's workspaces as they change.
+# The translucent terminal shows Pila's workspaces as they change: read
+# first, then drawn in one go, as a synchronized update (kitty shows no frame
+# of it half drawn).
 GLASS = r"""
 prev=
 while :; do
-    now=$(pila msg outputs; echo; pila msg workspaces)
+    outputs=$(pila msg outputs)
+    workspaces=$(pila msg workspaces)
+    now="$outputs
+$workspaces"
     if [ "$now" != "$prev" ]; then
-        printf '\033[H\033[2J$ pila msg outputs\n%s\n' "$(pila msg outputs)"
-        printf '\n$ pila msg workspaces\n%s' "$(pila msg workspaces)"
+        printf '\033[?2026h\033[H\033[2J$ pila msg outputs\n%s\n\n$ pila msg workspaces\n%s\033[?2026l' \
+            "$outputs" "$workspaces"
         prev=$now
     fi
     sleep 0.2
@@ -356,6 +361,9 @@ def scenes():
         pause(1.0)
 
     with Scene("workspaces", "Workspaces", short=True):
+        # The editor is seen before it goes, the short video's first sight
+        # of it too (it skips the launcher scene).
+        pause(1.0)
         combo("Super+Shift+Page_Down")
         wait("the editor on workspace 2", lambda s: find(s, "GTK Print Editor")["workspace"] == 2)
         pause(1.0)
