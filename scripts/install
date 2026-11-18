@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install pila as a login session, on any distro and with any display manager
 # that reads wayland-sessions (GDM, SDDM, LightDM, greetd front ends, ...):
-# the release binary (and pila-launcher's), the session wrapper, the session entry and its icon, and
+# the release binary (and pila-launcher's and pila-bar's), the session wrapper, the session entry and its icon, and
 # the portal configs for screen sharing. Run it from your desktop session; sudo
 # asks once if the targets aren't writable. Afterwards log out and pick "pila"
 # in the login screen's session menu. After changing pila: run it again, then
@@ -63,11 +63,13 @@ if [ ! -x target/release/pila ]; then
     echo "target/release/pila not found; build it first (cargo build --release)" >&2
     exit 1
 fi
-if [ ! -x launcher/target/release/pila-launcher ]; then
-    echo "launcher/target/release/pila-launcher not found; build it first" >&2
-    echo "(cargo build --release --manifest-path launcher/Cargo.toml)" >&2
-    exit 1
-fi
+for client in pila-launcher pila-bar; do
+    if [ ! -x "launcher/target/release/$client" ]; then
+        echo "launcher/target/release/$client not found; build it first" >&2
+        echo "(cargo build --release --manifest-path launcher/Cargo.toml)" >&2
+        exit 1
+    fi
+done
 
 if [ -z "$DESTDIR" ]; then
     # A binary that can't load here (e.g. built in the dev container against a

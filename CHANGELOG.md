@@ -8,6 +8,11 @@
   for apps that run in one). It stays in the background after the first use, so it opens at
   once; input methods such as fcitx5 type into it. Written with iced, rendered in software: it
   needs no new library, and the packages include it.
+- **`pila-bar`, a bar of Pila's own:** on every monitor, the workspaces (a click or the wheel
+  switches), the focused window's title and a clock in your language. Opt-in: add `pila-bar` to
+  `autostart` (`--bottom`, `--clock FORMAT`). Written with iced like `pila-launcher`, on
+  standard protocols (ext-workspace) plus wlr-foreign-toplevel-management, so it also runs on
+  other compositors; the packages include it.
 - **`default-bindings = false`** leaves out every default binding and gesture, so only the
   config's own are left: for a scheme of one's own, or Pila as a login screen's compositor
   (greetd), where Mod+Return would otherwise open a terminal before anyone logs in. Switching

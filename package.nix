@@ -32,20 +32,26 @@ let
       "-Wl,--pop-state"
     ]
   );
-  # pila-launcher (launcher/): a cargo workspace of its own, with its own
-  # lock. It loads libwayland-client and libxkbcommon at runtime too.
-  launcher = rustPlatform.buildRustPackage {
-    pname = "pila-launcher";
+  # pila-launcher and pila-bar (launcher/ and bar/): a cargo workspace of
+  # their own, rooted in launcher/, with its own lock. They load
+  # libwayland-client and libxkbcommon at runtime too.
+  clients = rustPlatform.buildRustPackage {
+    pname = "pila-clients";
     inherit version;
     src = lib.fileset.toSource {
-      root = ./launcher;
+      root = ./.;
       fileset = lib.fileset.unions [
         ./launcher/Cargo.lock
         ./launcher/Cargo.toml
         ./launcher/src
+        ./bar/Cargo.toml
+        ./bar/src
       ];
     };
     cargoLock.lockFile = ./launcher/Cargo.lock;
+    cargoRoot = "launcher";
+    # Its default members are both; the target directory stays at the top.
+    buildAndTestSubdir = "launcher";
     buildInputs = [
       libxkbcommon
       wayland
@@ -60,7 +66,7 @@ let
     );
     # CI runs its tests.
     doCheck = false;
-    meta.mainProgram = "pila-launcher";
+    meta.mainProgram = "pila-bar";
   };
 in
 rustPlatform.buildRustPackage {
@@ -120,7 +126,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   postInstall = ''
-    install -Dm755 ${launcher}/bin/pila-launcher -t $out/bin
+    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar -t $out/bin
     install -Dm755 resources/session/pila-session $out/bin/pila-session
     install -Dm755 scripts/report $out/bin/pila-report
     # pila-check finds its helpers in share/pila/check next to its bin.
@@ -148,7 +154,7 @@ rustPlatform.buildRustPackage {
     providedSessions = [ "pila" ];
     # For the flake's devShell.
     inherit rustFlags;
-    inherit launcher;
+    inherit clients;
   };
 
   meta = {
