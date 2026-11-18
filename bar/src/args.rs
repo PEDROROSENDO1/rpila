@@ -7,6 +7,8 @@ pub struct Args {
     pub bottom: bool,
     /// The clock's strftime format; empty for no clock.
     pub clock: String,
+    /// The clock's tooltip's strftime format; empty for none.
+    pub date: String,
     /// The bar's height in logical pixels, its exclusive zone.
     pub height: u32,
     /// The outputs (by name) to show the bar on; empty for all of them.
@@ -17,7 +19,8 @@ pub struct Args {
     pub tray: bool,
 }
 
-pub const DEFAULT_CLOCK: &str = "%a %e %b  %H:%M";
+pub const DEFAULT_CLOCK: &str = "%H:%M";
+pub const DEFAULT_DATE: &str = "%A %e %B %Y";
 /// The height when `--height` doesn't say, what the text size is made for.
 pub const DEFAULT_HEIGHT: u32 = 28;
 /// What `--height` takes.
@@ -28,6 +31,7 @@ impl Default for Args {
         Args {
             bottom: false,
             clock: DEFAULT_CLOCK.to_string(),
+            date: DEFAULT_DATE.to_string(),
             height: DEFAULT_HEIGHT,
             outputs: Vec::new(),
             battery: true,
@@ -37,17 +41,20 @@ impl Default for Args {
 }
 
 pub const USAGE: &str = "\
-Usage: pila-bar [--bottom] [--clock FORMAT] [--height PIXELS] [--output NAME]...
-               [--no-battery] [--no-tray]
+Usage: pila-bar [--bottom] [--clock FORMAT] [--date FORMAT] [--height PIXELS]
+               [--output NAME]... [--no-battery] [--no-tray]
 
 Pila's bar, on every monitor: the workspaces (a click or the wheel switches),
-the tray, the battery (where there's one) and a clock. It's Pila's default `autostart`. It works in any compositor with
-the layer shell and ext-workspace.
+the tray, the battery (where there's one) and a clock, the date in its
+tooltip. It's Pila's default `autostart`. It works in any compositor with the
+layer shell and ext-workspace.
 
 Options:
   --bottom          On the bottom edge of the screen (default: the top)
   --clock FORMAT    The clock as strftime(3) writes it, in the language of
-                    LC_TIME; '' leaves it out (default: '%a %e %b  %H:%M')
+                    LC_TIME; '' leaves it out (default: '%H:%M')
+  --date FORMAT     The clock's tooltip, shown with the pointer over it, the
+                    same way; '' for none (default: '%A %e %B %Y')
   --height PIXELS   The bar's height, 16 to 96; the text grows with it
                     (default: 28)
   --output NAME     Only on this monitor (as `pila msg outputs` names it);
@@ -88,6 +95,7 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args, Exit> 
             "--no-battery" if inline.is_none() => parsed.battery = false,
             "--no-tray" if inline.is_none() => parsed.tray = false,
             "--clock" => parsed.clock = value("a format")?,
+            "--date" => parsed.date = value("a format")?,
             "--height" => {
                 let text = value("a height")?;
                 parsed.height = text
@@ -133,6 +141,9 @@ mod tests {
         assert_eq!(args(&["--clock", "%H:%M"]).unwrap().clock, "%H:%M");
         assert_eq!(args(&["--clock=%T"]).unwrap().clock, "%T");
         assert_eq!(args(&["--clock", ""]).unwrap().clock, "");
+        assert_eq!(args(&["--date", "%F"]).unwrap().date, "%F");
+        assert_eq!(args(&["--date="]).unwrap().date, "");
+        assert!(matches!(args(&["--date"]), Err(Exit::Error(_))));
         // A format may hold '='.
         assert_eq!(args(&["--clock=a=b"]).unwrap().clock, "a=b");
         assert_eq!(args(&["-h"]), Err(Exit::Help));

@@ -46,6 +46,8 @@ PILA_BAR_BIN; skipped where it isn't), started in the run:
   - a layer surface along the top edge, as wide as the output, that windows
     keep clear of (its exclusive zone) and that takes no keyboard; a
     maximized window fills the rest;
+  - the pointer resting on the clock shows the date in a tooltip below the
+    bar, gone when it leaves;
   - a click on a workspace goes to it and the wheel over the bar to the next
     or previous one, starting from where a binding of Pila's left it (the
     bar follows ext-workspace), and never past the last;
@@ -434,6 +436,27 @@ class Workload:
                        (x, top, w, y + h) == (0, BAR_HEIGHT, 1920, 1080), f"geometry {(x, y, w, h)}")
         if shutil.which("grim"):
             subprocess.run(["grim", os.path.join(self.out, "bar.png")], check=False)
+
+        # The clock's tooltip (the date): a layer surface of its own below the
+        # bar while the pointer rests on the clock (the last block: the time
+        # alone), taking no input; gone when the pointer leaves.
+        tooltip = lambda s: next((l for l in s["layers"] if l["namespace"] == "pila-bar-tooltip"
+                                  and l["geometry"] and l["geometry"]["h"]), None)
+        self.move(1920 - 30, BAR_HEIGHT // 2)
+        state = self.wait(tooltip, 5)
+        if self.check("the pointer resting on the clock shows its tooltip", state is not None,
+                      f"layers {[l['namespace'] for l in self.state()['layers']]}"):
+            g = tooltip(state)["geometry"]
+            self.check("below the bar, inside the output, with no grab or keyboard",
+                       g["y"] >= BAR_HEIGHT and g["x"] >= 0 and g["x"] + g["w"] <= 1920
+                       and not state["pointer"]["grabbed"] and tooltip(state)["keyboard"] == "none",
+                       f"at {g}, grabbed {state['pointer']['grabbed']}")
+            if shutil.which("grim"):
+                time.sleep(0.5)  # Past its opening animation, for the picture.
+                subprocess.run(["grim", os.path.join(self.out, "tooltip.png")], check=False)
+        self.move(960, 600)
+        state = self.wait(lambda s: tooltip(s) is None, 5)
+        self.check("and leaving the clock hides it", state is not None)
 
         # A click on the second workspace's button.
         self.move(BAR_BUTTON + BAR_BUTTON // 2, BAR_HEIGHT // 2)

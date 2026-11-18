@@ -535,7 +535,10 @@ autostart = ["pila-bar --bottom", "mako"]
 ```
 
 `--bottom` puts it along the bottom edge, and `--clock FORMAT` sets the clock as strftime(3)
-writes it, in your `LC_TIME` language (default `'%a %e %b  %H:%M'`; `''` leaves the clock out).
+writes it, in your `LC_TIME` language (default `'%H:%M'`; `''` leaves the clock out). The date
+shows in a tooltip below the clock while the pointer rests on it: `--date FORMAT`, the same way
+(default `'%A %e %B %Y'`; `''` for none). For the date in the bar itself, as before:
+`--clock '%a %e %b  %H:%M'`.
 `--height PIXELS` makes it 16 to 96 pixels high instead of 28, its text growing with it, and
 `--output NAME` puts it on that monitor alone (named as `pila msg outputs` shows; once per
 monitor for several). A monitor connected later gets its bar too, if it's one of those. The

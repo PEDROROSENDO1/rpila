@@ -797,8 +797,15 @@ Key flows and invariants:
   (`IconFont::clock`); none found, the battery and the clock are text alone, never a missing
   glyph's box. The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the
-  user's `LC_TIME` and wakes the bar only when the text changes. `scripts/apps bar` drives it on
-  a headless Pila.
+  user's `LC_TIME` and wakes the bar only when the text changes; a second one makes the date for
+  the clock's tooltip (`--date`). The tooltip shows half a second after the pointer enters the
+  clock and goes when it leaves (`Message::ClockHover`, `Bar::open_tooltip`; a count of hovers
+  makes a late one stale): a layer surface of its own (namespace `pila-bar-tooltip`), not a
+  popup, since iced_layershell asks a grab for every popup it makes, with the enter's serial if
+  no button's, and a tooltip mustn't hold the pointer; anchored to the right edge under the
+  clock, the bar's last block (iced_layershell reports no layer surface's size to place it at the
+  pointer), with an exclusive zone of 0 so the compositor puts it below the bar, taking no input,
+  sized from its text (`ui::tooltip_size`). `scripts/apps bar` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

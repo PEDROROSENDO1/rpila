@@ -68,7 +68,9 @@ there. Run them after changing the launcher, the layer shell or input methods.
 `bar` drives `pila-bar` (`run_bar`; skipped where it isn't built in `launcher/target/release`,
 or `PILA_BAR_BIN`), started by the workload: its layer surface lies along the top edge, as wide
 as the output, with its exclusive zone (the output's `usable` area) and no keyboard, and a
-maximized foot fills the rest; a click on the second workspace's button goes there, the wheel
+maximized foot fills the rest; the pointer resting on the clock shows its tooltip, a layer surface
+(`pila-bar-tooltip`) below the bar, inside the output, with no grab or keyboard (`tooltip.png`),
+gone when the pointer leaves; a click on the second workspace's button goes there, the wheel
 over the bar goes on from where a binding of Pila's left the workspace (so the bar followed
 ext-workspace) and stops at the last; an output added gets a bar of its own as wide as it, one
 removed takes its bar along with the process still running; `--bottom` puts it along the

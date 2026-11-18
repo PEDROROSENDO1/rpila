@@ -18,6 +18,10 @@
   icon before it. The
   packages suggest one (`ttf-nerd-fonts-symbols` on Arch, Font Awesome on Debian, Ubuntu and
   Fedora).
+- **The clock is the time alone, the date in its tooltip:** `pila-bar`'s clock shows `%H:%M` by
+  default, and the date (`%A %e %B %Y`, in your language) shows below it while the pointer rests
+  on it; `--date FORMAT` sets it (`''` for none), and `--clock '%a %e %b  %H:%M'` puts the date
+  back in the bar.
 - **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
   its text growing with it, and shown only on the monitors `--output NAME` names (once per
   monitor), including when one is plugged in later.

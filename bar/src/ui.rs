@@ -44,6 +44,8 @@ use crate::{
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
 pub const NAMESPACE: &str = "pila-bar";
+/// The clock's tooltip's.
+pub const TOOLTIP_NAMESPACE: &str = "pila-bar-tooltip";
 
 /// The line along the edge that faces the windows.
 const EDGE: f32 = 1.0;
@@ -61,6 +63,13 @@ const MENU_CHAR: f32 = 8.5;
 pub enum Message {
     Update(Update),
     Clock(String),
+    /// The clock's tooltip's text.
+    Date(String),
+    /// The pointer entered (true) or left the clock.
+    ClockHover(bool),
+    /// The pointer has been on the clock long enough for its tooltip (the
+    /// hover it was asked for).
+    TooltipDue(u64),
     Battery(Battery),
     /// The icon font installed, if any.
     IconFont(Option<glyphs::IconFont>),
@@ -84,6 +93,14 @@ struct Bar {
     desktop: Desktop<ExtWorkspaceHandleV1>,
     switcher: Option<Switcher>,
     clock: String,
+    /// The clock's tooltip; empty for none.
+    date: String,
+    /// The pointer's latest entering or leaving the clock, counted: a
+    /// tooltip asked for during an older one is stale.
+    hover: u64,
+    hovered: bool,
+    /// The tooltip's surface, while it shows.
+    tooltip: Option<window::Id>,
     /// None with no battery, or `--no-battery`.
     battery: Option<Battery>,
     /// An icon font (`glyphs.rs`): icons where there'd be words.
@@ -138,6 +155,7 @@ pub fn run(args: Args) -> ExitCode {
     let Args {
         bottom,
         clock: format,
+        date: date_format,
         height,
         outputs,
         battery: show_battery,
@@ -149,6 +167,10 @@ pub fn run(args: Args) -> ExitCode {
             desktop: Desktop::default(),
             switcher: None,
             clock: String::new(),
+            date: String::new(),
+            hover: 0,
+            hovered: false,
+            tooltip: None,
             battery: None,
             icon_font: None,
             scrolled: 0.0,
@@ -168,6 +190,9 @@ pub fn run(args: Args) -> ExitCode {
         ];
         if !format.is_empty() {
             tasks.push(Task::run(clock::ticks(format.clone()), Message::Clock));
+            if !date_format.is_empty() {
+                tasks.push(Task::run(clock::ticks(date_format.clone()), Message::Date));
+            }
         }
         if show_tray {
             // Sharp at scale 2.
@@ -231,6 +256,23 @@ impl Bar {
                 }
             }
             Message::Clock(clock) => self.clock = clock,
+            Message::Date(date) => self.date = date,
+            Message::ClockHover(entered) => {
+                self.hover += 1;
+                self.hovered = entered;
+                if entered && self.menu.is_none() && !self.date.is_empty() {
+                    let hover = self.hover;
+                    return Task::perform(after(TOOLTIP_DELAY), move |()| {
+                        Message::TooltipDue(hover)
+                    });
+                }
+                return self.close_tooltip();
+            }
+            Message::TooltipDue(hover) => {
+                if hover == self.hover && self.hovered && self.menu.is_none() {
+                    return self.open_tooltip();
+                }
+            }
             Message::Battery(battery) => self.battery = Some(battery),
             Message::IconFont(font) => self.icon_font = font,
             Message::Style(style) => self.style = style,
@@ -238,13 +280,18 @@ impl Bar {
             Message::Tray(tray::Update::Items(items)) => self.tray_items = items,
             Message::TrayClick(key, click) => return self.tray_click(key, click),
             Message::Pointer(window, x) => {
-                if self.menu.as_ref().is_none_or(|m| m.window != window) {
+                let popup = self.menu.as_ref().is_some_and(|m| m.window == window)
+                    || self.tooltip == Some(window);
+                if !popup {
                     self.pointer = Some((window, x));
                 }
             }
             Message::Closed(window) => {
                 if self.menu.as_ref().is_some_and(|m| m.window == window) {
                     self.menu = None;
+                }
+                if self.tooltip == Some(window) {
+                    self.tooltip = None;
                 }
             }
             Message::MenuEntry(id) => return self.menu_entry(id),
@@ -279,9 +326,57 @@ impl Bar {
     /// A click on a tray item: its menu, if it has one read and the click
     /// asks for it, else the item's own. A click while a menu is open
     /// closes it (a second click on the same item does only that).
+    /// The clock's tooltip: a layer surface of its own below the bar (the
+    /// compositor keeps it clear of the bar's exclusive zone), on the
+    /// output the pointer is on, against its right edge, under the clock,
+    /// which is the bar's last block; it takes no input. Not a popup:
+    /// iced_layershell asks a grab for every popup it makes, and a tooltip
+    /// mustn't hold the pointer (or, denied the grab, be dismissed).
+    fn open_tooltip(&mut self) -> Task<Message> {
+        let Some((bar, _)) = self.pointer else {
+            return Task::none();
+        };
+        let Some(output) = self
+            .surfaces
+            .iter()
+            .find(|(_, w)| *w == bar)
+            .map(|(o, _)| o.clone())
+        else {
+            return Task::none();
+        };
+        let closed = self.close_tooltip();
+        let (width, height) = tooltip_size(&self.date, self.height);
+        let edge = if self.bottom {
+            Anchor::Bottom
+        } else {
+            Anchor::Top
+        };
+        let (window, open) = Message::layershell_open(NewLayerShellSettings {
+            size: Some((width, height)),
+            layer: Layer::Top,
+            anchor: edge | Anchor::Right,
+            // Placed clear of the bar's exclusive zone.
+            exclusive_zone: Some(0),
+            margin: None,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            output_option: OutputOption::Output(output),
+            events_transparent: true,
+            namespace: Some(TOOLTIP_NAMESPACE.to_string()),
+        });
+        self.tooltip = Some(window);
+        Task::batch([closed, open])
+    }
+
+    fn close_tooltip(&mut self) -> Task<Message> {
+        match self.tooltip.take() {
+            Some(window) => Task::done(Message::RemoveWindow(window)),
+            None => Task::none(),
+        }
+    }
+
     fn tray_click(&mut self, key: String, click: Click) -> Task<Message> {
         let was_open = self.menu.as_ref().map(|m| m.key.clone());
-        let closed = self.close_menu();
+        let closed = Task::batch([self.close_menu(), self.close_tooltip()]);
         let Some(tray) = &self.tray else {
             return closed;
         };
@@ -396,6 +491,9 @@ impl Bar {
         if let Some((open, level)) = self.menu_level().filter(|(m, _)| m.window == window) {
             return menu_view(level, !open.submenus.is_empty(), self.style);
         }
+        if self.tooltip == Some(window) {
+            return tooltip_view(&self.date, self.style);
+        }
         let st = self.style;
         let workspaces = Row::with_children(
             self.desktop
@@ -417,10 +515,14 @@ impl Bar {
             .icon_font
             .and_then(|icons| Some(text(icons.clock?.to_string()).font(icons.font)))
             .map(|icon| icon.color(st.text));
-        let clock = container(match clock_icon {
-            Some(icon) => Element::from(row![icon, time].spacing(6).align_y(Alignment::Center)),
-            None => time.into(),
-        })
+        let clock = container(
+            mouse_area(match clock_icon {
+                Some(icon) => Element::from(row![icon, time].spacing(6).align_y(Alignment::Center)),
+                None => time.into(),
+            })
+            .on_enter(Message::ClockHover(true))
+            .on_exit(Message::ClockHover(false)),
+        )
         .padding([0, 12])
         .height(Length::Fill)
         .align_x(Alignment::End)
@@ -609,6 +711,61 @@ fn tray_item<'a>(
         })
         .interaction(mouse::Interaction::Pointer)
         .into()
+}
+
+/// How long the pointer stays on the clock before its tooltip shows.
+const TOOLTIP_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Done after `delay`, from a thread of its own: no async runtime's timer.
+fn after(delay: std::time::Duration) -> impl iced::futures::Future<Output = ()> {
+    let (sender, receiver) = iced::futures::channel::oneshot::channel();
+    let spawned = std::thread::Builder::new()
+        .name("pila-bar-delay".into())
+        .spawn(move || {
+            std::thread::sleep(delay);
+            let _ = sender.send(());
+        });
+    if let Err(err) = spawned {
+        eprintln!("pila-bar: no tooltip: {err}");
+    }
+    async move {
+        let _ = receiver.await;
+    }
+}
+
+/// A tooltip's size for `text` in a bar `height` high: a row as high as
+/// the bar, about as wide as the text.
+fn tooltip_size(text: &str, height: u32) -> (u32, u32) {
+    // At least as wide as a character, for the text's size (proportional
+    // fonts' widest run near 0.7 of it): a little room to spare, the text
+    // centered, rather than a date cut short.
+    let char_width = text_size(height) * 0.7;
+    let width = text.chars().count() as f32 * char_width + 2.0 * 12.0 + 2.0 * MENU_BORDER;
+    (width.round() as u32, height + 2 * MENU_BORDER as u32)
+}
+
+/// The clock's tooltip: its text in a square box, as a menu is.
+fn tooltip_view<'a>(date: &str, st: Style) -> Element<'a, Message> {
+    container(
+        text(date.to_string())
+            .wrapping(text::Wrapping::None)
+            .color(st.text),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .padding([0, 12])
+    .align_x(Alignment::Center)
+    .align_y(Alignment::Center)
+    .style(move |_| container::Style {
+        background: Some(st.surface_dim.into()),
+        border: Border {
+            color: st.hover,
+            width: MENU_BORDER,
+            radius: 0.0.into(),
+        },
+        ..Default::default()
+    })
+    .into()
 }
 
 /// A popup's size for a menu with these entries: the tallest of its
