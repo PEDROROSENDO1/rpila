@@ -541,7 +541,10 @@ writes it, in your `LC_TIME` language (default `'%a %e %b  %H:%M'`; `''` leaves 
 monitor for several). A monitor connected later gets its bar too, if it's one of those. The
 battery shows how full the laptop's batteries are together, with an arrow up while charging,
 and turns amber at 15% or less while running down; a mouse's or a headset's battery isn't
-counted, and `--no-battery` leaves it out. The tray shows the icons apps put there (fcitx5,
+counted, and `--no-battery` leaves it out. With an icon font installed, a Nerd Font (its symbols
+alone, `Symbols Nerd Font`, are enough) or Font Awesome, both packaged by most distributions, the
+battery shows its icon too: its level in quarters, a bolt
+while charging, a plug while plugged in and not charging; without one, words and numbers alone. The tray shows the icons apps put there (fcitx5,
 network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
 does what the app does on a click, the middle button its second action, the wheel what it does
 with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it).

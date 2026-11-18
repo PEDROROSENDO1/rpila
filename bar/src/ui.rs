@@ -35,6 +35,7 @@ use crate::{
     battery::{self, Battery},
     clock,
     desktop::{self, Desktop, Switcher, Update},
+    glyphs,
     outputs::Change,
     pila_ipc,
     style::{self, Style},
@@ -61,6 +62,8 @@ pub enum Message {
     Update(Update),
     Clock(String),
     Battery(Battery),
+    /// The icon font installed, if any.
+    IconFont(Option<iced::Font>),
     /// Pila's colors, new or changed.
     Style(Style),
     Tray(tray::Update),
@@ -83,6 +86,8 @@ struct Bar {
     clock: String,
     /// None with no battery, or `--no-battery`.
     battery: Option<Battery>,
+    /// An icon font (`glyphs.rs`): icons where there'd be words.
+    icon_font: Option<iced::Font>,
     /// A touchpad's scroll not yet a workspace's worth.
     scrolled: f32,
     /// Along the bottom edge: the line facing the windows goes on top.
@@ -145,6 +150,7 @@ pub fn run(args: Args) -> ExitCode {
             switcher: None,
             clock: String::new(),
             battery: None,
+            icon_font: None,
             scrolled: 0.0,
             bottom,
             height,
@@ -170,6 +176,7 @@ pub fn run(args: Args) -> ExitCode {
         }
         if show_battery {
             tasks.push(Task::run(battery::updates(), Message::Battery));
+            tasks.push(Task::perform(glyphs::found(), Message::IconFont));
         }
         (bar, Task::batch(tasks))
     };
@@ -223,6 +230,7 @@ impl Bar {
             }
             Message::Clock(clock) => self.clock = clock,
             Message::Battery(battery) => self.battery = Some(battery),
+            Message::IconFont(font) => self.icon_font = font,
             Message::Style(style) => self.style = style,
             Message::Tray(tray::Update::Tray(tray)) => self.tray = Some(tray),
             Message::Tray(tray::Update::Items(items)) => self.tray_items = items,
@@ -411,18 +419,30 @@ impl Bar {
         .clip(true);
         let battery = self.battery.map(|battery| {
             let low = battery.low();
-            container(
-                text(battery.text())
+            let color = if low { st.text_bright } else { st.text };
+            // With an icon font, its icon and the percentage; else the
+            // percentage, with an arrow up while charging.
+            let shown: Element<'_, Message> = match self.icon_font {
+                Some(font) => row![
+                    text(glyphs::battery(&battery)).font(font).color(color),
+                    text(format!("{}%", battery.percent)).color(color),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .into(),
+                None => text(battery.text())
                     .wrapping(text::Wrapping::None)
-                    .color(if low { st.text_bright } else { st.text }),
-            )
-            .padding([0, 10])
-            .height(Length::Fill)
-            .align_y(Alignment::Center)
-            .style(move |_| match low {
-                true => container::Style::default().background(st.urgent),
-                false => container::Style::default(),
-            })
+                    .color(color)
+                    .into(),
+            };
+            container(shown)
+                .padding([0, 10])
+                .height(Length::Fill)
+                .align_y(Alignment::Center)
+                .style(move |_| match low {
+                    true => container::Style::default().background(st.urgent),
+                    false => container::Style::default(),
+                })
         });
         // The workspaces on the left; the battery and the clock on the right.
         let mut bar = row![left].height(Length::Fill);

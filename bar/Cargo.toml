@@ -29,6 +29,10 @@ serde_json = "1"
 # The tray (StatusNotifierItem over D-Bus): pure Rust, its blocking API on
 # a thread of the tray's own.
 zbus = "5"
+# Finding an icon font (`glyphs.rs`): the versions iced's text already
+# brings.
+fontdb = "0.23"
+ttf-parser = "0.25"
 # The clock: the local time and strftime, in the user's LC_TIME.
 libc = "0.2"
 # The desktop's state, on iced_layershell's connection (`desktop.rs`):

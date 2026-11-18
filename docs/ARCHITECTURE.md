@@ -787,7 +787,11 @@ Key flows and invariants:
   (`battery::updates`, unless `--no-battery`) is a thread that reads `/sys/class/power_supply`
   every 5 s (batteries whose `scope` isn't `Device`, so no mouse's; together by what they hold,
   `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;
-  with no battery there's no thread. The clock
+  with no battery there's no thread. Its icon comes from an icon font the user has installed
+  (`glyphs.rs`: a Nerd Font or Font Awesome, which put the same icons at the same code points),
+  found once on a thread at startup with fontdb and ttf-parser, the versions iced's text already
+  brings (`glyphs::find`: families by name, `Symbols Nerd Font` first, then checked to have every
+  glyph drawn); none found, the battery is text alone, never a missing glyph's box. The clock
   (`clock::ticks`) is a thread that reads the local time each second through strftime in the
   user's `LC_TIME` and wakes the bar only when the text changes. `scripts/apps bar` drives it on
   a headless Pila.
