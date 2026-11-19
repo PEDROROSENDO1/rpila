@@ -11,7 +11,7 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Stacking, with server-side decorations:** overlapping windows, xdg-decoration with Pila's
   own title bars and resize borders (client-side ones honored), snapping, workspaces spanning
-  all outputs. Shells built on layer shell usually run on tiling compositors (niri, Hyprland,
+  all outputs. Shells built on layer shell usually run on tiling compositors (Hyprland,
   sway); Pila gives them a floating desktop.
 - **A compositor, not a desktop environment:** bar, launcher, notifications, wallpaper and lock
   screen are external clients (layer shell, ext-session-lock, ...). Even Pila's own bar and

@@ -33,7 +33,7 @@ hybrid laptop's HDMI port wired to the dGPU) light up. Read with `docs/ARCHITECT
 
 ## Where it goes
 
-The model niri uses, and Smithay's multigpu module is built for: **render everything on the
+The model Smithay's multigpu module is built for: **render everything on the
 primary GPU; other GPUs only scan out.** For an output on a secondary GPU,
 `GpuManager::renderer(&primary, &target, format)` gives a `MultiRenderer` that renders on the
 primary and copies the result to a buffer the target can scan out.
@@ -58,16 +58,15 @@ The render GPU is always the primary, so the elements Pila builds today on the p
 `RenderElement<MultiRenderer>` by drawing it on that `GlesFrame` (errors become
 `MultiError::Render`); `underlying_storage` is `None`, so nothing on a secondary output is
 scanned out directly. `render.rs`, `rounded.rs`, `blur.rs`, `capture.rs`, `decoration.rs` and
-`window_menu.rs` stay on `GlesRenderer`, as do nested and headless. (niri makes its element
-code generic over a `NiriRenderer` trait instead, about a hundred changes in a dozen files
-here, for the same result while rendering stays on one GPU.)
+`window_menu.rs` stay on `GlesRenderer`, as do nested and headless. (Making the element code
+generic over a renderer trait instead would be about a hundred changes in a dozen files, for
+the same result while rendering stays on one GPU.)
 
 The cost: the primary's `GlesRenderer` lives in the `GpuManager` (its textures, client
 imports included, must belong to the context its frames draw with), and `GpuManager` lends it
 only through a `MultiRenderer` borrowed from itself (`single_renderer(&primary)`, then
 `as_mut()`). So `Backend::renderer()` returns a guard, `RendererRef`, that derefs to the
-`GlesRenderer` and holds that loan on bare metal (`None` if the GPU manager can't lend it);
-niri lends it to a closure instead (`with_primary_renderer`).
+`GlesRenderer` and holds that loan on bare metal (`None` if the GPU manager can't lend it).
 
 ## In what order, without breaking anything
 

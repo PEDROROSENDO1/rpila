@@ -18,8 +18,8 @@ Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,
-fuzzel and mako, or a full desktop shell) usually run on tiling compositors such as niri or
-Hyprland; Pila gives them a classic desktop of overlapping windows, with subtle animations, blur and a
+fuzzel and mako, or a full desktop shell) usually run on tiling compositors such as Hyprland
+or sway; Pila gives them a classic desktop of overlapping windows, with subtle animations, blur and a
 config applied as you save it. labwc keeps the Openbox look and its XML config, Wayfire is
 built around Compiz-style effects, and COSMIC's floating mode comes with the rest of COSMIC. More in
 [What sets Pila apart](https://github.com/igalmarino/pila/blob/main/docs/WHY-PILA.md).

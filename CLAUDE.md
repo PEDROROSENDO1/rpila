@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Pila: a stacking Wayland compositor
 
 A daily-driver **stacking** Wayland compositor (crate/binary name `pila`) written in **Rust**
-on **Smithay**'s main branch (a git dependency pinned to a `rev` in `Cargo.toml`, as niri
-and cosmic-comp do: 0.7.0, the last release, is from June 2025; for now from Pila's fork,
+on **Smithay**'s main branch (a git dependency pinned to a `rev` in `Cargo.toml`, as
+cosmic-comp does: 0.7.0, the last release, is from June 2025; for now from Pila's fork,
 `igalmarino/smithay`, branch `pila`: a rev of Smithay's plus the fixes `Cargo.toml` lists).
 
 ## Environment

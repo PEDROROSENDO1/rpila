@@ -711,7 +711,7 @@ Key flows and invariants:
   fill states. A mapped Top/Overlay surface with exclusive keyboard interactivity
   (`exclusive_layer`) keeps keyboard focus: `focus_window` then only raises. A Top/Overlay
   surface with on-demand interactivity gets the keyboard when it maps
-  (`takes_keyboard_on_map`, `MapChange::Mapped`), as on niri and COSMIC; else on a click. Popups may
+  (`takes_keyboard_on_map`, `MapChange::Mapped`), as on COSMIC; else on a click. Popups may
   have a layer-surface root (`unconstrain_popup`, popup `grab`). Smithay resets a layer
   surface's or popup's role in the commit that unmaps it (null buffer); that commit is never
   answered as an initial commit (`state::commit_map_change` says `MapChange::Unmapped`): a
@@ -1201,7 +1201,7 @@ Key flows and invariants:
   compiled by `render::warm_up`, kept in the EGL context; a failure disables blur.
 - **Login session** (`resources/session/`, `sd_notify.rs`): the display manager runs
   `pila-session`. Where `systemd --user` answers and has `pila.service` (installed in
-  `SYSTEMDUSERUNITDIR` by `scripts/install`), it runs Pila as that service, as niri does: it
+  `SYSTEMDUSERUNITDIR` by `scripts/install`), it runs Pila as that service: it
   refuses a second session while the service is active, imports the login's environment into
   the manager (libseat's logind backend finds the session by `XDG_SESSION_ID` there, the
   service being outside the session's scope; `PATH` and the locale are the services' too) and
@@ -1218,7 +1218,7 @@ Key flows and invariants:
   services of the target find `WAYLAND_DISPLAY`; `session_env` keeps `NOTIFY_SOCKET` from what
   it starts. `PILA_NO_SYSTEMD`, no user manager or no unit: the wrapper runs Pila itself as
   before (and `scripts/tty`, `scripts/check` never use the service). Per-app scopes
-  (`app-*.scope`, as niri's spawns get) aren't done.
+  (`app-*.scope`) aren't done.
 - **Session environment** (`Pila::spawn`, `start_session`): children get `WAYLAND_DISPLAY`,
   the X display reserved for Pila's Xwayland as `DISPLAY` (from startup, whether X runs yet
   or not; none with `[xwayland] enabled = false`), `XDG_CURRENT_DESKTOP=pila`, `XDG_SESSION_TYPE=wayland`
@@ -1227,7 +1227,7 @@ Key flows and invariants:
   first, so those (`config::PILA_ENV`, which parsing leaves out of it with a warning) and
   `[cursor]`'s `XCURSOR_*` win; Pila's own process environment isn't changed. A reload that
   changes it exports it again (`export_environment`, below).
-  Other compositors' IPC sockets and markers (`OTHER_COMPOSITORS_ENV`: `NIRI_SOCKET`,
+  Other compositors' IPC sockets and markers (`OTHER_COMPOSITORS_ENV`:
   `SWAYSOCK`, `HYPRLAND_INSTANCE_SIGNATURE`, …) are removed, for a Pila started from inside
   another session: desktop shells pick their compositor backend by them.
   Screen sharing goes through xdg-desktop-portal + xdg-desktop-portal-wlr (PipeWire),
@@ -1261,7 +1261,7 @@ Key flows and invariants:
 - **Activation** (`handlers/xdg_activation.rs`, xdg-activation): a token that activates
   is issued only for a serial newer than the keyboard focus's enter to the client holding it, or newer
   than the pointer focus's enter to the client under the pointer (a clicked notification or
-  panel, which take no keyboard; niri accepts either serial from any client); one with no
+  panel, which take no keyboard); one with no
   serial is issued too, but only marks its window urgent (`UrgentOnlyToken`, see "Urgency"). Tokens
   are single-use and expire after `TOKEN_TIMEOUT`. A request switches to the window's
   workspace (`reveal_workspace_of`), shows it if minimized and focuses it if it's mapped;
@@ -1422,7 +1422,7 @@ Key flows and invariants:
   `MenuBuffers`.
 - **Urgency** (`urgency.rs`): a mark in a window's user data (`set_urgent`, `is_urgent`), set by
   an activation whose token had no serial (`UrgentOnlyToken`, accepted for any client in
-  `token_created`; as niri) or X11's `WM_HINTS` urgency hint (`property_notify` `Hints`), never
+  `token_created`) or X11's `WM_HINTS` urgency hint (`property_notify` `Hints`), never
   on the focused window, and cleared when it gets the keyboard (`SeatHandler::focus_changed`,
   from the surface it's given: Smithay holds the keyboard's lock there, so asking it for the
   focus deadlocks). Shown by the title bar (`colors.bar_urgent`), ext-workspace's `urgent`

@@ -74,7 +74,7 @@
   do what they did (halves, maximize, restore a maximized one). It's the new action
   `snap <left|right|up|down>`; a configuration written by an earlier Pila keeps its arrows as
   they were, and the manual shows how to get them back.
-- **A systemd session, as niri's:** with systemd, `pila-session` runs Pila as the user service
+- **A systemd session:** with systemd, `pila-session` runs Pila as the user service
   `pila.service`, bound to `graphical-session.target`, so the user services of the graphical
   session (`WantedBy=graphical-session.target`) and the XDG autostart entries
   (`~/.config/autostart`) start once Pila is ready and stop when it quits, and Pila's variables
@@ -175,7 +175,7 @@
   blurred window being resized kept getting new textures for its backdrop, one set per frame;
   they're now a little bigger than needed (with room to grow, once one has grown out of
   them) and kept while it grows or shrinks, and given back once it shrinks to under half of
-  them. Noctalia's control center opening went from 6 allocations to 3.
+  them. A shell's control center opening went from 6 allocations to 3.
 
 ## 0.6.0 (2026-11-16)
 
@@ -323,10 +323,10 @@
   `--config` paths are left alone.
 - **The click after a dock or panel menu isn't lost anymore:** once a menu went away, Pila ended
   its grab only at the next input event and spent that event on it, so the pointer stayed where
-  the menu was and the next click landed there (in Noctalia's dock, the right click after
+  the menu was and the next click landed there (in a shell's dock, the right click after
   "Minimise" opened nothing). The keyboard also goes back to a window when the menu belonged to a
   panel that takes none.
-- **A minimized window keeps its icon in per-monitor taskbars** (Noctalia's, by default): Pila told
+- **A minimized window keeps its icon in per-monitor taskbars:** Pila told
   them it had left its monitor, and so did a window on another workspace. Both now stay on the
   monitor they come back to.
 
@@ -513,7 +513,7 @@
   settings through `pila msg action`, which allows them with the screen locked (as it does
   `switch-layout`, for a lock screen's password). `pila msg outputs`
   tells each monitor's `power`.
-- **Manual: Noctalia and Dux Shell on Pila's terms:** their idle monitor off and Log out through
+- **Manual: desktop shells on Pila's terms:** their idle monitor off and Log out through
   `pila msg`, and a waybar module that follows the keyboard layout.
 
 ## 0.4.1 (2026-11-08)
@@ -527,7 +527,7 @@
   now go out without waiting (about 2 ms on an AMD laptop); drivers without `GAMMA_LUT` keep the
   old way.
 - **Night light keeps working after a VT switch:** a change made while another VT was in front
-  failed, and Noctalia's night light stopped until it was restarted. Changes made meanwhile now
+  failed, and a shell's night light stopped until it was restarted. Changes made meanwhile now
   apply when you come back.
 - **The session starts even when Xwayland can't:** Xwayland dying at startup (a crash, a broken
   install) left Pila waiting for it forever, busy, without starting your shell or terminal. Now
@@ -565,13 +565,13 @@
 ## 0.4.0 (2026-11-08)
 
 - **Smithay's main branch:** pila now builds against Smithay's development branch (a git
-  dependency pinned to one commit, as niri and cosmic-comp do) instead of the 0.7.0 release
+  dependency pinned to one commit) instead of the 0.7.0 release
   from June 2025, so fixes reach pila without waiting for a release. Building pila needs
   network access to GitHub for it (the AUR package and Nix flake fetch it by its commit).
-- **Quickshell shells (Dux Shell/DMS, …) no longer crash:** a shell that hid a panel or
+- **Quickshell shells no longer crash:** a shell that hid a panel or
   launcher, or unlocked the screen, by destroying the surface's role and then committing it
-  with no buffer was disconnected by a protocol error. Dux Shell lost its connection each
-  time its launcher closed.
+  with no buffer was disconnected by a protocol error. One lost its connection each time its
+  launcher closed.
 - **Virtual keyboards** (`wtype`, on-screen keyboards, a clipboard history pasting) are
   keyboards now: their keys can use pila's bindings and count as activity (the screen doesn't
   blank while you type on one), and they type with their own keymap. Your keymap, layout and
@@ -587,18 +587,18 @@
 - **Clicking a notification opens its app in front:** a notification or panel (which takes no
   keyboard) may pass the click on to the app it opens, which then gets the focus.
 - **Launchers and dialogs above the windows get the keyboard when they appear** if they ask
-  for it on demand (Noctalia's welcome dialog, some launchers), instead of after a click.
+  for it on demand (a shell's welcome dialog, some launchers), instead of after a click.
 - **Shells started by a pila inside another session find pila:** programs pila starts no
-  longer inherit another compositor's sockets (`NIRI_SOCKET`, `SWAYSOCK`,
-  `HYPRLAND_INSTANCE_SIGNATURE`, …), so Noctalia or Dux Shell in a pila started from niri,
-  Sway or Hyprland don't drive that compositor instead.
+  longer inherit another compositor's sockets (`SWAYSOCK`, `HYPRLAND_INSTANCE_SIGNATURE`, …),
+  so a shell in a pila started from Sway, Hyprland or another compositor doesn't drive that
+  compositor instead.
 - **Why a client went away is in the log:** a program pila disconnects for a protocol error is
   logged as a warning with its process id and the error.
-- **Noctalia and Dux Shell checked feature by feature:** `scripts/shells` runs each on a headless
-  pila and goes through everything of theirs that depends on the compositor (bar, launcher,
-  workspaces, taskbar, notifications, clipboard, screenshots, night light, display settings and
-  power, lock screen). Both work; the manual has a Dux Shell setup now, and says what neither
-  can do until it knows pila by name ("Building your desktop").
+- **Desktop shells checked feature by feature:** two Quickshell shells ran on a headless pila
+  through everything of theirs that depends on the compositor (bar, launcher, workspaces,
+  taskbar, notifications, clipboard, screenshots, night light, display settings and power, lock
+  screen). Both work; the manual says what they can't do until they know pila by name
+  ("Building your desktop").
 - **Dragging shows what you drag:** the icon an app gives a drag (a file, a tab) follows the
   pointer until the drop; pila never drew it before.
 - **Panels hidden and shown again come back:** a layer surface (panel, launcher, dock) hidden
@@ -627,7 +627,7 @@
   - `bash` is a dependency (`pila-session` and `pila-report` are bash scripts).
   - `wl-clipboard` is recommended: without `wl-copy`, Mod+Shift+S did nothing, with no message.
   - `swaylock` and `pciutils` are suggested, not recommended, in the `.deb` and `.rpm`, so apt
-    and dnf don't install them by default: a shell such as Noctalia has its own lock screen,
+    and dnf don't install them by default: a desktop shell may have its own lock screen,
     and only `pila-report` uses `lspci`. They're optional in `pila-git`.
 - **`pila-report`** says whether `wl-copy` is installed, and hides your user name only as a whole
   word: a name that ended another word ("destroy") mangled the log and gave the name away.
@@ -739,7 +739,7 @@ All of this was tried on one AMD laptop with an external monitor; other GPUs are
   X11 apps) and title, `[[layer-rule]]` layer surfaces by namespace, with `*` wildcards.
   Windows: animations, open on a workspace, open maximized or fullscreen, size, position,
   title bar, corner radius, opacity. Layer surfaces: animations (for shells that animate
-  their own, e.g. `namespace = "noctalia-*"`) and blur.
+  their own, e.g. `namespace = "my-shell-*"`) and blur.
 - **Smoothness:** pila never makes a monitor miss a refresh while something moves, at the
   monitor's own rate; animations no longer stutter on bare metal, and the first one of a
   session no longer costs a long frame. `RUST_LOG=pila::frames=debug` logs frame times

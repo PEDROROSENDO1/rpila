@@ -50,7 +50,7 @@ At startup Pila runs the programs in `autostart`, or else its own bar and window
 `pila-bar` and `pila-switcher`; no terminal opens by itself: Mod+Return opens one.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
-`graphical-session.target` as GNOME's, KDE's and niri's sessions are: once Pila is ready, the
+`graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
 user services of the graphical session start (those enabled with
 `WantedBy=graphical-session.target`), and so do the XDG autostart entries in
 `~/.config/autostart` and `/etc/xdg/autostart` (skipping those whose `OnlyShowIn` leaves Pila
@@ -601,13 +601,13 @@ Tools that use the same protocols should work too, though nobody has tried them 
 managers (ext-data-control) and screen recorders (`wf-recorder`, screencopy).
 
 **Lighter bars, in part:** ironbar shows the windows (`launcher`), the focused one and the clock,
-but its `workspaces` module only knows sway, Hyprland and niri, and its `clipboard` module wants
+but its `workspaces` module only knows a few other compositors (sway, Hyprland, ...), and its `clipboard` module wants
 wlr-data-control, which Pila replaces with the standard ext-data-control. nwg-panel shows its
-clock and controls, with no taskbar or workspaces (it has them for sway, Hyprland and niri only).
+clock and controls, with no taskbar or workspaces (it has them for sway, Hyprland and a few others only).
 
 **What can't work:** bars and modules that talk to another compositor's own IPC rather than a
-Wayland protocol, such as dwlb (dwl's), HyprPanel (Hyprland's), waybar's `sway/*`,
-`hyprland/*` and `niri/*` modules and the like in ironbar and nwg-panel; and X11 bars such as polybar, which can't see Wayland windows.
+Wayland protocol, such as dwlb (dwl's), HyprPanel (Hyprland's), waybar's `sway/*` and
+`hyprland/*` modules and the like in ironbar and nwg-panel; and X11 bars such as polybar, which can't see Wayland windows.
 A bar that uses standard protocols and fails on Pila is a bug: please
 [report it](https://github.com/igalmarino/pila/issues).
 
