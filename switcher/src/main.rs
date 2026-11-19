@@ -19,6 +19,7 @@ mod model;
 #[path = "../../launcher/src/pila_ipc.rs"]
 mod pila_ipc;
 mod previews;
+mod shm;
 #[path = "../../launcher/src/style.rs"]
 mod style;
 mod ui;

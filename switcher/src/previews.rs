@@ -9,20 +9,18 @@
 //! can't be captured within `TIMEOUT` keeps its icon.
 
 use std::{
-    fs::File,
-    os::{
-        fd::{AsFd, AsRawFd, FromRawFd},
-        unix::fs::FileExt,
-    },
+    os::unix::fs::FileExt,
     time::{Duration, Instant},
 };
 
+use crate::shm::{dispatch_until, shm_buffer};
 use iced::widget::image;
 use wayland_client::{
     globals::{registry_queue_init, GlobalListContents},
     protocol::{wl_buffer::WlBuffer, wl_registry::WlRegistry, wl_shm, wl_shm_pool::WlShmPool},
     Connection, Dispatch, EventQueue, QueueHandle, WEnum,
 };
+
 use wayland_protocols::ext::{
     foreign_toplevel_list::v1::client::{
         ext_foreign_toplevel_handle_v1::{self, ExtForeignToplevelHandleV1},
@@ -187,71 +185,6 @@ fn capture_one(
     source.destroy();
     let _ = conn.flush();
     thumbnail
-}
-
-/// Read and dispatch events until `done` holds; `None` past the deadline or
-/// if the connection fails.
-fn dispatch_until(
-    conn: &Connection,
-    queue: &mut EventQueue<State>,
-    state: &mut State,
-    deadline: Instant,
-    done: impl Fn(&State) -> bool,
-) -> Option<()> {
-    loop {
-        queue.dispatch_pending(state).ok()?;
-        if done(state) {
-            return Some(());
-        }
-        conn.flush().ok()?;
-        let Some(guard) = queue.prepare_read() else {
-            continue;
-        };
-        let left = deadline.checked_duration_since(Instant::now())?;
-        let mut fd = libc::pollfd {
-            fd: guard.connection_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        let millis = left.as_millis().clamp(1, i32::MAX as u128) as i32;
-        // SAFETY: one valid pollfd, for the call's length.
-        let ready = unsafe { libc::poll(&mut fd, 1, millis) };
-        if ready <= 0 {
-            return None;
-        }
-        guard.read().ok()?;
-    }
-}
-
-/// An shm buffer of `width` x `height` in `format`, and its file to read it
-/// back from.
-fn shm_buffer(
-    shm: &wl_shm::WlShm,
-    qh: &QueueHandle<State>,
-    width: u32,
-    height: u32,
-    format: wl_shm::Format,
-) -> Option<(WlBuffer, File)> {
-    let len = width.checked_mul(height)?.checked_mul(4)?;
-    // SAFETY: a new fd, owned by the File from here on.
-    let fd = unsafe { libc::memfd_create(c"pila-switcher".as_ptr(), libc::MFD_CLOEXEC) };
-    if fd < 0 {
-        return None;
-    }
-    let file = unsafe { File::from_raw_fd(fd) };
-    file.set_len(len.into()).ok()?;
-    let pool = shm.create_pool(file.as_fd(), i32::try_from(len).ok()?, qh, ());
-    let buffer = pool.create_buffer(
-        0,
-        width as i32,
-        height as i32,
-        (width * 4) as i32,
-        format,
-        qh,
-        (),
-    );
-    pool.destroy();
-    Some((buffer, file))
 }
 
 /// Little-endian BGRA (XRGB or ARGB) pixels as an opaque RGBA thumbnail no

@@ -56,10 +56,7 @@ overrides:
       - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
-      - grim
-      - slurp
       - xdg-utils
-      - wl-clipboard
       # The volume keys' default bindings (pila-osd sets the brightness and
       # tells the media players itself).
       - wireplumber
@@ -83,10 +80,7 @@ overrides:
       - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
-      - grim
-      - slurp
       - xdg-utils
-      - wl-clipboard
       # The volume keys' default bindings (pila-osd sets the brightness and
       # tells the media players itself).
       - wireplumber

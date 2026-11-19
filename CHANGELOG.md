@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Screenshots with nothing else installed, `pila-shot`:** Mod+Shift+S and Mod+Ctrl+S run
+  `pila-shot`, a new program installed with Pila, instead of grim, slurp and wl-copy. For a
+  region the monitors hold still and dim while you drag it, shown as it is in a square frame
+  (Escape or a right click cancels), and it goes to the clipboard as a PNG image; Mod+Ctrl+S
+  saves the monitor under the pointer to your pictures folder (`XDG_PICTURES_DIR`, else
+  `~/Pictures`). The cursor is left out. From a terminal, `pila-shot output [NAME]` and
+  `pila-shot region` take `--file PATH` (`-` for a pipe) or `--clipboard`. It also picks the
+  monitor to share for screen sharing (`pila-shot pick-output`, in the portal's configuration
+  Pila installs), so slurp isn't needed there either; a copy of that configuration of your own
+  in `~/.config/xdg-desktop-portal-wlr/pila` still runs slurp until you change its
+  `chooser_cmd`. The packages no longer recommend grim, slurp and wl-clipboard, and
+  `pila-report` says whether `wpctl` is installed instead of `wl-copy`.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; and the brightness
   and media keys need nothing but `pila-osd` (below), so brightnessctl and playerctl are no

@@ -281,10 +281,11 @@ tap = true                       # tap to click
 "Mod+H" = "show-desktop"
 "Mod+O" = "focus-output next"
 "Mod+Shift+O" = "move-to-output next"
-# A region to the clipboard (needs grim, slurp and wl-clipboard), and the
-# screen under the pointer to a file (needs grim).
-"Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"
-"Mod+Ctrl+S" = "spawn mkdir -p ~/Pictures && grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"
+# Screenshots with pila-shot (installed with Pila): a region dragged on a
+# monitor to the clipboard, and the monitor under the pointer to a file in
+# the pictures folder (XDG_PICTURES_DIR, else ~/Pictures).
+"Mod+Shift+S" = "spawn pila-shot region"
+"Mod+Ctrl+S" = "spawn pila-shot output"
 # The volume and brightness keys, held to go on, each change shown for a
 # moment by pila-osd (installed with Pila); the volume with wpctl (PipeWire's
 # WirePlumber), up to 100%, the brightness by pila-osd itself, never quite

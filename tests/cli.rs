@@ -326,7 +326,7 @@ fn the_report_names_each_gpu_and_its_driver_without_lspci() {
 #[test]
 fn the_report_says_whether_the_tools_bindings_and_apps_need_are_installed() {
     use std::os::unix::fs::{symlink, PermissionsExt};
-    for tool in ["xdg-open", "wl-copy"] {
+    for tool in ["xdg-open", "wpctl"] {
         // Every program on the PATH but this one, whatever this machine has.
         let home = report_home(tool);
         let bin = home.join("bin");

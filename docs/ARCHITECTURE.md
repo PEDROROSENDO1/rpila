@@ -887,6 +887,31 @@ Key flows and invariants:
   square level bar; the percentage, or "muted", dimmed. A media key's popup has its icon
   (`glyphs::media`) and the title, on one line. Colors from `[colors]`, as the bar's
   (`pila_ipc::styles`). `scripts/apps osd` drives it on a headless Pila.
+- **Screenshots** (`shot/`, the `pila-shot` command): Pila's screenshots, run by the default
+  bindings (`pila-shot region` on Mod+Shift+S, `pila-shot output` on Mod+Ctrl+S, which gets
+  the pointer's output as `PILA_OUTPUT` from `spawn`) and by xdg-desktop-portal-wlr's chooser
+  (`pila-shot pick-output`, `resources/xdg/xdg-desktop-portal-wlr/pila`), so neither needs
+  grim, slurp or wl-copy. An iced client in the launcher's workspace that uses only standard
+  protocols Pila already serves to its own clients, and changes nothing in the compositor: it
+  captures each output first (`capture::outputs`: ext-image-copy-capture of an
+  ext-output-image-capture-source, no cursor, on a connection of its own, which Pila gives
+  upright at its full resolution; `shm.rs`, shared with pila-switcher's previews by `#[path]`,
+  waits with a deadline and makes the shm buffers), so a region is picked on the screen as it
+  was. `region` and `pick-output` then cover each output with a layer surface (`ui.rs`: an
+  Overlay anchored to every edge, exclusive zone -1 so it lies over bars, exclusive keyboard for
+  Escape, namespace `pila-shot`) showing that picture dimmed under a canvas: a drag selects a
+  rectangle (`ui::between`, the dimmed parts `ui::around`, a square frame in the accent color);
+  a click picks a monitor; Escape or a right click cancels (exit 1). The daemon exits with the
+  outcome; the region, in fractions of the surface, becomes pixels of the picture
+  (`save::rect_of`: the same at any scale), cropped (`save::crop`) and encoded as PNG without
+  alpha (`save::png`, the `image` crate). A file goes to `--file`, or the pictures folder
+  (`save::pictures_dir`: `XDG_PICTURES_DIR` from `user-dirs.dirs`, else `~/Pictures`) named by
+  the local time (pila-bar's `clock::now`). The clipboard (`clipboard::serve`:
+  ext-data-control, privileged, so not a sandboxed app's) offers `image/png` and writes it to
+  whoever pastes until the source is cancelled; a Wayland clipboard holds offers, so a
+  `serve-clipboard` process of its own does that, started detached (`setsid`) with the PNG on
+  its stdin, and the first process exits once it says the picture is offered.
+  `scripts/apps shot` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its
@@ -1226,7 +1251,7 @@ Key flows and invariants:
   another session: desktop shells pick their compositor backend by them.
   Screen sharing goes through xdg-desktop-portal + xdg-desktop-portal-wlr (PipeWire),
   which `resources/xdg/xdg-desktop-portal/pila-portals.conf` selects; xdpw's own config
-  (`resources/xdg/xdg-desktop-portal-wlr/pila`: pick the screen with slurp) must be in
+  (`resources/xdg/xdg-desktop-portal-wlr/pila`: pick the screen with `pila-shot pick-output`) must be in
   `~/.config/xdg-desktop-portal-wlr/` or `/etc/xdg` (xdpw ignores `XDG_CONFIG_DIRS`;
   `scripts/install` puts both in `/etc/xdg`). On a TTY, before the startup programs, Pila
   exports that environment to the D-Bus session bus (`export_environment`, `SESSION_ENV`, with

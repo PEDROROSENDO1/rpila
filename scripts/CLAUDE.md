@@ -103,6 +103,17 @@ it hasn't; so does `pila-osd volume` with no wpctl; `pila-osd play-pause` on a d
 its own with no player shows that there's none (`osd-media.png`; players themselves are
 `osd/src/media.rs`' tests). Run it after changing pila-osd or the layer shell.
 
+`shot` drives `pila-shot` (`run_shot`; skipped where it isn't built in `launcher/target/release`,
+or `PILA_SHOT_BIN`) over a maximized foot: `pila-shot output --file` writes a PNG of the whole
+output (1920x1080), and with no `--file` one into the sealed `~/Pictures`, whose path it prints;
+`pila-shot region` maps a `pila-shot` layer, an Overlay over the whole output with the keyboard
+(exclusive), and a real drag on it ends it (exit 0, the layer gone) with a PNG of the dragged
+size on the clipboard as `image/png` (`wl-paste`, where it's installed; `region.png`, taken by
+pila-shot mid-drag, shows the selection), served by one `pila-shot` process until `wl-copy`
+copies something else; Escape cancels (exit 1, no layer, the keyboard back on foot); and
+`pila-shot pick-output` prints `Monitor: eDP-1` after a click. Run it after changing pila-shot,
+the layer shell, captures or data-control.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes

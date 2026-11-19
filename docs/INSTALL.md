@@ -55,10 +55,11 @@ differ between releases):
 | Void | `libseat-devel libinput-devel eudev-libudev-devel libgbm-devel libxkbcommon-devel mesa xorg-server-xwayland pkg-config` |
 | Alpine | `libseat-dev libinput-dev eudev-dev mesa-dev libxkbcommon-dev xwayland pkgconf` |
 
-Then `cargo build --release`, and for the launcher, the bar, the window switcher and the
-on-screen display (a cargo workspace of their own, in `launcher/`) `cargo build --release
---manifest-path launcher/Cargo.toml`, which puts `pila-launcher`, `pila-bar`, `pila-switcher` and
-`pila-osd` in `launcher/target/release`. `scripts/install` builds and installs all five.
+Then `cargo build --release`, and for the launcher, the bar, the window switcher, the
+on-screen display and the screenshots (a cargo workspace of their own, in `launcher/`) `cargo
+build --release --manifest-path launcher/Cargo.toml`, which puts `pila-launcher`, `pila-bar`,
+`pila-switcher`, `pila-osd` and `pila-shot` in `launcher/target/release`. `scripts/install`
+builds and installs all six.
 
 ## Debian, Ubuntu and Fedora
 
@@ -217,13 +218,11 @@ distros):
 
 - `kitty`: the default terminal (or set `terminal`; foot, alacritty and others are found
   too)
-- `xdg-desktop-portal-wlr`, `slurp`: screen sharing (`slurp` picks the screen to share)
-- `grim`, `slurp`: screenshots; Mod+Ctrl+S needs `grim`, Mod+Shift+S both and `wl-clipboard`
+- `xdg-desktop-portal-wlr`: screen sharing (`pila-shot`, installed with Pila, picks the screen
+  to share; screenshots need nothing else either)
 - `xdg-desktop-portal-gtk`: the file chooser and other portals
 - `xdg-utils`: `xdg-open`, which programs such as kitty use to open links and files; without it
   a click on a link does nothing, and says nothing
-- `wl-clipboard`: `wl-copy`, which Mod+Shift+S needs to put a region of the screen on the clipboard;
-  without it, that binding does nothing
 - `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
   lock screen doesn't need it
 - `wireplumber` (PipeWire's session manager, which most distros install with PipeWire):
@@ -231,9 +230,9 @@ distros):
   media keys need nothing but `pila-osd`, installed with Pila)
 
 ```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber   # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber  # Fedora
+sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber   # Arch
+sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber # Debian, Ubuntu
+sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber  # Fedora
 ```
 
 The rest of a desktop (notifications, wallpaper, lock screen and idle, another bar or launcher)

@@ -93,7 +93,8 @@ A short report helps even if everything works:
   tray, the battery and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; the volume, brightness and media keys working out of
-  the box, each change shown for a moment (`pila-osd`); a shadow under each window (`[shadow]`); optional
+  the box, each change shown for a moment (`pila-osd`); screenshots of a monitor or a region
+  you drag, to a file or the clipboard (`pila-shot`); a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.
@@ -110,7 +111,7 @@ A short report helps even if everything works:
   X11 app needs it and, with `[xwayland] idle-timeout`, stops when none is left.
 - **Desktop tools:** layer shell (waybar, fuzzel, mako, swaybg), session lock (swaylock),
   idle notification and inhibition (swayidle, video players), clipboard managers
-  (ext-data-control), screenshots (grim; ext-image-copy-capture and wlr-screencopy) and screen sharing
+  (ext-data-control), screenshots (`pila-shot`, or grim; ext-image-copy-capture and wlr-screencopy) and screen sharing
   (xdg-desktop-portal-wlr, for browsers and OBS), taskbars that act on windows
   (foreign-toplevel-management), night light (gamma control), screen off and monitor
   settings (output power and management), blur behind panels and windows (background-effect),

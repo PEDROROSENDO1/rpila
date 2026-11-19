@@ -97,8 +97,8 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Shift+Page_Down`, `Mod+Shift+Page_Up` | Send the window to the next, previous workspace |
 | `Mod+WheelScrollDown`, `Mod+WheelScrollUp` | Mod and the mouse wheel: next, previous workspace, a notch each (a quick turn is one) |
 | `Mod+Shift+WheelScrollDown`, `Mod+Shift+WheelScrollUp` | Send the window to the next, previous workspace |
-| `Mod+Shift+S` | Screenshot of a region you drag, to the clipboard (needs grim, slurp and wl-clipboard) |
-| `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to `~/Pictures` (needs grim) |
+| `Mod+Shift+S` | Screenshot of a region you drag, to the clipboard |
+| `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to your pictures folder |
 | `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` | Volume up, down by 5% (up to 100%), held to go on (needs wpctl) |
 | `XF86AudioMute`, `XF86AudioMicMute` | Mute the speakers, the microphone; again, unmute (needs wpctl) |
 | `XF86MonBrightnessUp`, `XF86MonBrightnessDown` | Screen brightness up, down by 5%, held to go on, never quite off |
@@ -655,17 +655,25 @@ a daemon they only reach the log.
 
 ## Screenshots and screen sharing
 
-`Mod+Shift+S` lets you drag a region and puts it on the clipboard; `Mod+Ctrl+S` saves the
-monitor under the pointer to `~/Pictures`. They need `grim`, and the first also `slurp` and
-`wl-clipboard`. `grim` and other screenshot tools work on their own too, and so do a shell's
-own screenshot features.
+`Mod+Shift+S` lets you drag a region and puts it on the clipboard, as a PNG image: the monitors
+hold still and dim, and the region you drag shows as it is, in a square frame (Escape or a right
+click cancels). `Mod+Ctrl+S` saves the monitor under the pointer to your pictures folder
+(`XDG_PICTURES_DIR` in `~/.config/user-dirs.dirs`, else `~/Pictures`) as
+`screenshot-YYYYMMDD-HHMMSS.png`. The cursor is left out. Both run `pila-shot`, installed with
+Pila, which needs no other program; from a terminal, `pila-shot output [NAME] [--file PATH |
+--clipboard]` and `pila-shot region [--file PATH | --clipboard]` do the same with another
+destination (`--file -` writes the PNG to its output, for a pipe). A picture on the clipboard
+is kept by a `pila-shot` process of its own until something else is copied, as `wl-copy` does.
+Other screenshot tools (grim, slurp) work on their own too, and so do a shell's own screenshot
+features. Its layer surfaces' namespace is `pila-shot`.
 
 **Screen sharing** in browsers, OBS and video calls goes through the desktop portal:
 `xdg-desktop-portal-wlr` for the screen, and `xdg-desktop-portal-gtk` for everything else (the
 file chooser, for instance). Pila installs their configuration for a Pila session. When an app
-asks to share, the pointer becomes a crosshair: click the monitor to share (this uses `slurp`).
+asks to share, the monitors hold still and dim: click the one to share (`pila-shot
+pick-output`; Escape cancels).
 
-**Sharing a single window** needs a menu to pick it from, since `slurp` can only click
+**Sharing a single window** needs a menu to pick it from, since `pila-shot` only picks
 monitors. With `fuzzel` installed (`wofi`, `rofi`, `bemenu` or `wmenu` work too), copy
 `/etc/xdg/xdg-desktop-portal-wlr/pila` to `~/.config/xdg-desktop-portal-wlr/pila` if it isn't
 there yet, change its two `chooser_` lines to:
@@ -864,10 +872,10 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
 | Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
 | The volume, brightness or media keys do nothing | The volume keys run `wpctl` (package wireplumber, PipeWire's): install it, or bind them to your own commands (`pactl` on PulseAudio). The brightness keys need a backlight in `/sys/class/backlight` and either write access to it or logind (elogind); the media keys a player that speaks MPRIS; `pila-osd brightness +5%` or `pila-osd play-pause` run from a terminal says what's wrong. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "wpctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
-| `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
+| `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | `pila-shot region` or `pila-shot output` run from a terminal says what's wrong. A configuration of your own that binds them to grim needs grim (and slurp and wl-clipboard): Pila tells you when one of its programs isn't installed. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |
-| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr` and `slurp`, and start Pila from the login screen or `pila-session`. |
+| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `slurp`: change its `chooser_cmd` to `pila-shot pick-output`, or delete it. |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |

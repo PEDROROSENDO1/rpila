@@ -87,20 +87,32 @@ wpctl of the run's own that says the volume, over a maximized foot:
   - `pila-osd play-pause` on a session bus of the run's own (dbus-daemon)
     with no media player shows that there's none.
 
+And pila-shot (shot: built in launcher/ with cargo build --release, or
+PILA_SHOT_BIN; skipped where it isn't), over a maximized foot:
+
+  - `pila-shot output --file F` writes a PNG of the whole output, and with no
+    --file one into ~/Pictures, whose path it prints;
+  - `pila-shot region` covers the output with an Overlay layer surface that
+    takes the keyboard; a drag on it puts a PNG of the dragged size on the
+    clipboard (wl-paste, where it's installed) and takes the surface away;
+    the process that serves it goes when something else is copied;
+    Escape cancels (exit 1, no surface left);
+  - `pila-shot pick-output`: a click prints "Monitor: eDP-1".
+
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
                                      weston-terminal, xterm, launcher,
-                                     bar, switcher, osd, fcitx5-foot,
+                                     bar, switcher, osd, shot, fcitx5-foot,
                                      fcitx5-gtk4, fcitx5-launcher)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
 (app.log) and a screenshot at the end (grim, if installed). Uses
 target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
 (package dbus); xterm needs Xwayland; fcitx5-gtk4 reads the text back with
-wl-paste (package wl-clipboard); launcher, bar, switcher and osd need foot. Standard
+wl-paste (package wl-clipboard); launcher, bar, switcher, osd and shot need foot. Standard
 library only.
 """
 
@@ -144,6 +156,8 @@ SWITCHER_APP, SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = "pila-switcher
 # pila-osd, its layer surface's namespace, size and margin above the bottom
 # edge (`osd/src/ui.rs`).
 OSD_APP, OSD_SIZE, OSD_MARGIN = "pila-osd", (320, 52), 96
+# pila-shot and its layer surfaces' namespace (`shot/src/ui.rs`).
+SHOT_APP = "pila-shot"
 # Apps for it to find (in the sealed XDG_DATA_HOME): what they write to the
 # runtime directory says they ran.
 LAUNCHER_APPS = {
@@ -868,7 +882,8 @@ class Workload:
         return [l for l in state["layers"] if l["namespace"] == OSD_APP and l["geometry"]
                 and l["geometry"]["h"]]
 
-    def osd_processes(self):
+    def osd_processes(self, name=OSD_APP):
+        """This run's live processes of `name`."""
         mine = f"XDG_RUNTIME_DIR={os.environ['XDG_RUNTIME_DIR']}".encode()
         count = 0
         for pid in filter(str.isdigit, os.listdir("/proc")):
@@ -881,7 +896,7 @@ class Workload:
                     environ = f.read().split(b"\0")
             except OSError:
                 continue
-            if os.path.basename(argv0) == OSD_APP and mine in environ and stat.rsplit(")", 1)[1].split()[0] != "Z":
+            if os.path.basename(argv0) == name and mine in environ and stat.rsplit(")", 1)[1].split()[0] != "Z":
                 count += 1
         return count
 
@@ -977,7 +992,135 @@ class Workload:
         first.wait(5)
         return self.finish()
 
+    # --- pila-shot ---
+
+    def shots(self, state):
+        return [l for l in state["layers"] if l["namespace"] == SHOT_APP and l["geometry"]
+                and l["geometry"]["h"]]
+
+    def run_shot(self):
+        """pila-shot (module docs)."""
+        self.mark(f"{self.app} begin")
+        shot = os.environ["PILA_APPS_SHOT"]
+        log = open(os.path.join(self.out, "shot.log"), "a")
+
+        def run(*args):
+            return subprocess.Popen([shot, *args], stdout=subprocess.PIPE, stderr=log, text=True)
+
+        def png_size(data):
+            """A PNG's width and height, from its IHDR; None if it isn't one."""
+            if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+                return None
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+        def size_of(path):
+            try:
+                with open(path, "rb") as f:
+                    return png_size(f.read(32))
+            except OSError:
+                return None
+
+        subprocess.Popen(["foot"], stdout=open(os.path.join(self.out, "app.log"), "w"), stderr=subprocess.STDOUT)
+        if not self.check("foot opens", self.wait(lambda s: s["focused"] == "foot", 20) is not None):
+            return self.finish()
+        self.ctl(cmd="combo", keys="Super+m")
+        self.wait(lambda s: self.window(s)["maximized"], 3)
+
+        # A whole output, to a file and to the pictures folder.
+        path = os.path.join(self.out, "output.png")
+        done = run("output", "--file", path)
+        said, _ = done.communicate(timeout=20)
+        self.check("pila-shot output --file writes a PNG of the whole output",
+                   done.returncode == 0 and size_of(path) == (1920, 1080),
+                   f"exit {done.returncode}, size {size_of(path)}")
+        done = run("output")
+        said, _ = done.communicate(timeout=20)
+        said = said.strip()
+        pictures = os.path.join(os.environ["HOME"], "Pictures")
+        self.check("pila-shot output alone writes one into ~/Pictures and prints its path",
+                   done.returncode == 0 and os.path.dirname(said) == pictures
+                   and os.path.basename(said).startswith("screenshot-") and size_of(said) == (1920, 1080),
+                   f"exit {done.returncode}, said {said!r}, size {size_of(said)}")
+
+        # A region, to the clipboard.
+        picking = run("region")
+        state = self.wait(lambda s: self.shots(s), 10)
+        if not self.check("pila-shot region covers the output", state is not None, "no surface within 10 s"):
+            picking.kill()
+            return self.finish()
+        layer, = self.shots(state)
+        g = layer["geometry"]
+        self.check("an Overlay over the whole output, taking the keyboard",
+                   layer["layer"] == "overlay" and (g["x"], g["y"], g["w"], g["h"]) == (0, 0, 1920, 1080)
+                   and layer["keyboard"] == "exclusive", f"{layer['layer']} at {g}, keyboard {layer['keyboard']}")
+        time.sleep(0.3)
+        self.move(200, 150)
+        time.sleep(0.1)
+        self.ctl(cmd="button", button="left", state="press")
+        for i in range(1, STEPS + 1):
+            self.move(200 + 400 * i / STEPS, 150 + 300 * i / STEPS)
+            time.sleep(0.02)
+        # Mid-drag, as it looks (pila-shot itself takes it).
+        subprocess.run([shot, "output", "--file", os.path.join(self.out, "region.png")],
+                       stdout=subprocess.DEVNULL, stderr=log, check=False)
+        self.ctl(cmd="button", button="left", state="release")
+        try:
+            picking.wait(10)
+        except subprocess.TimeoutExpired:
+            picking.kill()
+        gone = self.wait(lambda s: not self.shots(s), 3)
+        self.check("a drag picks the region: the surface goes and pila-shot exits",
+                   picking.returncode == 0 and gone is not None, f"exit {picking.returncode}")
+        if shutil.which("wl-paste"):
+            types = subprocess.run(["wl-paste", "-l"], capture_output=True, text=True, timeout=5).stdout.split()
+            data = subprocess.run(["wl-paste", "-t", "image/png"], capture_output=True, timeout=5).stdout
+            self.check("the clipboard has the region as image/png, the size dragged",
+                       "image/png" in types and png_size(data) == (400, 300),
+                       f"types {types}, size {png_size(data)}")
+            serving = self.osd_processes(SHOT_APP)
+            subprocess.run(["wl-copy", "something else"], check=False, timeout=5)
+            end = time.monotonic() + 5
+            while time.monotonic() < end and self.osd_processes(SHOT_APP):
+                time.sleep(0.1)
+            self.check("its clipboard's process stays until something else is copied, then goes",
+                       serving == 1 and self.osd_processes(SHOT_APP) == 0,
+                       f"{serving} serving, {self.osd_processes(SHOT_APP)} left")
+
+        # Escape cancels.
+        picking = run("region")
+        if self.wait(lambda s: self.shots(s), 10) is not None:
+            time.sleep(0.3)
+            self.tap("Escape")
+        try:
+            picking.wait(10)
+        except subprocess.TimeoutExpired:
+            picking.kill()
+        state = self.wait(lambda s: not self.shots(s), 3) or self.state()
+        self.check("Escape cancels: exit 1, no surface left, the keyboard back on foot",
+                   picking.returncode == 1 and not self.shots(state) and state["focused"] == "foot",
+                   f"exit {picking.returncode}, layers {self.shots(state)}, focused {state['focused']}")
+
+        # The monitor to share.
+        picking = run("pick-output")
+        if self.wait(lambda s: self.shots(s), 10) is not None:
+            time.sleep(0.3)
+            self.move(960, 540)
+            time.sleep(0.1)
+            self.ctl(cmd="button", button="left", state="click")
+        try:
+            said, _ = picking.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            picking.kill()
+            said, _ = picking.communicate()
+        self.check("pila-shot pick-output: a click prints the monitor for the portal",
+                   picking.returncode == 0 and said.strip() == "Monitor: eDP-1",
+                   f"exit {picking.returncode}, said {said!r}")
+        self.wait(lambda s: not self.shots(s), 3)
+        return self.finish()
+
     def run(self):
+        if self.app == "shot":
+            return self.run_shot()
         if self.app == "osd":
             return self.run_osd()
         if self.app == "switcher":
@@ -1128,10 +1271,10 @@ def data_file(relative):
     return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
 
 
-def missing_for(app, launcher, bar, switcher, osd):
+def missing_for(app, launcher, bar, switcher, osd, shot):
     """What `app`'s run needs and the system lacks, if anything (`launcher`,
-    `bar`, `switcher`, `osd`: pila-launcher's, pila-bar's, pila-switcher's and
-    pila-osd's binaries)."""
+    `bar`, `switcher`, `osd`, `shot`: pila-launcher's, pila-bar's,
+    pila-switcher's, pila-osd's and pila-shot's binaries)."""
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
@@ -1143,7 +1286,9 @@ def missing_for(app, launcher, bar, switcher, osd):
         return f"no {switcher} (cargo build --release in launcher/, or PILA_SWITCHER_BIN)"
     if app == "osd" and not os.access(osd, os.X_OK):
         return f"no {osd} (cargo build --release in launcher/, or PILA_OSD_BIN)"
-    if app in ("launcher", "bar", "switcher", "osd"):
+    if app == "shot" and not os.access(shot, os.X_OK):
+        return f"no {shot} (cargo build --release in launcher/, or PILA_SHOT_BIN)"
+    if app in ("launcher", "bar", "switcher", "osd", "shot"):
         return "" if shutil.which("foot") else "foot not installed"
     command, how = IME_APPS[app]
     tools = ([command("")[0]] if command else []) + ["fcitx5"]
@@ -1163,7 +1308,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    names = list(APPS) + ["launcher", "bar", "switcher", "osd"] + list(IME_APPS)
+    names = list(APPS) + ["launcher", "bar", "switcher", "osd", "shot"] + list(IME_APPS)
     unknown = [a for a in argv if a not in names]
     if unknown:
         print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)
@@ -1183,9 +1328,10 @@ def main(argv):
     switcher = os.environ.get("PILA_SWITCHER_BIN") or os.path.join(
         repo, "launcher/target/release", SWITCHER_APP)
     osd = os.environ.get("PILA_OSD_BIN") or os.path.join(repo, "launcher/target/release", OSD_APP)
+    shot = os.environ.get("PILA_SHOT_BIN") or os.path.join(repo, "launcher/target/release", SHOT_APP)
     ok = True
     for app in argv or names:
-        missing = missing_for(app, launcher, bar, switcher, osd)
+        missing = missing_for(app, launcher, bar, switcher, osd, shot)
         if missing:
             print(f"\nSKIP  {app} ({missing})")
             continue
@@ -1214,7 +1360,7 @@ def main(argv):
                    XDG_DATA_HOME=os.path.join(home, ".local/share"),
                    PILA_HEADLESS_CHECK_INVARIANTS="1", PILA_APPS_BAR=os.path.abspath(bar),
                    PILA_APPS_SWITCHER=os.path.abspath(switcher),
-                   PILA_APPS_OSD=os.path.abspath(osd),
+                   PILA_APPS_OSD=os.path.abspath(osd), PILA_APPS_SHOT=os.path.abspath(shot),
                    RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
         workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"
         with open(os.path.join(out, "pila.log"), "w") as log:

@@ -91,7 +91,7 @@ section_system() {
     echo "Wayland display: ${WAYLAND_DISPLAY:-unset}"
     echo "Xwayland: $(command -v Xwayland >/dev/null && echo installed || echo missing)"
     echo "xdg-open: $(command -v xdg-open >/dev/null && echo installed || echo missing)"
-    echo "wl-copy: $(command -v wl-copy >/dev/null && echo installed || echo missing)"
+    echo "wpctl: $(command -v wpctl >/dev/null && echo installed || echo missing)"
 }
 
 # The name pci.ids gives a vendor (`1002`) or, with a device (`1638`), one of

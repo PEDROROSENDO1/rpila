@@ -2761,8 +2761,14 @@ mod tests {
             Some(Action::Spawn(command)) => command,
             other => panic!("not a spawn: {other:?}"),
         };
-        assert!(spawned(config.action_for(Keysym::s, &alt_shift)).contains("wl-copy"));
-        assert!(spawned(config.action_for(Keysym::s, &alt_ctrl)).contains("$PILA_OUTPUT"));
+        assert_eq!(
+            spawned(config.action_for(Keysym::s, &alt_shift)),
+            "pila-shot region"
+        );
+        assert_eq!(
+            spawned(config.action_for(Keysym::s, &alt_ctrl)),
+            "pila-shot output"
+        );
     }
 
     #[test]
