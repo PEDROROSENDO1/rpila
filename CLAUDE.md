@@ -46,7 +46,7 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`) and `pila-switcher` (`switcher/`) are a cargo workspace of their own,
+- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`), `pila-switcher` (`switcher/`) and `pila-osd` (`osd/`) are a cargo workspace of their own,
   rooted in `launcher/`, with its own `Cargo.lock` (Smithay and iced_layershell need different
   winit betas): the same commands with `--manifest-path launcher/Cargo.toml` (or run from
   `launcher/`; `cargo fmt --all`); the binaries land in `launcher/target/`. CI, the packages
@@ -262,9 +262,9 @@ global that exposes or controls other clients, input or outputs must get it too.
 The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
-`launcher/` is `pila-launcher`, `bar/` is `pila-bar` and `switcher/` is `pila-switcher`, iced
-clients of their own that reach Pila only through Wayland and, for the switcher, its IPC (see
-"Launcher", "Bar" and "Switcher" in `docs/ARCHITECTURE.md`).
+`launcher/` is `pila-launcher`, `bar/` is `pila-bar`, `switcher/` is `pila-switcher` and `osd/`
+is `pila-osd`, iced clients of their own that reach Pila only through Wayland and its IPC (see
+"Launcher", "Bar", "Switcher" and "OSD" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature

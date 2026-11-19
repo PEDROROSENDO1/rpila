@@ -285,6 +285,22 @@ tap = true                       # tap to click
 # screen under the pointer to a file (needs grim).
 "Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"
 "Mod+Ctrl+S" = "spawn mkdir -p ~/Pictures && grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"
+# The volume and brightness keys, held to go on, each change shown for a
+# moment by pila-osd (installed with Pila); the volume with wpctl (PipeWire's
+# WirePlumber), up to 100%, the brightness with brightnessctl, never quite
+# off. The media keys control the player that's playing (playerctl). Without
+# the program a key does nothing.
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && pila-osd volume", repeat = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && pila-osd volume", repeat = true }
+"XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && pila-osd volume"
+"XF86AudioMicMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle && pila-osd mic"
+"XF86MonBrightnessUp" = { action = "spawn brightnessctl -q set 5%+ && pila-osd brightness", repeat = true }
+"XF86MonBrightnessDown" = { action = "spawn brightnessctl -q -n set 5%- && pila-osd brightness", repeat = true }
+"XF86AudioPlay" = "spawn playerctl play-pause"
+"XF86AudioPause" = "spawn playerctl play-pause"
+"XF86AudioNext" = "spawn playerctl next"
+"XF86AudioPrev" = "spawn playerctl previous"
+"XF86AudioStop" = "spawn playerctl stop"
 "Mod+Page_Down" = "workspace-next"
 "Mod+Page_Up" = "workspace-prev"
 "Mod+Shift+Page_Down" = "move-to-workspace-next"
@@ -298,10 +314,8 @@ tap = true                       # tap to click
 #
 # Examples:
 # "Mod+Shift+Return" = "spawn kitty -e htop"
-# "XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }
-# "XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-", repeat = true }
-# "XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-# "XF86AudioPlay" = "spawn playerctl play-pause"
+# "XF86AudioRaiseVolume" = { action = "spawn pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat = true }  # PulseAudio
+# "XF86AudioPlay" = "none"         # to the app, as a key of its own
 # "Mod+J" = "none"
 # "Mod" = "none"                   # tapping Mod alone opens nothing
 

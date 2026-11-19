@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The volume, brightness and media keys work out of the box:** default bindings for the volume
+  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (brightnessctl,
+  never quite off) and play, pause, next, previous and stop (playerctl), the volume and brightness
+  ones repeating while held. Each change shows for a moment at the bottom of the monitor:
+  `pila-osd`, a new program installed with Pila, with an icon, a level bar and the percentage
+  (dimmed while muted). They come with a configuration Pila wrote before too (defaults are added
+  to the file's bindings, unless `default-bindings = false`); your own bindings of those keys
+  still win. Without wpctl, brightnessctl or playerctl, those keys do nothing, as before; the
+  packages recommend them.
 - **A window switcher you can see, `pila-switcher`:** held a moment, Mod+Tab or Alt+Tab shows
   the windows it goes through in the middle of the monitor, most recently used first: a preview
   of each (a still, taken as the switch starts), with its app's icon and its title, the one it's

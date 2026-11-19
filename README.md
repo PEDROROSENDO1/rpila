@@ -92,7 +92,8 @@ A short report helps even if everything works:
   you type); a bar of Pila's own (`pila-bar`, on by default: workspaces, a
   tray, the battery and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
-  attention marked with an amber title bar; a shadow under each window (`[shadow]`); optional
+  attention marked with an amber title bar; the volume, brightness and media keys working out of
+  the box, each change shown for a moment (`pila-osd`); a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.

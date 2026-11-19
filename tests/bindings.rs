@@ -1106,3 +1106,99 @@ fn another_key_stops_a_repeating_binding() {
     pila.key_release("Shift");
     pila.key_release("Super");
 }
+
+/// The volume, brightness and media keys' default bindings run wpctl,
+/// brightnessctl and playerctl, then `pila-osd` to show the level; when the
+/// change fails (no PipeWire), nothing is shown.
+#[test]
+fn volume_brightness_and_media_keys_run_their_programs_and_pila_osd() {
+    use std::os::unix::fs::PermissionsExt;
+    // Programs on PATH that write their arguments to a file of their name;
+    // wpctl fails while `wpctl-fails` is there.
+    let bin = std::env::temp_dir().join(format!("pila-media-bin-{}", std::process::id()));
+    std::fs::create_dir_all(&bin).unwrap();
+    for name in ["wpctl", "brightnessctl", "playerctl", "pila-osd"] {
+        let script = bin.join(name);
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\necho \"$@\" >> \"$XDG_RUNTIME_DIR/{name}\"\n\
+                 [ ! -e \"$XDG_RUNTIME_DIR/{name}-fails\" ]\n"
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let mut pila = TestPila::start_with(Options {
+        env: vec![("PATH".into(), path)],
+        ..Options::default()
+    });
+    let ran = |pila: &mut TestPila, key: &str, calls: &[(&str, &str)]| {
+        pila.key(key);
+        for (program, args) in calls {
+            assert_eq!(
+                pila.wait_file(program),
+                format!("{args}\n"),
+                "{key}: {program}"
+            );
+            std::fs::remove_file(pila.dir.join(program)).unwrap();
+        }
+    };
+    let volume_up = "set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+";
+    ran(
+        &mut pila,
+        "XF86AudioRaiseVolume",
+        &[("wpctl", volume_up), ("pila-osd", "volume")],
+    );
+    let volume_down = "set-volume @DEFAULT_AUDIO_SINK@ 5%-";
+    ran(
+        &mut pila,
+        "XF86AudioLowerVolume",
+        &[("wpctl", volume_down), ("pila-osd", "volume")],
+    );
+    let mute = "set-mute @DEFAULT_AUDIO_SINK@ toggle";
+    ran(
+        &mut pila,
+        "XF86AudioMute",
+        &[("wpctl", mute), ("pila-osd", "volume")],
+    );
+    let mic = "set-mute @DEFAULT_AUDIO_SOURCE@ toggle";
+    ran(
+        &mut pila,
+        "XF86AudioMicMute",
+        &[("wpctl", mic), ("pila-osd", "mic")],
+    );
+    let up = "-q set 5%+";
+    ran(
+        &mut pila,
+        "XF86MonBrightnessUp",
+        &[("brightnessctl", up), ("pila-osd", "brightness")],
+    );
+    let down = "-q -n set 5%-";
+    ran(
+        &mut pila,
+        "XF86MonBrightnessDown",
+        &[("brightnessctl", down), ("pila-osd", "brightness")],
+    );
+    for (key, args) in [
+        ("XF86AudioPlay", "play-pause"),
+        ("XF86AudioPause", "play-pause"),
+        ("XF86AudioNext", "next"),
+        ("XF86AudioPrev", "previous"),
+        ("XF86AudioStop", "stop"),
+    ] {
+        ran(&mut pila, key, &[("playerctl", args)]);
+    }
+
+    // A change that fails shows nothing.
+    std::fs::write(pila.dir.join("wpctl-fails"), "").unwrap();
+    ran(&mut pila, "XF86AudioMute", &[("wpctl", mute)]);
+    let osd = pila.dir.join("pila-osd");
+    pila.stays(
+        "no pila-osd after wpctl failed",
+        std::time::Duration::from_millis(300),
+        |_| !osd.exists(),
+    );
+    let _ = std::fs::remove_dir_all(&bin);
+}

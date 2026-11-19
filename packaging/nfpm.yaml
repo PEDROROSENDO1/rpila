@@ -60,6 +60,10 @@ overrides:
       - libnotify-bin
       - xdg-utils
       - wl-clipboard
+      # The volume, brightness and media keys' default bindings.
+      - wireplumber
+      - brightnessctl
+      - playerctl
     # Not installed by default: a desktop shell may have its own lock
     # screen, and only pila-report uses lspci.
     suggests:
@@ -87,6 +91,10 @@ overrides:
       - libnotify
       - xdg-utils
       - wl-clipboard
+      # The volume, brightness and media keys' default bindings.
+      - wireplumber
+      - brightnessctl
+      - playerctl
     # Not installed by default: a desktop shell may have its own lock
     # screen, and only pila-report uses lspci.
     suggests:

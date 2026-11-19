@@ -32,7 +32,7 @@ let
       "-Wl,--pop-state"
     ]
   );
-  # pila-launcher, pila-bar and pila-switcher (launcher/, bar/ and switcher/): a cargo workspace of
+  # pila-launcher, pila-bar, pila-switcher and pila-osd (launcher/, bar/, switcher/, osd/): a cargo workspace of
   # their own, rooted in launcher/, with its own lock. They load
   # libwayland-client and libxkbcommon at runtime too.
   clients = rustPlatform.buildRustPackage {
@@ -48,11 +48,13 @@ let
         ./bar/src
         ./switcher/Cargo.toml
         ./switcher/src
+        ./osd/Cargo.toml
+        ./osd/src
       ];
     };
     cargoLock.lockFile = ./launcher/Cargo.lock;
     cargoRoot = "launcher";
-    # Its default members are all three; the target directory stays at the top.
+    # Its default members are all four; the target directory stays at the top.
     buildAndTestSubdir = "launcher";
     # smithay-client-toolkit (pila-bar's) finds libxkbcommon through it.
     nativeBuildInputs = [ pkg-config ];
@@ -130,7 +132,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   postInstall = ''
-    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar ${clients}/bin/pila-switcher -t $out/bin
+    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar ${clients}/bin/pila-switcher ${clients}/bin/pila-osd -t $out/bin
     install -Dm755 resources/session/pila-session $out/bin/pila-session
     install -Dm755 scripts/report $out/bin/pila-report
     # pila-check finds its helpers in share/pila/check next to its bin.

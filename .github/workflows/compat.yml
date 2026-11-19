@@ -17,6 +17,7 @@ on:
       - launcher/Cargo.lock
       - bar/Cargo.toml
       - switcher/Cargo.toml
+      - osd/Cargo.toml
       - package.nix
       - flake.nix
       - flake.lock
@@ -33,6 +34,7 @@ on:
       - launcher/Cargo.lock
       - bar/Cargo.toml
       - switcher/Cargo.toml
+      - osd/Cargo.toml
       - package.nix
       - flake.nix
       - flake.lock
@@ -73,7 +75,7 @@ jobs:
             . -> target
             launcher -> target
       - run: cargo build --locked
-      # pila-launcher, pila-bar and pila-switcher have the same rust-version.
+      # pila-launcher, pila-bar, pila-switcher and pila-osd have the same rust-version.
       - run: cargo build --locked --manifest-path launcher/Cargo.toml
 
   distros:
@@ -125,6 +127,7 @@ jobs:
       - run: ./launcher/target/debug/pila-launcher --version
       - run: ./launcher/target/debug/pila-bar --version
       - run: ./launcher/target/debug/pila-switcher --version
+      - run: ./launcher/target/debug/pila-osd --version
 
   nix:
     name: Nix (package, smoke test)
@@ -140,6 +143,7 @@ jobs:
       - run: ./result/bin/pila-launcher --version
       - run: ./result/bin/pila-bar --version
       - run: ./result/bin/pila-switcher --version
+      - run: ./result/bin/pila-osd --version
       - run: ./result/bin/pila-check --help && test -f result/share/pila/check/capture-stream
       - run: nix develop --command cargo --version
       # EGL's drivers, which a NixOS system provides, come from Mesa here. If
