@@ -101,8 +101,8 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to `~/Pictures` (needs grim) |
 | `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` | Volume up, down by 5% (up to 100%), held to go on (needs wpctl) |
 | `XF86AudioMute`, `XF86AudioMicMute` | Mute the speakers, the microphone; again, unmute (needs wpctl) |
-| `XF86MonBrightnessUp`, `XF86MonBrightnessDown` | Screen brightness up, down by 5%, held to go on, never quite off (needs brightnessctl) |
-| `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, `XF86AudioPrev`, `XF86AudioStop` | Play or pause, next, previous, stop, in the player that's playing (needs playerctl) |
+| `XF86MonBrightnessUp`, `XF86MonBrightnessDown` | Screen brightness up, down by 5%, held to go on, never quite off |
+| `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, `XF86AudioPrev`, `XF86AudioStop` | Play or pause, next, previous, stop, in the player that's playing (MPRIS), shown with the track |
 | `Mod+Shift+Q` | Close the window |
 | `Mod+Shift+E` | Quit Pila |
 | `Mod` + left drag | Move a window from anywhere in it |
@@ -113,9 +113,17 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 icon, a level bar and the percentage, dimmed while muted (`pila-osd`, installed with Pila; its
 icon comes from the same icon font as the bar's, else it names the level). It shows what the
 key left: the volume and the microphone read with wpctl, the brightness from the backlight. Without
-wpctl (PipeWire's WirePlumber) or brightnessctl the keys do nothing; with PulseAudio, bind them
-to `pactl` instead. A binding of your own can show it too, after its change: `pila-osd volume`,
+wpctl (PipeWire's WirePlumber) the volume keys do nothing; with PulseAudio, bind them to `pactl`
+instead. A binding of your own can show it too, after its change: `pila-osd volume`,
 `pila-osd mic` or `pila-osd brightness`.
+
+The brightness and media keys need no other program: `pila-osd brightness +5%` (or `-5%`)
+changes the backlight's brightness and shows it, writing it in `/sys/class/backlight` where you
+may, else asking logind (or elogind) to, which needs no permissions of your own; `pila-osd
+play-pause`, `next`, `previous` and `stop` tell the media player that's playing (else a paused
+one) over MPRIS, as playerctl does, and show for a moment what it did (playing, paused, the next
+or previous track, stopped) with the track's title and artist, or that there's no player.
+Bindings of yours that run brightnessctl or playerctl keep working.
 
 Any of these but the two drags and the VT switch can be changed or removed (the drags follow
 the `mod` setting), and any key bound to an action or a command, in `[bindings]`: see
@@ -858,7 +866,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | A notification says the configuration is invalid | It gives the line and the problem; fix it and save. `pila --check-config` checks it again. A key binding must be under `[bindings]`. |
 | A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
 | Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
-| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "brightnessctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
+| The volume, brightness or media keys do nothing | The volume keys run `wpctl` (package wireplumber, PipeWire's): install it, or bind them to your own commands (`pactl` on PulseAudio). The brightness keys need a backlight in `/sys/class/backlight` and either write access to it or logind (elogind); the media keys a player that speaks MPRIS; `pila-osd brightness +5%` or `pila-osd play-pause` run from a terminal says what's wrong. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "wpctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
 | `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Install `libnotify` and run a notification daemon (mako, or your shell's). |

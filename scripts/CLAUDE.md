@@ -99,8 +99,9 @@ margin above the edge, with no keyboard, and the pointer over it is on foot (cli
 through: an empty input region) (`osd.png`); a second run, muted, goes to the first (one
 process) and it's still shown (`osd-muted.png`); it goes away on its own; `pila-osd brightness`
 shows the backlight's where `/sys/class/backlight` has one, and exits 1 with nothing shown where
-it hasn't; so does `pila-osd volume` with no wpctl. Run it after changing pila-osd or the layer
-shell.
+it hasn't; so does `pila-osd volume` with no wpctl; `pila-osd play-pause` on a dbus-daemon of
+its own with no player shows that there's none (`osd-media.png`; players themselves are
+`osd/src/media.rs`' tests). Run it after changing pila-osd or the layer shell.
 
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime

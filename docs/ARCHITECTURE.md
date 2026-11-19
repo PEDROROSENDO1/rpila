@@ -857,13 +857,25 @@ Key flows and invariants:
   sends `focus` (`pila_ipc::focus`, on a thread), which ends the switch on that window.
   `scripts/apps switcher` drives it on a headless Pila.
 - **OSD** (`osd/`, the `pila-osd` command): Pila's on-screen display, run by the default
-  bindings of the volume and brightness keys right after their change
+  bindings of the volume keys right after their change
   (`wpctl ... && pila-osd volume`, `config.example.toml`), so a failed change (no PipeWire)
-  shows nothing, and those bindings stay plain commands a user can swap. Like the launcher, an
+  shows nothing, and those bindings stay plain commands a user can swap. The brightness and
+  media keys need no program of their own: `pila-osd brightness +5%` changes the backlight
+  first (`backlight::change`: the device `backlight::find` picks, a step of the maximum,
+  never down to off, `backlight::stepped`; written to its `brightness` file where the user may,
+  else logind's `SetBrightness` on the session `auto`, on the system bus with zbus), then shows
+  the level it left; `pila-osd play-pause|next|previous|stop` (`media::run`) calls that method
+  of MPRIS's player interface on the session bus, of the player that's playing, else a paused
+  one, else any (by bus name, `media::control`), then shows what it did (`media::State`: its
+  icon, `glyphs::media_glyph`) and the track's "title — artist" (`Media`, shortened to fit,
+  `ui::fit`), or that there's no player. Players change after they answer: `media::settle`
+  reads the status or track again until it changes (up to `SETTLE`, 400 ms), else play-pause
+  shows the opposite of what was and a skip the player's name. What a run shows is a `Popup`
+  (a level or a media key's, one line on the socket); the parsing is `Request` in `main.rs`. Like the launcher, an
   iced client on iced_layershell in its cargo workspace: a run reads its level
   (`level::read`: the volume and the microphone from `wpctl get-volume` of the default sink and
   source, `level::wpctl_volume`; the brightness from `/sys/class/backlight`, the firmware's,
-  then the platform's, then a raw one, `level::backlight`), then hands it to the run in the
+  then the platform's, then a raw one, `backlight::find`), then hands it (a `Popup`) to the run in the
   background over a socket in the runtime directory (`socket_path`, one per Wayland display;
   `Level::encode`, one line) and exits, or binds it and becomes that run (`ui::run`): an
   iced_layershell daemon with no surface while hidden. A level opens a surface if there's

@@ -39,8 +39,6 @@ optdepends=(
     'pciutils: the GPU and its driver in pila-report (lspci)'
     'ttf-nerd-fonts-symbols: icons in pila-bar and pila-osd (or otf-font-awesome, or any Nerd Font)'
     'wireplumber: the volume and mute keys (wpctl)'
-    'brightnessctl: the brightness keys'
-    'playerctl: the media keys (play, pause, next, previous)'
 )
 provides=(pila)
 conflicts=(pila)

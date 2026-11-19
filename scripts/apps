@@ -83,7 +83,9 @@ wpctl of the run's own that says the volume, over a maximized foot:
     pila-osd process, still shown; and it goes away on its own;
   - `pila-osd brightness` shows the backlight's where there's one, and
     where there's none exits with an error and shows nothing; so does
-    `pila-osd volume` without wpctl.
+    `pila-osd volume` without wpctl;
+  - `pila-osd play-pause` on a session bus of the run's own (dbus-daemon)
+    with no media player shows that there's none.
 
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
@@ -956,6 +958,21 @@ class Workload:
         no_wpctl.wait(5)
         self.check("pila-osd volume without wpctl exits with an error and shows nothing",
                    no_wpctl.returncode == 1 and not self.osds(self.state()), f"exit {no_wpctl.returncode}")
+        if shutil.which("dbus-daemon"):
+            bus = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--print-address=1"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            address = bus.stdout.readline().strip()
+            media = subprocess.Popen([osd, "play-pause"], stdout=log, stderr=subprocess.STDOUT,
+                                     env=dict(env, DBUS_SESSION_BUS_ADDRESS=address))
+            media.wait(5)
+            shown = self.wait(lambda s: self.osds(s), 3)
+            self.check("pila-osd play-pause with no media player says so",
+                       media.returncode == 0 and shown is not None, f"exit {media.returncode}")
+            if shutil.which("grim"):
+                time.sleep(0.2)
+                subprocess.run(["grim", os.path.join(self.out, "osd-media.png")], check=False)
+            bus.terminate()
+            bus.wait(5)
         first.terminate()
         first.wait(5)
         return self.finish()

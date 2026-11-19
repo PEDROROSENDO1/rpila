@@ -2171,6 +2171,7 @@ dependencies = [
  "iced_layershell",
  "serde_json",
  "ttf-parser",
+ "zbus",
 ]
 
 [[package]]

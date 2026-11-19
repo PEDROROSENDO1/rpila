@@ -1,5 +1,5 @@
 //! Telling the user when a command Pila ran needs a program that isn't
-//! installed: a binding's (`brightnessctl ... && pila-osd brightness`), the
+//! installed: a binding's (`wpctl ... && pila-osd volume`), the
 //! terminal, the launcher or `autostart`'s. The shell says "command not
 //! found" only to Pila's log; a key that silently does nothing is the first
 //! thing a new user meets.

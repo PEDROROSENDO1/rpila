@@ -1,12 +1,12 @@
 //! The popup's icon, drawn as text from the icon font the user has
 //! installed (`icon_font.rs`, as pila-bar's): Material Design's in a Nerd
 //! Font (the volume by thirds, a muted speaker or microphone, the sun by
-//! thirds), else Font Awesome's fewer. Without one, the popup names what it
-//! shows in words.
+//! thirds; play, pause, skip, stop for the media keys), else Font Awesome's
+//! fewer. Without one, the popup names what it shows in words.
 
 use iced::Font;
 
-use crate::{icon_font, level::Kind, level::Level};
+use crate::{icon_font, level::Kind, level::Level, media::State};
 
 /// Material Design's, in Nerd Fonts: `md-volume_low`, `_medium`, `_high`,
 /// `_off`; `md-microphone`, `_off`; `md-brightness_5`, `_6`, `_7`.
@@ -21,6 +21,21 @@ const AWESOME_VOLUME: [char; 3] = ['\u{f026}', '\u{f027}', '\u{f028}'];
 const AWESOME_MIC: char = '\u{f130}';
 const AWESOME_MIC_OFF: char = '\u{f131}';
 const AWESOME_SUN: char = '\u{f185}';
+/// The media keys': Material Design's `md-play`, `md-pause`, `md-stop`,
+/// `md-skip_next`, `md-skip_previous`, `md-music_off` (no player); Font
+/// Awesome's `play`, `pause`, `stop`, `step-forward`, `step-backward`,
+/// `music`, in that order.
+const MATERIAL_MEDIA: [char; 6] = [
+    '\u{f040a}',
+    '\u{f03e4}',
+    '\u{f04db}',
+    '\u{f04ad}',
+    '\u{f04ae}',
+    '\u{f075b}',
+];
+const AWESOME_MEDIA: [char; 6] = [
+    '\u{f04b}', '\u{f04c}', '\u{f04d}', '\u{f051}', '\u{f048}', '\u{f001}',
+];
 
 /// The icon font found, and whether it has Material Design's icons.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,6 +65,23 @@ pub fn glyph(level: &Level, material: bool) -> char {
     }
 }
 
+/// The icon for what a media key did.
+pub fn media_glyph(state: State, material: bool) -> char {
+    let icons = if material {
+        MATERIAL_MEDIA
+    } else {
+        AWESOME_MEDIA
+    };
+    icons[match state {
+        State::Playing => 0,
+        State::Paused => 1,
+        State::Stopped => 2,
+        State::Next => 3,
+        State::Previous => 4,
+        State::NoPlayer => 5,
+    }]
+}
+
 /// The installed icon font with every icon above: Material Design's if it
 /// has them all, else Font Awesome's.
 pub fn find() -> Option<IconFont> {
@@ -58,8 +90,10 @@ pub fn find() -> Option<IconFont> {
         let mut material = MATERIAL_VOLUME.to_vec();
         material.extend([MATERIAL_VOLUME_OFF, MATERIAL_MIC, MATERIAL_MIC_OFF]);
         material.extend(MATERIAL_BRIGHTNESS);
+        material.extend(MATERIAL_MEDIA);
         let mut awesome = AWESOME_VOLUME.to_vec();
         awesome.extend([AWESOME_MIC, AWESOME_MIC_OFF, AWESOME_SUN]);
+        awesome.extend(AWESOME_MEDIA);
         if all(&material) {
             Some(true)
         } else {
@@ -114,5 +148,13 @@ mod tests {
             MATERIAL_BRIGHTNESS[2]
         );
         assert_eq!(g(Kind::Brightness, 5, false, false), AWESOME_SUN);
+    }
+
+    #[test]
+    fn media_icons_follow_what_was_done() {
+        assert_eq!(media_glyph(State::Playing, true), '\u{f040a}');
+        assert_eq!(media_glyph(State::Paused, false), '\u{f04c}');
+        assert_eq!(media_glyph(State::NoPlayer, true), '\u{f075b}');
+        assert_eq!(media_glyph(State::Previous, false), '\u{f048}');
     }
 }

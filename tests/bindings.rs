@@ -1107,17 +1107,18 @@ fn another_key_stops_a_repeating_binding() {
     pila.key_release("Super");
 }
 
-/// The volume, brightness and media keys' default bindings run wpctl,
-/// brightnessctl and playerctl, then `pila-osd` to show the level; when the
-/// change fails (no PipeWire), nothing is shown.
+/// The volume keys' default bindings run wpctl, then `pila-osd` to show the
+/// level; when the change fails (no PipeWire), nothing is shown. The
+/// brightness and media keys need no program but `pila-osd`, which changes
+/// the brightness and tells the player itself.
 #[test]
-fn volume_brightness_and_media_keys_run_their_programs_and_pila_osd() {
+fn volume_brightness_and_media_keys_run_wpctl_and_pila_osd() {
     use std::os::unix::fs::PermissionsExt;
     // Programs on PATH that write their arguments to a file of their name;
     // wpctl fails while `wpctl-fails` is there.
     let bin = std::env::temp_dir().join(format!("pila-media-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["wpctl", "brightnessctl", "playerctl", "pila-osd"] {
+    for name in ["wpctl", "pila-osd"] {
         let script = bin.join(name);
         std::fs::write(
             &script,
@@ -1169,17 +1170,15 @@ fn volume_brightness_and_media_keys_run_their_programs_and_pila_osd() {
         "XF86AudioMicMute",
         &[("wpctl", mic), ("pila-osd", "mic")],
     );
-    let up = "-q set 5%+";
     ran(
         &mut pila,
         "XF86MonBrightnessUp",
-        &[("brightnessctl", up), ("pila-osd", "brightness")],
+        &[("pila-osd", "brightness +5%")],
     );
-    let down = "-q -n set 5%-";
     ran(
         &mut pila,
         "XF86MonBrightnessDown",
-        &[("brightnessctl", down), ("pila-osd", "brightness")],
+        &[("pila-osd", "brightness -5%")],
     );
     for (key, args) in [
         ("XF86AudioPlay", "play-pause"),
@@ -1188,7 +1187,7 @@ fn volume_brightness_and_media_keys_run_their_programs_and_pila_osd() {
         ("XF86AudioPrev", "previous"),
         ("XF86AudioStop", "stop"),
     ] {
-        ran(&mut pila, key, &[("playerctl", args)]);
+        ran(&mut pila, key, &[("pila-osd", args)]);
     }
 
     // A change that fails shows nothing.

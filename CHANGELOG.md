@@ -4,17 +4,19 @@
 
 - **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
   terminal, the launcher, `autostart`) fails because a program it needs isn't installed, a
-  notification names it ("brightnessctl isn't installed") and the command, once a session per
+  notification names it ("wpctl isn't installed") and the command, once a session per
   program, where before only the log said so and the key did nothing.
 - **The volume, brightness and media keys work out of the box:** default bindings for the volume
-  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (brightnessctl,
-  never quite off) and play, pause, next, previous and stop (playerctl), the volume and brightness
-  ones repeating while held. Each change shows for a moment at the bottom of the monitor:
+  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (never quite
+  off) and play, pause, next, previous and stop, the volume and brightness ones repeating while
+  held. The brightness and media keys need no other program: `pila-osd brightness +5%` sets the
+  backlight (in `/sys/class/backlight`, else through logind or elogind, with no permissions of
+  your own) and `pila-osd play-pause|next|previous|stop` tells the player that's playing over
+  MPRIS and shows what it did with the track's title and artist. Each change shows for a moment at the bottom of the monitor:
   `pila-osd`, a new program installed with Pila, with an icon, a level bar and the percentage
   (dimmed while muted). They come with a configuration Pila wrote before too (defaults are added
   to the file's bindings, unless `default-bindings = false`); your own bindings of those keys
-  still win. Without wpctl, brightnessctl or playerctl, those keys do nothing, as before; the
-  packages recommend them.
+  still win. Without wpctl the volume keys do nothing, as before; the packages recommend it.
 - **A window switcher you can see, `pila-switcher`:** held a moment, Mod+Tab or Alt+Tab shows
   the windows it goes through in the middle of the monitor, most recently used first: a preview
   of each (a still, taken as the switch starts), with its app's icon and its title, the one it's
