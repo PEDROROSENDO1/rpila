@@ -661,7 +661,13 @@ Key flows and invariants:
   to go somewhere else (the focused window closed, unmapped, minimized or left the workspace, a
   launcher that held the keyboard went away, the session unlocked) it goes through
   `focus_recent_window`: the most recent window on screen in that history, the top one only if
-  none is. Never the top one first: an always-on-top window always is.
+  none is. Never the top one first: an always-on-top window always is. Every change to a switch
+  (`cycle_focus`, `end_switch`, `forget_in_switch`) calls `Pila::switch_changed`, and the IPC's
+  `switch` subscribers get it at the end of that loop iteration (`send_switch_events`, called
+  every iteration: a switch can end where it started, with nothing to draw): its windows' ids,
+  the pick's and the output the pointer was on when it started (`Switch::output`). That's all
+  pila-switcher knows: Pila keeps the keys and the logic, so a quick tap is never lost to a
+  client still mapping.
 - **Minimize** (`minimize.rs`): a minimized window is unmapped from the `Space` and kept
   in `Pila::windows.minimized` with its location (X11 ones get `_NET_WM_STATE_HIDDEN`).
   `window_for_surface`/`window_for_x11` search it too, and destroyed windows are removed
@@ -1389,7 +1395,8 @@ Key flows and invariants:
   xkb option can switch them with nothing to draw. Only against those the last event was made
   from (`keyboard_layouts_are`, nothing built): the event is made only when they changed. The
   colors (`[colors]`, for pila-bar and pila-launcher) are sent when `apply_config` changes them
-  (`send_colors_event`); `ipc_colors` writes them back as the config does (`hex`, from
+  (`send_colors_event`), the window switch in the iteration it changed
+  (`send_switch_events`, see "Window switching"); `ipc_colors` writes them back as the config does (`hex`, from
   premultiplied). `keyboard_layout.rs` reads them from the
   seat's xkb state and `switch-layout` sets them; while a virtual keyboard's keymap is in place
   it's the physical keyboard's that count, the names cached when that keymap swapped in

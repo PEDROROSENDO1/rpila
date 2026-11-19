@@ -1759,6 +1759,8 @@ impl Pila {
         self.refresh_sessions();
         // A layout can change with no frame to draw (an xkb option's keys).
         self.send_keyboard_events();
+        // So can the window switch end (its window was already in front).
+        self.send_switch_events();
         let drawn = std::mem::take(&mut self.frame_drawn);
         let capture_due = std::mem::take(&mut self.capture_due);
         if !std::mem::take(&mut self.housekeeping) && !drawn && !capture_due {

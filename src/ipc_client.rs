@@ -18,11 +18,13 @@ Requests:
   workspaces          The workspaces
   keyboard            The keyboard layouts, and which is in use
   colors              The colors of [colors], as pila-bar takes them
+  switch              The Mod+Tab in progress: its windows, most recent
+                      first, and the one selected
   focused             The focused window
   version             Pila's version
   subscribe [EVENTS]  Events as they happen: windows, workspaces, outputs,
-                      keyboard, colors (all of them unless named), until
-                      Pila quits
+                      keyboard, colors, switch (all of them unless named),
+                      until Pila quits
   action <action>     Run an action, as in [bindings]: action workspace 2
   focus <id>          Focus a window, by its id in `windows`
   close <id>          Ask a window to close
@@ -66,14 +68,14 @@ fn request(args: &[String]) -> Result<Value, String> {
         _ => Err(format!("{name} takes one window id")),
     };
     match name.as_str() {
-        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "focused" | "version"
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "focused"
+        | "version"
             if rest.is_empty() =>
         {
             Ok(json!({ "request": name }))
         }
-        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "focused" | "version" => {
-            Err(format!("{name} takes no arguments"))
-        }
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "focused"
+        | "version" => Err(format!("{name} takes no arguments")),
         "action" if rest.is_empty() => Err("action needs an action".to_string()),
         "action" => Ok(json!({ "request": "action", "action": rest.join(" ") })),
         "subscribe" if rest.is_empty() => Ok(json!({ "request": "subscribe" })),
@@ -232,6 +234,27 @@ fn text_of(name: &str, answer: &Value) -> Vec<String> {
             .flatten()
             .map(|(name, color)| format!("{}  {}", name.replace('_', "-"), plain(color)))
             .collect(),
+        "switch" => match answer["switch"].as_object() {
+            None => vec!["no window switch".to_string()],
+            Some(switch) => {
+                let mut lines = vec![format!("on {}", plain(&switch["output"]))];
+                lines.extend(
+                    switch["windows"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|id| {
+                            let selected = *id == switch["selected"];
+                            format!(
+                                "{}{}",
+                                plain(id),
+                                if selected { "  [selected]" } else { "" }
+                            )
+                        }),
+                );
+                lines
+            }
+        },
         "version" => vec![format!("pila {}", plain(&answer["version"]))],
         _ => Vec::new(),
     }

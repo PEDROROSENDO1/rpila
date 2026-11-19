@@ -9,10 +9,11 @@
 //! when asked for.
 //!
 //! A client may `subscribe` to events: whole snapshots of the windows,
-//! workspaces, outputs, keyboard layouts or colors, sent first as they are and
-//! then whenever one changes (`Pila::send_ipc_events`, from `after_frames`,
-//! where the taskbars hear about windows too; the layouts every loop
-//! iteration, `send_keyboard_events`; the colors when the config is applied,
+//! workspaces, outputs, keyboard layouts, colors or the window switch, sent
+//! first as they are and then whenever one changes (`Pila::send_ipc_events`,
+//! from `after_frames`, where the taskbars hear about windows too; the layouts
+//! every loop iteration, `send_keyboard_events`; the switch in the iteration it
+//! changed, `send_switch_events`; the colors when the config is applied,
 //! `send_colors_event`). A change that may come with no frame at all (the
 //! monitors turned off) sends them anyway (`ipc_events_due`). Each subscriber
 //! keeps the last snapshot it got of each kind; with none, nothing is built.
@@ -35,7 +36,7 @@ use serde_json::{json, Value};
 use smithay::{
     desktop::Window,
     reexports::calloop::{generic::Generic, Interest, Mode, PostAction},
-    utils::{Transform, SERIAL_COUNTER},
+    utils::{IsAlive, Transform, SERIAL_COUNTER},
 };
 use tracing::{debug, info, warn};
 
@@ -311,6 +312,8 @@ pub enum Request {
     Keyboard,
     /// `[colors]`, for clients that look like Pila (pila-bar, pila-launcher).
     Colors,
+    /// The Mod+Tab in progress, for pila-switcher.
+    Switch,
     /// Events of these kinds, from now on.
     Subscribe(Vec<Kind>),
     Focused,
@@ -340,6 +343,7 @@ pub fn parse_request(line: &[u8]) -> Result<Request, String> {
         "workspaces" => Request::Workspaces,
         "keyboard" => Request::Keyboard,
         "colors" => Request::Colors,
+        "switch" => Request::Switch,
         "subscribe" => Request::Subscribe(match request.get("events") {
             None => Kind::ALL.to_vec(),
             Some(Value::Array(names)) if !names.is_empty() => names
@@ -375,6 +379,7 @@ fn handle(
         }
         Request::Keyboard => Ok(json!({ "protocol": PROTOCOL, "layouts": state.ipc_layouts() })),
         Request::Colors => Ok(json!({ "protocol": PROTOCOL, "colors": state.ipc_colors() })),
+        Request::Switch => Ok(json!({ "protocol": PROTOCOL, "switch": state.ipc_switch() })),
         Request::Subscribe(kinds) => {
             state.subscribe(client, kinds);
             Ok(json!({ "protocol": PROTOCOL }))
@@ -434,15 +439,17 @@ pub enum Kind {
     Outputs,
     Keyboard,
     Colors,
+    Switch,
 }
 
 impl Kind {
-    const ALL: [Kind; 5] = [
+    const ALL: [Kind; 6] = [
         Kind::Windows,
         Kind::Workspaces,
         Kind::Outputs,
         Kind::Keyboard,
         Kind::Colors,
+        Kind::Switch,
     ];
     /// Built after frames are drawn; the rest every loop iteration.
     const AFTER_FRAMES: [Kind; 3] = [Kind::Windows, Kind::Workspaces, Kind::Outputs];
@@ -454,10 +461,11 @@ impl Kind {
             Kind::Outputs => "outputs",
             Kind::Keyboard => "keyboard",
             Kind::Colors => "colors",
+            Kind::Switch => "switch",
         }
     }
 
-    /// The event's list (or object, for colors): named as the answer to the request of the same
+    /// The event's list (or object, for colors and the switch): named as the answer to the request of the same
     /// name has it.
     fn field(self) -> &'static str {
         match self {
@@ -488,6 +496,8 @@ pub struct Subscribers {
     /// The layouts, and the one in use, the last keyboard event was made
     /// from (`send_keyboard_events`).
     keyboard: Option<(Vec<String>, usize)>,
+    /// The window switch changed this iteration (`Pila::switch_changed`).
+    switch: bool,
     /// Where each window was in the last windows event, by id: the window
     /// being moved or resized with the pointer stays there until it's let
     /// go, so that a drag sends one event rather than one a frame.
@@ -575,6 +585,21 @@ impl Pila {
         self.send_events_of(&[Kind::Colors]);
     }
 
+    /// The window switch started, stepped, lost a window or ended: its
+    /// subscribers hear of it at the end of this loop iteration
+    /// (`send_switch_events`), drawn or not, since a switch can end with
+    /// nothing new to draw.
+    pub fn switch_changed(&mut self) {
+        self.ipc_events.switch = true;
+    }
+
+    /// The switch, to its subscribers, if it changed this iteration.
+    pub fn send_switch_events(&mut self) {
+        if std::mem::take(&mut self.ipc_events.switch) {
+            self.send_events_of(&[Kind::Switch]);
+        }
+    }
+
     /// The same for the keyboard layouts, every loop iteration: an xkb
     /// option's keys switch them with nothing to draw. The event is made
     /// only when they changed since the last one (`keyboard_layouts_are`).
@@ -653,6 +678,7 @@ impl Pila {
             Kind::Outputs => Value::Array(self.ipc_outputs()),
             Kind::Keyboard => Value::Array(self.ipc_layouts()),
             Kind::Colors => self.ipc_colors(),
+            Kind::Switch => self.ipc_switch(),
         };
         let mut event = serde_json::Map::new();
         event.insert("event".into(), kind.name().into());
@@ -767,6 +793,21 @@ impl Pila {
                 }))
             })
             .collect()
+    }
+
+    /// The Mod+Tab in progress: its windows' ids in its order (most recent
+    /// first), the selected one's and the output it shows on; null if none.
+    fn ipc_switch(&self) -> Value {
+        let Some(switch) = &self.windows.switch else {
+            return Value::Null;
+        };
+        let (order, index) = switch.order();
+        let selected = order.get(index).filter(|w| w.alive()).and_then(identifier);
+        json!({
+            "windows": order.iter().filter(|w| w.alive()).filter_map(identifier).collect::<Vec<_>>(),
+            "selected": selected,
+            "output": switch.output(),
+        })
     }
 
     /// The physical keyboard's layouts, in order.

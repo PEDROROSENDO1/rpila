@@ -64,8 +64,9 @@ actions are those of `config.example.toml`.
 | `workspaces` | | `protocol`, `workspaces` |
 | `keyboard` | | `protocol`, `layouts` |
 | `colors` | | `protocol`, `colors` |
+| `switch` | | `protocol`, `switch`: the window switch in progress, or null |
 | `focused` | | `protocol`, `window`: a window, or null |
-| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard`, `colors` (all if left out) | `protocol`; then events (below) |
+| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard`, `colors`, `switch` (all if left out) | `protocol`; then events (below) |
 | `action` | `action`: as in `[bindings]` | nothing more |
 | `focus` | `id` | nothing more |
 | `close` | `id` | nothing more |
@@ -105,6 +106,13 @@ keyboard) types with a keymap of its own, these are still the physical keyboard'
 translucent: those of the configuration file, the example's where it leaves one out. For
 programs that want to look like Pila's title bars, as `pila-bar` and `pila-launcher` do.
 
+**The window switch:** while Mod+Tab or Alt+Tab is held (or a switching swipe goes on), an object:
+`windows`, the ids of the windows it goes through, most recently used first (minimized ones
+included); `selected`, the id of the one it's on; `output`, the name of the monitor the pointer
+was on when it started (null if none). Null when no switch is going on. Pila does the switching
+(the keys, the order, the end when the modifiers are let go); this is for showing it, as
+`pila-switcher` does. A `focus` request ends the switch on that window.
+
 ## Events
 
 After `subscribe`, the connection gets an event line for each kind asked for, with how things are
@@ -118,7 +126,8 @@ now, and then one whenever that kind changes:
 ```
 
 Each event is the whole list, as the request of the same name answers it (`keyboard` events carry
-`layouts`; `colors` events the `colors` object): replace what you had. Colors change when a
+`layouts`; `colors` events the `colors` object, `switch` events the `switch` object or null):
+replace what you had. The switch's events come at once, at each step of it. Colors change when a
 saved configuration changes them.
 A window being moved or resized with the pointer keeps, in events, the `x`, `y`, `width` and
 `height` it had before, until it's let go: a drag sends one event, when it ends, rather than one

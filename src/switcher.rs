@@ -7,7 +7,9 @@
 //! `cycle-focus-back` steps back. Releasing all of Ctrl/Alt/Super ends the
 //! switch (`Pila::end_switch`, from the keyboard path): the chosen window
 //! becomes the most recent. So a quick Mod+Tab toggles between the last two
-//! windows.
+//! windows. Every change to a switch (its start, a step, a window gone, its
+//! end) is sent to the IPC's `switch` subscribers (`Pila::switch_changed`),
+//! which is how pila-switcher shows it.
 
 use smithay::{
     desktop::Window,
@@ -23,12 +25,19 @@ pub struct Switch {
     index: usize,
     /// The current pick was minimized and is only shown while selected.
     shown_minimized: Option<Window>,
+    /// The output the pointer was on when it started, where a switcher
+    /// shows it (`docs/IPC.md`).
+    output: Option<String>,
 }
 
 impl Switch {
     /// The candidates, most recent first, and the index of the pick.
     pub(crate) fn order(&self) -> (&[Window], usize) {
         (&self.order, self.index)
+    }
+
+    pub(crate) fn output(&self) -> Option<&str> {
+        self.output.as_deref()
     }
 }
 
@@ -86,6 +95,8 @@ impl Pila {
 
     /// One step of Mod+Tab (or Mod+Shift+Tab when `!forward`).
     pub fn cycle_focus(&mut self, forward: bool, serial: Serial) {
+        // A step, a start, or an end if every window went away.
+        self.switch_changed();
         let mut switch = match self.windows.switch.take() {
             Some(switch) => switch,
             None => {
@@ -107,6 +118,7 @@ impl Pila {
                     order,
                     index,
                     shown_minimized: None,
+                    output: self.output_at(self.pointer_location()).map(|o| o.name()),
                 }
             }
         };
@@ -136,6 +148,7 @@ impl Pila {
         let Some(switch) = self.windows.switch.take() else {
             return;
         };
+        self.switch_changed();
         if let Some(window) = switch.order.get(switch.index).filter(|w| w.alive()) {
             let window = window.clone();
             self.touch_focus_history(&window);
@@ -155,6 +168,7 @@ impl Pila {
             if switch.shown_minimized.as_ref() == Some(window) {
                 switch.shown_minimized = None;
             }
+            self.switch_changed();
         }
     }
 

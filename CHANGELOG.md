@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
+  switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
+  the one it's on, at each step, and null when it ends: for a program that shows it.
 - **A tray in `pila-bar`:** the icons apps put in the tray (StatusNotifierItem: fcitx5, network
   and Bluetooth applets, Steam, Discord, ...), with their clicks, wheel and menus, the menus
   opening below the bar. The bar is the session's StatusNotifierWatcher when nothing else is.

@@ -1069,3 +1069,134 @@ fn the_outputs_listing_says_which_monitors_are_off() {
         "{listing}"
     );
 }
+
+// --- The window switch -------------------------------------------------------
+
+/// The ids of the windows `app_ids` (as `windows` lists them), in that order.
+fn ids_of(pila: &TestPila, app_ids: &[&str]) -> Vec<Value> {
+    let windows = query(pila, &["windows"]);
+    app_ids
+        .iter()
+        .map(|app_id| named(&windows, app_id)["id"].clone())
+        .collect()
+}
+
+/// The switch's windows (most recent first) and the one selected, as ids,
+/// reach `switch` subscribers at each step; its end comes as null, also when
+/// it ends where it started with nothing new to draw.
+#[test]
+fn a_subscriber_follows_the_window_switch() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    for name in ["a", "b", "c"] {
+        client.window(name).create();
+        pila.wait_focus(name);
+    }
+    let [c, b, a]: [Value; 3] = ids_of(&pila, &["c", "b", "a"]).try_into().unwrap();
+    let (mut events, _) = Subscription::new(&pila, Some(&["switch"]));
+    assert_eq!(
+        events.line().unwrap(),
+        serde_json::json!({ "event": "switch", "switch": null })
+    );
+    assert!(query(&pila, &["switch"])["switch"].is_null());
+
+    pila.key_press("Alt");
+    pila.key("Tab");
+    let event = events.wait("switch", "the switch starts", |e| e["switch"].is_object());
+    let switch = &event["switch"];
+    assert_eq!(switch["windows"], serde_json::json!([c, b, a]));
+    assert_eq!(switch["selected"], b);
+    assert_eq!(switch["output"], "HEADLESS-1");
+    assert_eq!(query(&pila, &["switch"])["switch"], *switch);
+    pila.key("Tab");
+    events.wait("switch", "a step on", |e| e["switch"]["selected"] == a);
+    pila.key_press("Shift");
+    pila.key("Tab");
+    pila.key_release("Shift");
+    events.wait("switch", "a step back", |e| e["switch"]["selected"] == b);
+    pila.key("Tab");
+    pila.key("Tab");
+    // Back on c, which was in front all along: the end draws nothing new.
+    events.wait("switch", "around to c", |e| e["switch"]["selected"] == c);
+    pila.key_release("Alt");
+    events.wait("switch", "the switch ends", |e| e["switch"].is_null());
+    pila.wait_focus("c");
+}
+
+/// A window that closes mid-switch leaves its list; a minimized one is in it.
+#[test]
+fn the_switch_event_lists_minimized_windows_and_drops_closed_ones() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    let mut handles = Vec::new();
+    for name in ["a", "b", "c"] {
+        handles.push(client.window(name).create());
+        pila.wait_focus(name);
+    }
+    let [c, b, a]: [Value; 3] = ids_of(&pila, &["c", "b", "a"]).try_into().unwrap();
+    msg(&pila, &["minimize", a.as_str().unwrap()]);
+    pila.wait("a minimized", |s| {
+        window_in(s, "a").is_some_and(|w| w["minimized"] == true)
+    });
+    let (mut events, _) = Subscription::new(&pila, Some(&["switch"]));
+    events.line();
+    pila.key_press("Alt");
+    pila.key("Tab");
+    events.wait("switch", "a among them", |e| {
+        e["switch"]["windows"] == serde_json::json!([c, b, a])
+    });
+    client.destroy(handles[1]);
+    events.wait("switch", "b gone from it", |e| {
+        e["switch"]["windows"] == serde_json::json!([c, a])
+    });
+    pila.key_release("Alt");
+    events.wait("switch", "the switch ends", |e| e["switch"].is_null());
+}
+
+/// Whatever ends a switch besides the keys ends it for subscribers too.
+#[test]
+fn a_switch_ended_by_a_workspace_switch_a_click_or_focus_says_so() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    for name in ["a", "b"] {
+        client.window(name).create();
+        pila.wait_focus(name);
+    }
+    let (mut events, _) = Subscription::new(&pila, Some(&["switch"]));
+    events.line();
+    pila.key_press("Alt");
+    pila.key("Tab");
+    events.wait("switch", "started", |e| e["switch"].is_object());
+    action(&pila, &["workspace", "2"]);
+    events.wait("switch", "ended by the workspace", |e| {
+        e["switch"].is_null()
+    });
+    pila.key_release("Alt");
+    action(&pila, &["workspace", "1"]);
+
+    pila.key_press("Alt");
+    pila.key("Tab");
+    events.wait("switch", "started again", |e| e["switch"].is_object());
+    pila.click("left");
+    events.wait("switch", "ended by the click", |e| e["switch"].is_null());
+    pila.key_release("Alt");
+
+    // A switcher's click: `focus` ends it on that window, Alt still held.
+    let [b, a]: [Value; 2] = ids_of(&pila, &["b", "a"]).try_into().unwrap();
+    msg(&pila, &["focus", a.as_str().unwrap()]);
+    pila.wait_focus("a");
+    pila.key_press("Alt");
+    pila.key("Tab");
+    pila.key("Tab");
+    events.wait("switch", "back on a", |e| e["switch"]["selected"] == a);
+    msg(&pila, &["focus", b.as_str().unwrap()]);
+    events.wait("switch", "ended by focus", |e| e["switch"].is_null());
+    pila.wait_focus("b");
+    pila.key_release("Alt");
+}
+
+#[test]
+fn pila_msg_switch_says_when_there_is_none() {
+    let pila = TestPila::start();
+    assert_eq!(text(&msg(&pila, &["switch"])), "no window switch\n");
+}
