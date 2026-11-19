@@ -11,8 +11,8 @@
 
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
 Windows float and overlap, with server-side title bars, like a classic desktop. It comes with
-a bar, an app launcher and a window switcher of its own (`pila-bar`, `pila-launcher`,
-`pila-switcher`, on by default); the rest
+a bar and an app launcher of its own (`pila-bar`, `pila-launcher`, on by default) and draws its
+window switcher itself; the rest
 (notifications, lock screens), or another bar and launcher, come from the usual
 Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
@@ -86,8 +86,8 @@ A short report helps even if everything works:
   maximize and fullscreen; snapping to screen halves and quarters by keyboard or by dragging to
   an edge or corner; moving, resizing and centering from the keyboard; minimize; showing the
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
-  between monitors; switching by recent use (Mod+Tab, Alt+Tab), the windows shown while it's held
-  (`pila-switcher`, on by default); tapping Mod alone opens the
+  between monitors; switching by recent use (Mod+Tab, Alt+Tab), the windows shown as live
+  previews while it's held; tapping Mod alone opens the
   launcher, your own or Pila's (`pila-launcher`, the default: the installed apps, searched as
   you type); a bar of Pila's own (`pila-bar`, on by default: workspaces, a
   tray, the battery and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,

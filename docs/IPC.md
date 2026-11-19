@@ -110,8 +110,8 @@ programs that want to look like Pila's title bars, as `pila-bar` and `pila-launc
 `windows`, the ids of the windows it goes through, most recently used first (minimized ones
 included); `selected`, the id of the one it's on; `output`, the name of the monitor the pointer
 was on when it started (null if none). Null when no switch is going on. Pila does the switching
-(the keys, the order, the end when the modifiers are let go); this is for showing it, as
-`pila-switcher` does. A `focus` request ends the switch on that window.
+(the keys, the order, the end when the modifiers are let go) and shows it itself; this is for
+another program that shows it too. A `focus` request ends the switch on that window.
 
 ## Events
 

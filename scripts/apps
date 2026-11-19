@@ -60,15 +60,13 @@ PILA_BAR_BIN; skipped where it isn't), started in the run:
     menu with a grab, a click elsewhere closes it, and the item goes when
     fcitx5 quits.
 
-And pila-switcher (switcher: built in launcher/ with cargo build --release,
-or PILA_SWITCHER_BIN; skipped where it isn't), started in the run, with
-three foot windows:
+And the window switcher Pila draws (switcher), with three foot windows:
 
   - a quick Super+Tab, there and back, shows nothing;
-  - Super held with a tap of Tab shows it: an Overlay layer surface centered
-    on the output, a tile per window in a row, taking no keyboard (the window switched
-    to has it); another Tab keeps it; letting go of Super takes it away, on
-    the window switched to;
+  - Super held with a tap of Tab shows it: centered on the output, a tile
+    per window in a row (the window switched to has the keyboard); another
+    Tab keeps it; letting go of Super takes it away, on the window switched
+    to;
   - a click on a tile while Alt+Tab is held switches to that window and takes
     it away, leaving no grab.
 
@@ -150,9 +148,9 @@ IME_APPS = {
 LAUNCHER = "pila-launcher"
 # pila-bar, its layer surfaces' namespace and height.
 BAR_APP, BAR_HEIGHT, BAR_BUTTON = "pila-bar", 28, 28
-# pila-switcher, its layer surface's namespace, and its tiles' size, the
-# spacing between them and the padding around them all (`switcher/src/ui.rs`).
-SWITCHER_APP, SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = "pila-switcher", (200, 157), 4, 12
+# The switcher's tiles' size, the spacing between them and the padding
+# around them all (`src/switcher_view.rs`).
+SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = (200, 157), 4, 12
 # pila-osd, its layer surface's namespace, size and margin above the bottom
 # edge (`osd/src/ui.rs`).
 OSD_APP, OSD_SIZE, OSD_MARGIN = "pila-osd", (320, 52), 96
@@ -784,62 +782,50 @@ class Workload:
         self.launcher_hidden("and hides it, leaving no grab")
         return self.finish()
 
-    # --- pila-switcher ---
-
-    def switchers(self, state):
-        return [l for l in state["layers"] if l["namespace"] == SWITCHER_APP]
+    # --- the switcher Pila draws ---
 
     def switcher_shown(self, state):
-        return any(l["geometry"] and l["geometry"]["h"] for l in self.switchers(state))
+        return state["switcher_view"]["shown"]
 
     def run_switcher(self):
-        """pila-switcher (module docs)."""
+        """The window switcher Pila draws (module docs)."""
         self.mark(f"{self.app} begin")
-        switcher = subprocess.Popen([os.environ["PILA_APPS_SWITCHER"]],
-                                    stdout=open(os.path.join(self.out, "switcher.log"), "a"),
-                                    stderr=subprocess.STDOUT)
         names = ["switch-a", "switch-b", "switch-c"]
         for name in names:
             subprocess.Popen(["foot", "--app-id", name, "--title", f"{name} window"],
                              stdout=open(os.path.join(self.out, "app.log"), "a"), stderr=subprocess.STDOUT)
             if not self.check(f"{name} opens", self.wait(lambda s: s["focused"] == name, 20) is not None):
-                switcher.terminate()
                 return self.finish()
-        # Its connection to Pila: a switch before it's subscribed would go unseen.
-        time.sleep(1.5)
+        time.sleep(1.0)
 
         # A quick Super+Tab: back and forth, nothing shown.
         self.ctl(cmd="key", key="Super_L", state="press")
         self.ctl(cmd="key", key="Tab", state="tap")
         self.ctl(cmd="key", key="Super_L", state="release")
         flashed = self.wait(self.switcher_shown, 0.6)
-        self.check("a quick Super+Tab shows nothing", flashed is None, "a pila-switcher surface came")
+        self.check("a quick Super+Tab shows nothing", flashed is None, "the switcher came")
         state = self.wait(lambda s: s["focused"] == "switch-b", 3) or self.state()
         # Most recent first: the switch goes to the second, then the third.
         second, third = state["focus_history"][1:3]
 
-        # Held: shown after its delay, centered, a row per window, no keyboard.
+        # Held: shown after its delay, centered, a tile per window in a row.
         self.ctl(cmd="key", key="Super_L", state="press")
         self.ctl(cmd="key", key="Tab", state="tap")
         state = self.wait(self.switcher_shown, 5)
-        if not self.check("Super held with a tap of Tab shows pila-switcher", state is not None,
-                          "no surface within 5 s"):
+        if not self.check("Super held with a tap of Tab shows the switcher", state is not None,
+                          "not within 5 s"):
             self.ctl(cmd="key", key="Super_L", state="release")
-            switcher.terminate()
             return self.finish()
-        layer, = self.switchers(state)
-        g = layer["geometry"]
+        view = state["switcher_view"]
+        g = view["rect"]
         width = 2 * SWITCHER_PADDING + len(names) * SWITCHER_TILE[0] + (len(names) - 1) * SWITCHER_SPACING
         height = 2 * SWITCHER_PADDING + SWITCHER_TILE[1]
-        self.check("an Overlay centered on the output, a tile per window in a row",
-                   layer["layer"] == "overlay" and (g["w"], g["h"]) == (width, height)
+        self.check("centered on the output, a tile per window in a row",
+                   (g["w"], g["h"]) == (width, height) and len(view["tiles"]) == len(names)
                    and abs(g["x"] + g["w"] / 2 - 960) <= 1 and abs(g["y"] + g["h"] / 2 - 540) <= 1,
-                   f"{layer['layer']} at {g}")
-        self.check("it takes no keyboard: the window switched to has it",
-                   layer["keyboard"] == "none" and state["focused"] == second
-                   and state["keyboard_focus"] != "layer:" + SWITCHER_APP,
-                   f"keyboard {layer['keyboard']}, focused {state['focused']}, "
-                   f"keyboard focus {state['keyboard_focus']}")
+                   f"{view}")
+        self.check("the window switched to has the keyboard", state["focused"] == second,
+                   f"focused {state['focused']}")
         self.ctl(cmd="key", key="Tab", state="tap")
         state = self.wait(lambda s: s["focused"] == third, 3)
         self.check("another Tab steps on, still shown", state is not None and self.switcher_shown(state))
@@ -847,33 +833,29 @@ class Workload:
             time.sleep(0.3)
             subprocess.run(["grim", os.path.join(self.out, "switcher.png")], check=False)
         self.ctl(cmd="key", key="Super_L", state="release")
-        state = self.wait(lambda s: not self.switchers(s), 3)
+        state = self.wait(lambda s: not self.switcher_shown(s), 3)
         self.check("letting go of Super takes it away, on the window switched to",
                    state is not None and state["focused"] == third,
-                   f"layers {self.switchers(self.state())}, focused {self.state()['focused']}")
+                   f"shown {self.state()['switcher_view']['shown']}, focused {self.state()['focused']}")
 
-        # A click on a row, Alt+Tab held (Alt isn't Mod here; with Mod, the same).
+        # A click on a tile, Alt+Tab held (Alt isn't Mod here; with Mod, the same).
         self.ctl(cmd="key", key="Alt_L", state="press")
         self.ctl(cmd="key", key="Tab", state="tap")
         state = self.wait(self.switcher_shown, 5)
         if self.check("Alt+Tab held shows it too", state is not None):
-            g = self.switchers(state)[0]["geometry"]
             # The last tile: the least recent window.
-            tile = len(names) - 1
-            self.move(g["x"] + SWITCHER_PADDING + tile * (SWITCHER_TILE[0] + SWITCHER_SPACING) + SWITCHER_TILE[0] // 2,
-                      g["y"] + SWITCHER_PADDING + SWITCHER_TILE[1] // 2)
+            tile = state["switcher_view"]["tiles"][-1]
+            r = tile["rect"]
+            self.move(r["x"] + r["w"] // 2, r["y"] + r["h"] // 2)
             time.sleep(0.2)
-            last = state["focus_history"][-1]
+            last = tile["app_id"]
             self.ctl(cmd="button", button="left", state="click")
-            state = self.wait(lambda s: not self.switchers(s) and s["focused"] == last, 3)
+            state = self.wait(lambda s: not self.switcher_shown(s) and s["focused"] == last, 3)
             now = self.state()
             self.check("a click on a tile switches to that window and takes it away, no grab left",
                        state is not None and not now["pointer"]["grabbed"],
-                       f"focused {now['focused']} (wanted {last}), layers {self.switchers(now)}, "
-                       f"grab {now['pointer']['grab']}")
+                       f"focused {now['focused']} (wanted {last}), grab {now['pointer']['grab']}")
         self.ctl(cmd="key", key="Alt_L", state="release")
-        switcher.terminate()
-        switcher.wait(5)
         return self.finish()
 
     # --- pila-osd ---
@@ -1271,10 +1253,10 @@ def data_file(relative):
     return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
 
 
-def missing_for(app, launcher, bar, switcher, osd, shot):
+def missing_for(app, launcher, bar, osd, shot):
     """What `app`'s run needs and the system lacks, if anything (`launcher`,
-    `bar`, `switcher`, `osd`, `shot`: pila-launcher's, pila-bar's,
-    pila-switcher's, pila-osd's and pila-shot's binaries)."""
+    `bar`, `osd`, `shot`: pila-launcher's, pila-bar's, pila-osd's and
+    pila-shot's binaries)."""
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
@@ -1282,8 +1264,6 @@ def missing_for(app, launcher, bar, switcher, osd, shot):
         return f"no {launcher} (cargo build --release in launcher/, or PILA_LAUNCHER_BIN)"
     if app == "bar" and not os.access(bar, os.X_OK):
         return f"no {bar} (cargo build --release in launcher/, or PILA_BAR_BIN)"
-    if app == "switcher" and not os.access(switcher, os.X_OK):
-        return f"no {switcher} (cargo build --release in launcher/, or PILA_SWITCHER_BIN)"
     if app == "osd" and not os.access(osd, os.X_OK):
         return f"no {osd} (cargo build --release in launcher/, or PILA_OSD_BIN)"
     if app == "shot" and not os.access(shot, os.X_OK):
@@ -1325,13 +1305,11 @@ def main(argv):
     launcher = os.environ.get("PILA_LAUNCHER_BIN") or os.path.join(
         repo, "launcher/target/release", LAUNCHER)
     bar = os.environ.get("PILA_BAR_BIN") or os.path.join(repo, "launcher/target/release", BAR_APP)
-    switcher = os.environ.get("PILA_SWITCHER_BIN") or os.path.join(
-        repo, "launcher/target/release", SWITCHER_APP)
     osd = os.environ.get("PILA_OSD_BIN") or os.path.join(repo, "launcher/target/release", OSD_APP)
     shot = os.environ.get("PILA_SHOT_BIN") or os.path.join(repo, "launcher/target/release", SHOT_APP)
     ok = True
     for app in argv or names:
-        missing = missing_for(app, launcher, bar, switcher, osd, shot)
+        missing = missing_for(app, launcher, bar, osd, shot)
         if missing:
             print(f"\nSKIP  {app} ({missing})")
             continue
@@ -1359,7 +1337,6 @@ def main(argv):
                    XDG_CACHE_HOME=os.path.join(home, ".cache"),
                    XDG_DATA_HOME=os.path.join(home, ".local/share"),
                    PILA_HEADLESS_CHECK_INVARIANTS="1", PILA_APPS_BAR=os.path.abspath(bar),
-                   PILA_APPS_SWITCHER=os.path.abspath(switcher),
                    PILA_APPS_OSD=os.path.abspath(osd), PILA_APPS_SHOT=os.path.abspath(shot),
                    RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
         workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"

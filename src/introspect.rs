@@ -304,6 +304,7 @@ impl Pila {
                 .map(|(_, l)| l.namespace().to_string()),
             "focus_history": focus_history,
             "switch": switch,
+            "switcher_view": self.switcher_view_json(),
             "workspace": self.workspaces.active + 1,
             "workspaces": self.config.workspaces,
             "outputs": outputs,

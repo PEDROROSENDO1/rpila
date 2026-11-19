@@ -10,7 +10,7 @@
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
 touchpad and monitors, and the wallpaper. It comes with a bar, a launcher and a window switcher of
-its own (`pila-bar`, `pila-launcher` and `pila-switcher`, on by default); the rest of a desktop
+its own (`pila-bar` and `pila-launcher`, on by default) and draws its window switcher; the rest of a desktop
 (notifications, a lock screen), or another bar and launcher, comes from separate programs, or
 from a desktop shell that has them all.
 
@@ -47,7 +47,7 @@ This manual says how to use Pila and set it up. Every configuration option is de
   desktop around it keeps Super), and the mouse, touchpad and monitors belong to that desktop.
 
 At startup Pila runs the programs in `autostart`, or else its own bar and window switcher,
-`pila-bar` and `pila-switcher`; no terminal opens by itself: Mod+Return opens one.
+`pila-bar`; no terminal opens by itself: Mod+Return opens one.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
 `graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
@@ -175,10 +175,9 @@ arrow resizes it (right and down grow it, left and up shrink it), and `Mod+C` ce
 **Switching windows.** `Mod+Tab` goes to the window you used before, so a quick `Mod+Tab`
 toggles between the last two. Keep Mod held and press Tab again to go further back; each window
 comes forward as you reach it, and releasing Mod settles on it. Held a moment, it shows the
-windows it goes through, most recently used first, in the middle of the monitor: a preview of
-each, with its app's icon and its title, the one you're on highlighted (`pila-switcher`, in the
-default `autostart`; with an `autostart` of your own, add it there). A click on one switches
-to it. `Mod+Shift+Tab` goes the other
+windows it goes through, most recently used first, in the middle of the monitor: a live preview
+of each (a video keeps playing in it), with its title, the one you're on highlighted. A click on
+one switches to it. `Mod+Shift+Tab` goes the other
 way. `Alt+Tab` and `Alt+Shift+Tab` do the same whatever Mod is, as on other desktops, so apps
 no longer get them; `"Alt+Tab" = "none"` and `"Alt+Shift+Tab" = "none"` in `[bindings]` give
 them back. Clicking a
@@ -485,8 +484,7 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); by default its own bar and window switcher, `pila-bar` and `pila-switcher`, and no
-terminal. `autostart = []` starts
+Xwayland); by default its own bar, `pila-bar`, and no terminal. `autostart = []` starts
 nothing.
 
 **Pila's own tools are defaults, never requirements.** Each is named in the default configuration
@@ -496,7 +494,6 @@ alone, and Pila works the same with another in its place:
 |---|---|---|
 | `pila-launcher` | `launcher` | `launcher = "fuzzel"`, or any launcher |
 | `pila-bar` | `autostart` | waybar or any other bar (a list without `pila-bar`) |
-| `pila-switcher` | `autostart` | nothing: without it Mod+Tab still switches, unseen |
 | `pila-osd` | the volume, brightness and media keys' bindings | bindings of your own (wpctl or pactl alone, brightnessctl, playerctl, ...) |
 | `pila-shot` | `Mod+Shift+S` and `Mod+Ctrl+S`; the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own (grim, slurp and wl-copy, ...); `chooser_cmd` in those settings |
 
@@ -586,7 +583,7 @@ wheel over the bar to the next or previous one. It's the default `autostart`; wi
 programs, list it among them:
 
 ```toml
-autostart = ["pila-bar --bottom", "pila-switcher", "mako"]
+autostart = ["pila-bar --bottom", "mako"]
 ```
 
 `--bottom` puts it along the bottom edge, and `--clock FORMAT` sets the clock as strftime(3)
@@ -611,13 +608,10 @@ X11 tray (XEmbed) don't show there. Its layer surfaces' namespace is `pila-bar`,
 `[[layer-rule]]`. It has no network or volume of its own (the apps' icons in the tray do): for
 those, waybar.
 
-**Pila's own window switcher**, `pila-switcher`, installed with Pila, shows the windows of a
-`Mod+Tab` or `Alt+Tab` held for a moment (see "Switching windows") as previews, in the bar's
-colors; a quick one, there and back, shows nothing. The previews are stills, taken once as the
-switch starts (a screen capture of each window, which Pila allows Pila's own programs and any
-other one that isn't sandboxed). It doesn't take the keyboard: Pila does the switching and
-tells it what to show (`pila msg subscribe switch`), so without it, or with another bar,
-switching works the same, only unseen. Its layer surface's namespace is `pila-switcher`.
+**The window switcher** is drawn by Pila itself: a `Mod+Tab` or `Alt+Tab` held for a moment shows
+its windows (see "Switching windows") as live previews in the bar's colors; a quick one, there
+and back, shows nothing. Another program can show the switch too, from `pila msg subscribe
+switch`.
 
 **Tried on Pila**, each started on it and seen doing its job: waybar (with the modules below),
 fuzzel, swaybg, mako, swaylock, swayidle, wlsunset (night light), grim and slurp (screenshots),
@@ -923,7 +917,6 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | Stuck on a locked screen after the locker crashed | See [Locking the screen and idling](#locking-the-screen-and-idling). |
 | `Mod+D` or tapping Mod does nothing | `launcher` is `""`, or names a launcher that isn't installed: set it to one that is, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)). |
 | No bar, or no terminal, at login | Pila starts only what `autostart` lists, no terminal by itself (Mod+Return opens one): list `pila-bar` (or your bar) and any terminal you want there. |
-| Mod+Tab shows no list of windows | `pila-switcher` isn't running: an `autostart` of your own (or the one Pila wrote from an older example) doesn't list it. Add it there. |
 | An app needs Mod with the mouse wheel, which switches workspaces | `"Mod+WheelScrollDown" = "none"` and `"Mod+WheelScrollUp" = "none"` under `[bindings]` give it back (nested, Mod is Alt). |
 | Tapping Mod opens the launcher and you don't want it | `"Mod" = "none"` under `[bindings]` (nested, Mod is Alt, so tapping Alt opens it). |
 | A fullscreen window flickers or shows wrong colors | `direct-scanout = false` in the configuration (Pila then draws those frames itself), and report it with `pila-report`'s file. |

@@ -186,6 +186,15 @@ pub fn send_frames(scene: &Scene, cursor: Option<&WlSurface>, output: &Output, t
                 paced_by(layer_offscreen(entry.effect.as_ref()), surface, data)
             });
     }
+    // The switcher's previews are live: their windows draw for its output.
+    for window in scene
+        .switcher
+        .iter()
+        .filter(|view| view.output == output.name())
+        .flat_map(|view| view.windows())
+    {
+        window.send_frame(output, time, None, |_, _| Some(output.clone()));
+    }
     for surface in other_trees(scene, cursor) {
         send_frames_surface_tree(
             surface,

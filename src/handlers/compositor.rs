@@ -74,6 +74,9 @@ impl CompositorHandler for Pila {
         crate::cursor::handle_commit(&self.cursor_status, surface);
         self.handle_dnd_icon_commit(surface);
         self.redraw_committed(surface, before);
+        if let Some(window) = self.window_for_surface(&crate::redraw::root_surface(surface)) {
+            self.switcher_view_committed(&window);
+        }
     }
 
     // Destroying a subsurface takes it off its parent at once, no commit

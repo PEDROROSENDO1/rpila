@@ -64,6 +64,7 @@ pub mod stacking;
 pub mod state;
 pub mod surface_limits;
 pub mod switcher;
+pub mod switcher_view;
 pub mod sync;
 pub mod tearing;
 pub mod test_control;

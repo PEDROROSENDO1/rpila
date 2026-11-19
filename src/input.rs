@@ -756,6 +756,15 @@ impl Pila {
                 at: std::time::Instant::now(),
             });
         }
+        // A click on a tile of the switcher ends the switch on that window,
+        // and does nothing else (its release neither).
+        if button_state == ButtonState::Pressed {
+            if let Some(window) = self.switcher_view_window_at(pointer.current_location()) {
+                self.input.suppressed_buttons.insert(button);
+                self.activate_toplevel(&window);
+                return;
+            }
+        }
         // A click picks the window itself; a Mod+Tab in progress is over.
         if button_state == ButtonState::Pressed {
             self.end_switch();

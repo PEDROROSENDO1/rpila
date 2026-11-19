@@ -55,7 +55,6 @@ fn the_docs_name_only_code_that_exists() {
         "fuzz/fuzz_targets",
         "launcher/src",
         "bar/src",
-        "switcher/src",
         "osd/src",
         "shot/src",
     ] {

@@ -44,7 +44,7 @@ jobs:
       # assertions catch more.
       - run: cargo test --locked
       - run: target/release/pila --version
-      # pila-launcher (launcher/), pila-bar (bar/), pila-switcher (switcher/),
+      # pila-launcher (launcher/), pila-bar (bar/),
       # pila-osd (osd/) and pila-shot (shot/): a workspace of their own, with
       # its own lock.
       - run: cargo fmt --all --check --manifest-path launcher/Cargo.toml
@@ -53,7 +53,6 @@ jobs:
       - run: cargo build --release --locked --manifest-path launcher/Cargo.toml
       - run: launcher/target/release/pila-launcher --version
       - run: launcher/target/release/pila-bar --version
-      - run: launcher/target/release/pila-switcher --version
       - run: launcher/target/release/pila-osd --version
       - run: launcher/target/release/pila-shot --version
       - name: Staged install

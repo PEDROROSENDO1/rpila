@@ -2456,11 +2456,11 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher, pila-bar and pila-switcher come from
+        // As every setting: pila-launcher and pila-bar come from
         // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(config.autostart, ["pila-bar", "pila-switcher"]);
+        assert_eq!(config.autostart, ["pila-bar"]);
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -2953,13 +2953,7 @@ mod tests {
         // By default, every one of them.
         let defaults = Config::from_toml("", &no_env).unwrap();
         let named = pilas(&defaults).join("\n");
-        for tool in [
-            "pila-launcher",
-            "pila-bar",
-            "pila-switcher",
-            "pila-osd",
-            "pila-shot",
-        ] {
+        for tool in ["pila-launcher", "pila-bar", "pila-osd", "pila-shot"] {
             assert!(named.contains(tool), "{tool} isn't a default: {named}");
         }
         // One key of its own: that key's tool goes, the others stay.

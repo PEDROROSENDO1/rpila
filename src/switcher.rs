@@ -9,7 +9,7 @@
 //! becomes the most recent. So a quick Mod+Tab toggles between the last two
 //! windows. Every change to a switch (its start, a step, a window gone, its
 //! end) is sent to the IPC's `switch` subscribers (`Pila::switch_changed`),
-//! which is how pila-switcher shows it.
+//! and shown by Pila's own switcher (`switcher_view.rs`).
 
 use smithay::{
     desktop::Window,
@@ -139,6 +139,8 @@ impl Pila {
         }
         // `focus_window` must not reorder the history mid-switch.
         self.windows.switch = Some(switch);
+        // Shown after its delay, or redrawn on the step (`switcher_view.rs`).
+        self.switcher_view_changed();
         self.focus_window(Some(window), serial);
     }
 

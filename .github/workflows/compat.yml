@@ -16,7 +16,6 @@ on:
       - launcher/Cargo.toml
       - launcher/Cargo.lock
       - bar/Cargo.toml
-      - switcher/Cargo.toml
       - osd/Cargo.toml
       - shot/Cargo.toml
       - package.nix
@@ -34,7 +33,6 @@ on:
       - launcher/Cargo.toml
       - launcher/Cargo.lock
       - bar/Cargo.toml
-      - switcher/Cargo.toml
       - osd/Cargo.toml
       - shot/Cargo.toml
       - package.nix
@@ -77,7 +75,7 @@ jobs:
             . -> target
             launcher -> target
       - run: cargo build --locked
-      # pila-launcher, pila-bar, pila-switcher, pila-osd and pila-shot have the same rust-version.
+      # pila-launcher, pila-bar, pila-osd and pila-shot have the same rust-version.
       - run: cargo build --locked --manifest-path launcher/Cargo.toml
 
   distros:
@@ -128,7 +126,6 @@ jobs:
       - run: cargo build --locked --manifest-path launcher/Cargo.toml
       - run: ./launcher/target/debug/pila-launcher --version
       - run: ./launcher/target/debug/pila-bar --version
-      - run: ./launcher/target/debug/pila-switcher --version
       - run: ./launcher/target/debug/pila-osd --version
       - run: ./launcher/target/debug/pila-shot --version
 
@@ -145,7 +142,6 @@ jobs:
       - run: ./result/bin/pila-report --help
       - run: ./result/bin/pila-launcher --version
       - run: ./result/bin/pila-bar --version
-      - run: ./result/bin/pila-switcher --version
       - run: ./result/bin/pila-osd --version
       - run: ./result/bin/pila-shot --version
       - run: ./result/bin/pila-check --help && test -f result/share/pila/check/capture-stream

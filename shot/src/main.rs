@@ -17,7 +17,6 @@ mod clock;
 #[path = "../../launcher/src/pila_ipc.rs"]
 mod pila_ipc;
 mod save;
-#[path = "../../switcher/src/shm.rs"]
 mod shm;
 #[path = "../../launcher/src/style.rs"]
 mod style;

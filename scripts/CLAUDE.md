@@ -84,14 +84,14 @@ gone when it leaves, a right
 click on it opens its menu with a grab (`tray.png`), a click elsewhere closes it with no grab
 left, and the item leaves when fcitx5 quits. `bar.png` shows the bar. Run it after changing the bar, the layer shell or ext-workspace.
 
-`switcher` drives `pila-switcher` (`run_switcher`; skipped where it isn't built in
-`launcher/target/release`, or `PILA_SWITCHER_BIN`), started by the workload with three foot
-windows (`--app-id switch-a` ...): a quick Super+Tab, there and back, maps no `pila-switcher`
-layer; Super held with a tap of Tab maps one, an Overlay centered on the output, a tile per window
-in a row, with no keyboard while the window switched to keeps it (`switcher.png`); another Tab steps
-on with it shown; letting go of Super removes it, on the window switched to; and with Alt+Tab
-held (Alt isn't Mod there), a click on the last tile switches to the least recent window and
-removes it, with no grab left. Run it after changing the switcher, `switcher.rs` or the IPC.
+`switcher` drives the window switcher Pila draws (`run_switcher`) with three foot windows
+(`--app-id switch-a` ...), reading it from the state (`switcher_view`): a quick Super+Tab, there
+and back, shows nothing; Super held with a tap of Tab shows it, centered on the output, a tile per
+window in a row, the window switched to keeping the keyboard (`switcher.png`: real apps' live
+previews, shrunk whole); another Tab steps on with it shown; letting go of Super takes it
+away, on the window switched to; and with Alt+Tab held (Alt isn't Mod there), a click on the last
+tile switches to the least recent window and takes it away, with no grab left. Run it after
+changing the switcher, `switcher.rs` or `switcher_view.rs`.
 
 `osd` drives `pila-osd` (`run_osd`; skipped where it isn't built in `launcher/target/release`,
 or `PILA_OSD_BIN`) over a maximized foot, with a `wpctl` of the run's own that prints a volume

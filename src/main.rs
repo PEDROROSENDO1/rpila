@@ -16,8 +16,7 @@ Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headles
 
 Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
-                        config's autostart (default: pila-bar and
-                        pila-switcher)
+                        config's autostart (default: pila-bar)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
                         or ~/.config/pila/config.toml, written from
                         config.example.toml the first time it's missing)

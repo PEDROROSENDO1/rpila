@@ -1,7 +1,6 @@
-//! What capturing over a Wayland connection of one's own needs, whatever is
-//! captured: waiting for events with a deadline, and shm buffers to copy
-//! into and read back. pila-switcher's window previews (`previews.rs`) and
-//! pila-shot's screenshots (`shot/src/capture.rs`, by `#[path]`).
+//! What capturing over a Wayland connection of one's own needs: waiting for
+//! events with a deadline, and shm buffers to copy into and read back
+//! (`capture.rs`).
 
 use std::{
     fs::File,

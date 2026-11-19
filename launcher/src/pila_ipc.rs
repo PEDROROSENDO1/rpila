@@ -1,11 +1,11 @@
-//! What pila-launcher, pila-bar and pila-switcher ask Pila itself, on its IPC
-//! socket (`docs/IPC.md`; `PILA_SOCKET`, which Pila gives the programs it
-//! starts): its `[colors]`, followed as the user saves new ones, and for the
-//! switcher the windows and the window switch. Elsewhere (another
-//! compositor, no `PILA_SOCKET`) or from a Pila too old to say, nothing comes
-//! and the clients keep the defaults.
+//! What Pila's own clients ask Pila itself, on its IPC socket (`docs/IPC.md`;
+//! `PILA_SOCKET`, which Pila gives the programs it starts): its `[colors]`,
+//! followed as the user saves new ones. Elsewhere (another compositor, no
+//! `PILA_SOCKET`) or from a Pila too old to say, nothing comes and the
+//! clients keep the defaults.
 //!
-//! pila-bar and pila-switcher include this file (`#[path]`): one source for all.
+//! pila-bar, pila-osd and pila-shot include this file (`#[path]`): one source
+//! for all.
 
 #![allow(dead_code)] // Each client uses part of it.
 
@@ -78,31 +78,6 @@ fn follow<'a>(reader: impl BufRead + 'a, kinds: &'a [&str]) -> impl Iterator<Ite
         .into_iter()
         .flatten()
         .filter(move |event| kinds.iter().any(|kind| event["event"] == *kind))
-}
-
-/// Ask Pila to focus the window `id` (`focus`, which also ends a window
-/// switch on it), on a thread: a click mustn't wait on the socket.
-pub fn focus(client: &'static str, id: String) {
-    let Some(path) = std::env::var_os("PILA_SOCKET").filter(|p| !p.is_empty()) else {
-        return;
-    };
-    let spawned = std::thread::Builder::new()
-        .name(format!("{client}-focus"))
-        .spawn(move || {
-            let request = serde_json::json!({ "request": "focus", "id": id });
-            let sent = UnixStream::connect(&path).and_then(|mut stream| {
-                stream.write_all(format!("{request}\n").as_bytes())?;
-                // Pila's answer, so the request isn't cut off by closing.
-                let mut answer = String::new();
-                BufReader::new(stream).read_line(&mut answer).map(|_| ())
-            });
-            if let Err(err) = sent {
-                eprintln!("{client}: can't ask Pila to focus a window: {err}");
-            }
-        });
-    if let Err(err) = spawned {
-        eprintln!("{client}: can't ask Pila to focus a window: {err}");
-    }
 }
 
 #[cfg(test)]

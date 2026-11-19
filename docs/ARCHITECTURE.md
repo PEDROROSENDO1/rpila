@@ -670,9 +670,8 @@ Key flows and invariants:
   (`cycle_focus`, `end_switch`, `forget_in_switch`) calls `Pila::switch_changed`, and the IPC's
   `switch` subscribers get it at the end of that loop iteration (`send_switch_events`, called
   every iteration: a switch can end where it started, with nothing to draw): its windows' ids,
-  the pick's and the output the pointer was on when it started (`Switch::output`). That's all
-  pila-switcher knows: Pila keeps the keys and the logic, so a quick tap is never lost to a
-  client still mapping.
+  the pick's and the output the pointer was on when it started (`Switch::output`), for a
+  program that shows it; Pila shows it itself too ("Switcher").
 - **Minimize** (`minimize.rs`): a minimized window is unmapped from the `Space` and kept
   in `Pila::windows.minimized` with its location (X11 ones get `_NET_WM_STATE_HIDDEN`).
   `window_for_surface`/`window_for_x11` search it too, and destroyed windows are removed
@@ -825,37 +824,31 @@ Key flows and invariants:
   (`ui::tray_tooltip_left`), from the bar's width, asked for then (`window::size`:
   iced_layershell reports no size when a surface opens). `scripts/apps bar` drives both on a
   headless Pila.
-- **Switcher** (`switcher/`, the `pila-switcher` command): a window switcher of Pila's own, in the
-  default `autostart`, that only shows the switch Pila does (see "Window switching"): Pila keeps
-  the keys and the order, so the switcher takes no keyboard and a quick tap is never lost to a
-  client still mapping. Like the bar, a separate iced client on iced_layershell in the
-  launcher's cargo workspace, rendered with tiny-skia; it needs `PILA_SOCKET` and exits without
-  it. It subscribes to the IPC's `colors`, `windows` and `switch` events (`pila_ipc::events`,
-  the launcher's file, which the bar and the switcher include by `#[path]`), which
-  `model::Model` applies (no Wayland or iced in it, so it's unit tested): the windows by id,
-  the switch in progress, and a count of switches, so that the delay of one that ended
-  (`model::Change::Started`, `Model::is_due`) can't show the next, nor its previews land in it.
-  An iced_layershell daemon with no surface while no switch goes on: a switch still on
-  `ui::DELAY` (150 ms) after it started gets a layer surface (Overlay, no anchor so Pila centers
-  it, on the output Pila picks, the pointer's, as the event's `output`; no keyboard; namespace
-  `pila-switcher`) of tiles, `ui::COLUMNS` to a row and `ui::ROWS` rows shown
-  (`model::first_shown` keeping the selected one's in view), resized when windows leave the
-  switch (`SizeChange`), removed when it ends. A tile is the window's preview over its app's
-  icon and its title (control characters dropped), the selected one in the accent color.
-  At each switch's start, on threads: the icons and names (`ui::find_apps`: the launcher's
-  `apps::scan` and `icons::find` by `#[path]`, a window's entry by `matching::app_for`, the
-  desktop ID, any case, then `StartupWMClass`, which `apps::parse` reads for it, then the ID's
-  last part; else an icon named as the app id), and the previews (`previews::capture`): a
-  Wayland connection of their own, opened for that switch and closed after, binds
-  ext-foreign-toplevel-list (whose identifiers are the IPC's ids), the window capture sources
-  and ext-image-copy-capture, and captures the switch's windows one at a time, the selected one
-  first, into an shm buffer (a memfd, XRGB or ARGB), each within `previews::TIMEOUT`, shrunk
-  to `previews::THUMBNAIL` (`previews::thumbnail_of`) before the next: one frame of Pila's per
-  window per switch (a capture, counted apart in the frame statistics), one full-size buffer at
-  a time, nothing between switches. A window with no preview yet shows its icon large. The
-  switcher must be a privileged client (not sandboxed) for those globals. A click on a tile
-  sends `focus` (`pila_ipc::focus`, on a thread), which ends the switch on that window.
-  `scripts/apps switcher` drives it on a headless Pila.
+- **Switcher** (`switcher_view.rs`): Pila's own window switcher, drawn by Pila, that only shows
+  the switch `switcher.rs` does (see "Window switching"). `Pila::switch_changed` (and
+  `cycle_focus` once the switch is in place) call `switcher_view_changed`: a new switch arms a
+  `DELAY` timer (150 ms: a quick tap, there and back, shows nothing), past which it's shown; a
+  step or a window gone redraws the panel where it was and where it is (`redraw_switcher_view`),
+  and the end hides it and drops its textures. The panel (`switcher_layout`, from the switch as
+  it is) is centered on the switch's output: tiles of `COLUMNS` to a row, `ROWS` rows shown
+  (`first_shown` keeps the selected one's in view), each a preview over the window's title (or
+  its app id), the selected one on the accent color (`[colors] snap-preview`, opaque), on
+  `bar-inactive` with a `hover` border, square. `Scene::switcher` (`SceneSwitcher`) is drawn on
+  its output in front of everything but the window menu and the cursor
+  (`render::output_elements`), and in captures. A preview is the window's surfaces (no title
+  bar, no popups) drawn into an `OffscreenWindow` of its own the size of its place, scaled to
+  fit as a whole (`RescaleRenderElement`: a surface element scales only its place) and never
+  grown: that texture's own damage tracker redraws only what the window changed, and the output
+  sees one texture per tile. Live: while it's shown its windows get frame callbacks from its
+  output (`frame::send_frames`), minimized ones and those elsewhere included, and a commit of
+  one redraws its tile (`switcher_view_committed`; a window on another output wouldn't redraw
+  this one). Titles are rasterized once per text, scale and state (`text::render_title`) and
+  kept, with the textures and solid buffers, in `Buffers` while it's shown. `Pila::under` hits
+  nothing over the panel, so no client gets the pointer there; a press on a tile
+  (`switcher_view_window_at`, in `pointer_button` before a click ends the switch) activates
+  that window, which ends the switch on it, and the press and its release go nowhere else. The
+  state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
+  real apps on a headless Pila.
 - **OSD** (`osd/`, the `pila-osd` command): Pila's on-screen display, run by the default
   bindings of the volume keys right after their change
   (`wpctl ... && pila-osd volume`, `config.example.toml`), so a failed change (no PipeWire)
@@ -895,7 +888,7 @@ Key flows and invariants:
   protocols Pila already serves to its own clients, and changes nothing in the compositor: it
   captures each output first (`capture::outputs`: ext-image-copy-capture of an
   ext-output-image-capture-source, no cursor, on a connection of its own, which Pila gives
-  upright at its full resolution; `shm.rs`, shared with pila-switcher's previews by `#[path]`,
+  upright at its full resolution; `shm.rs`
   waits with a deadline and makes the shm buffers), so a region is picked on the screen as it
   was. `region` and `pick-output` then cover each output with a layer surface (`ui.rs`: an
   Overlay anchored to every edge, exclusive zone -1 so it lies over bars, exclusive keyboard for

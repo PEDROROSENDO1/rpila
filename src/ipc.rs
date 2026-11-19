@@ -312,7 +312,7 @@ pub enum Request {
     Keyboard,
     /// `[colors]`, for clients that look like Pila (pila-bar, pila-launcher).
     Colors,
-    /// The Mod+Tab in progress, for pila-switcher.
+    /// The Mod+Tab in progress, for a program that shows it.
     Switch,
     /// Events of these kinds, from now on.
     Subscribe(Vec<Kind>),
@@ -591,6 +591,7 @@ impl Pila {
     /// nothing new to draw.
     pub fn switch_changed(&mut self) {
         self.ipc_events.switch = true;
+        self.switcher_view_changed();
     }
 
     /// The switch, to its subscribers, if it changed this iteration.

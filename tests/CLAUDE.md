@@ -8,7 +8,7 @@ Integration tests (`tests/*.rs`, harness in `tests/common/`) run a headless Pila
 
 - `TestPila` starts it with a config (animations, shadows and shake to find off, the US
   layout and no `autostart` unless the test sets `[animations]`, `[shadow]`, `[cursor]`,
-  `[keyboard]` or `autostart`: the example's `pila-bar` and `pila-switcher` would count among the `children`), without
+  `[keyboard]` or `autostart`: the example's `pila-bar` would count among the `children`), without
   the session's display, keymap, cursor theme (named cursors are the built-in arrow), `PILA_*`
   or D-Bus variables, in a private runtime, config and state directory, and returns once the
   fonts are loaded (they end with a redraw of every output, which a count must not see); it injects

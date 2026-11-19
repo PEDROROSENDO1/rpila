@@ -193,6 +193,9 @@ pub struct Scene {
     pub corner_radius: u32,
     /// `[wallpaper]`'s picture, under everything (`wallpaper.rs`).
     pub wallpaper: Option<crate::wallpaper::SceneWallpaper>,
+    /// The window switcher, in front of everything but the cursor
+    /// (`switcher_view.rs`).
+    pub switcher: Option<crate::switcher_view::SceneSwitcher>,
     pub colors: Colors,
 }
 
@@ -214,6 +217,7 @@ impl Scene {
             hidden_windows: Vec::new(),
             corner_radius: 0,
             wallpaper: None,
+            switcher: None,
             colors,
         }
     }
@@ -222,7 +226,11 @@ impl Scene {
     /// the window in front there is fullscreen over all of it and its frames
     /// may tear, plainly drawn, with nothing of Pila's over it and not locked.
     pub fn tears(&self, output: Rectangle<i32, Logical>) -> bool {
-        if self.locked || self.slide.is_some() || self.window_menu.is_some() {
+        if self.locked
+            || self.slide.is_some()
+            || self.window_menu.is_some()
+            || self.switcher.is_some()
+        {
             return false;
         }
         self.windows
@@ -945,7 +953,7 @@ pub struct OffscreenWindow {
 }
 
 impl OffscreenWindow {
-    fn new(
+    pub(crate) fn new(
         renderer: &mut GlesRenderer,
         size: Size<i32, Physical>,
         scale: Scale<f64>,
@@ -1001,7 +1009,11 @@ impl OffscreenWindow {
     }
 
     /// Draw `elements` (relative to the texture's top-left) into it.
-    fn draw(&mut self, renderer: &mut GlesRenderer, elements: &[PilaRenderElement]) -> bool {
+    pub(crate) fn draw(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        elements: &[PilaRenderElement],
+    ) -> bool {
         let age = usize::from(self.drawn);
         let damage = {
             let mut texture = self.texture.clone();
@@ -1086,13 +1098,16 @@ pub fn warm_up(renderer: &mut GlesRenderer) {
 }
 
 /// The physical size of a texture holding `rect` at `scale`.
-fn texture_size(rect: Rectangle<i32, Logical>, scale: Scale<f64>) -> Size<i32, Physical> {
+pub(crate) fn texture_size(
+    rect: Rectangle<i32, Logical>,
+    scale: Scale<f64>,
+) -> Size<i32, Physical> {
     let size: Size<i32, Physical> = rect.size.to_f64().to_physical(scale).to_i32_ceil();
     (size.w.max(1), size.h.max(1)).into()
 }
 
 /// A texture of `snapshot`-like content drawn at `dst` (space coordinates).
-fn texture_element(
+pub(crate) fn texture_element(
     buffer: &TextureRenderBuffer<GlesTexture>,
     texture_size: Size<i32, Physical>,
     dst: Rectangle<f64, Logical>,
@@ -1764,10 +1779,23 @@ pub fn output_elements(
         output_geo.size,
         scale,
     );
-    let mut elements = match scene.window_menu.as_ref().filter(|_| !scene.locked) {
-        Some(menu) => crate::window_menu::elements(renderer, menu, &scene.colors, origin, scale),
+    let mut elements = match scene
+        .switcher
+        .as_ref()
+        .filter(|view| !scene.locked && view.output == output_name)
+    {
+        Some(view) => crate::switcher_view::elements(renderer, view, &scene.colors, origin, scale),
         None => Vec::new(),
     };
+    if let Some(menu) = scene.window_menu.as_ref().filter(|_| !scene.locked) {
+        elements.extend(crate::window_menu::elements(
+            renderer,
+            menu,
+            &scene.colors,
+            origin,
+            scale,
+        ));
+    }
     elements.extend(dnd_icon_elements(renderer, scene, origin, scale));
     elements.extend(scene_elements(
         renderer,

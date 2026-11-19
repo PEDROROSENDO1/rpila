@@ -14,7 +14,7 @@
   way to lock the screen after a while; a setup that turns the monitors off through it keeps
   working.
 - **Pila's own tools are defaults, never requirements:** `pila-launcher`, `pila-bar`,
-  `pila-switcher`, `pila-osd` and `pila-shot` are named in the default configuration alone, and
+  `pila-osd` and `pila-shot` are named in the default configuration alone, and
   the manual's "Building your desktop" says where each is set and what to put in its place; the
   example configuration shows other tools next to the screenshot and media keys too.
 - **Screenshots with nothing else installed, `pila-shot`:** Mod+Shift+S and Mod+Ctrl+S run
@@ -53,14 +53,12 @@
   (dimmed while muted). They come with a configuration Pila wrote before too (defaults are added
   to the file's bindings, unless `default-bindings = false`); your own bindings of those keys
   still win. Without wpctl the volume keys do nothing, as before; the packages recommend it.
-- **A window switcher you can see, `pila-switcher`:** held a moment, Mod+Tab or Alt+Tab shows
-  the windows it goes through in the middle of the monitor, most recently used first: a preview
-  of each (a still, taken as the switch starts), with its app's icon and its title, the one it's
-  on highlighted; a click on one switches to it. A quick Mod+Tab, there and back, shows nothing. Pila still does the
-  switching (it only tells the switcher, over the IPC), so the keys work as before. It's in the
-  default `autostart`: a configuration of your own with an `autostart` line, including the one
-  Pila wrote on its first run, needs `"pila-switcher"` added to it. Installed with Pila, in
-  every package.
+- **A window switcher you can see:** held a moment, Mod+Tab or Alt+Tab shows the windows it
+  goes through in the middle of the monitor, most recently used first: a live preview of each (a
+  video keeps playing in it, minimized windows and those on another monitor too), with its
+  title, the one it's on highlighted; a click on one switches to it. A quick Mod+Tab, there and
+  back, shows nothing. Pila draws it itself: nothing to start or install, and the previews are
+  the windows' own pictures, with no capture.
 - **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
   switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
   the one it's on, at each step, and null when it ends: for a program that shows it.

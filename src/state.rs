@@ -218,6 +218,8 @@ pub struct Pila {
     pub monitors_off: crate::idle::MonitorsOff,
     /// `[wallpaper]`'s picture (`wallpaper.rs`).
     pub wallpaper: crate::wallpaper::Wallpaper,
+    /// The window switcher Pila draws (`switcher_view.rs`).
+    pub switcher_view: crate::switcher_view::SwitcherView,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -593,6 +595,7 @@ impl Pila {
             idle_inhibitors: IdleInhibitors::default(),
             monitors_off: Default::default(),
             wallpaper: Default::default(),
+            switcher_view: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -673,6 +676,10 @@ impl Pila {
             return self
                 .lock_surface_under(pos)
                 .map(|(surface, origin)| Under::Lock(surface, origin));
+        }
+        // Pila's switcher is in front of everything, and no client's.
+        if self.switcher_view_covers(pos) {
+            return None;
         }
         let layer = |layers| {
             crate::layers::layer_surface_under(layers, pos)
@@ -807,6 +814,7 @@ impl Pila {
                 .collect(),
             corner_radius: self.config.corner_radius,
             wallpaper: self.scene_wallpaper(),
+            switcher: self.scene_switcher(),
             ..Scene::blank(self.config.colors)
         }
     }
