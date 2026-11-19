@@ -67,15 +67,15 @@ fn hovering_the_close_button_highlights_it() {
     client.window("a").size(400, 300).create();
     pila.wait_focus("a");
     let (x, y, w, _) = rect(&pila.window("a")["geometry"]);
-    // A corner of the close button, away from its icon.
-    let (bx, by) = ((x + w - 3) as f64, (y - BAR + 3) as f64);
+    // Center of the close button circle (BUTTON_WIDTH = 26, center at x + w - 13).
+    let (bx, by) = ((x + w - 13) as f64, (y - BAR / 2) as f64);
     pila.settle();
     let before = pila.pixel(bx, by);
     pila.move_to(bx, by);
     pila.settle();
     let after = pila.pixel(bx, by);
     assert!(
-        near(after, [196, 43, 28, 255], 3),
+        before != after && near(after, [31, 31, 31, 255], 5),
         "{before:?} -> {after:?}"
     );
 }

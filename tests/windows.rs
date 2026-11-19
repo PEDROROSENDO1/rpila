@@ -10,7 +10,7 @@ use wayland_protocols::xdg::dialog::v1::client::xdg_wm_dialog_v1::XdgWmDialogV1;
 /// Title bar height (`decoration::TITLE_BAR_HEIGHT`).
 const BAR: i64 = 28;
 /// Width of each title bar button (`decoration::BUTTON_WIDTH`).
-const BUTTON: i64 = 36;
+const BUTTON: i64 = 26;
 
 #[test]
 fn a_window_opens_centered_below_its_title_bar() {
@@ -335,7 +335,7 @@ fn the_title_bar_drags_the_window() {
     client.window("a").size(400, 300).create();
     let w = pila.wait_window("a");
     let (x, y, _, _) = rect(&w["geometry"]);
-    pila.move_to((x + 20) as f64, (y - 10) as f64);
+    pila.move_to((x + 200) as f64, (y - 10) as f64);
     pila.press("left");
     pila.wait("a move grab", |s| s["pointer"]["grab"] == "move");
     pila.move_by(-100.0, 50.0);

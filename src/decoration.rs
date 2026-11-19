@@ -43,7 +43,9 @@ use crate::{
 pub const TITLE_BAR_HEIGHT: i32 = 28;
 /// Width of each button cell (clickable and hover-highlighted), at the right
 /// end of the bar. Cells are the full bar height.
-const BUTTON_WIDTH: i32 = 36;
+const BUTTON_WIDTH: i32 = 26;
+/// Radius of each circular title bar button ("bolinha"), in logical pixels.
+const BUTTON_RADIUS: f64 = 6.5;
 /// Minimize, maximize and close, from left to right at the bar's right end.
 const BUTTONS: i32 = 3;
 /// Space between the bar's left end and the title, and between the title and
@@ -215,16 +217,15 @@ enum Icon {
     Close,
     Minimize,
     Maximize,
-    /// Shown on the maximize button of a maximized window.
-    Restore,
 }
 
 /// A rasterized button and what it was drawn for, so it's only redrawn
 /// (and re-uploaded) when the icon or its colors change.
 struct ButtonTexture {
-    /// Icon, background, icon color, buffer scale and the rounded corner it's
-    /// cut by (in buffer pixels; the close button's, at the bar's top-right).
-    key: (Icon, Option<[f32; 3]>, [f32; 3], i32, i32),
+    /// Icon, circle fill color, optional hover glyph color, buffer scale and
+    /// the rounded corner it's cut by (in buffer pixels; the close button's,
+    /// at the bar's top-right).
+    key: (Icon, [f32; 3], Option<[f32; 3]>, i32, i32),
     buffer: MemoryRenderBuffer,
 }
 
@@ -356,7 +357,6 @@ pub fn title_bar_elements(
         .borrow_mut();
     let TitleBarBuffers { bar, scaled } = &mut *buffers;
 
-    let maximized = is_maximized(window);
     let buffer_scale = crate::scale::buffer_scale(scale);
     // This scale's parts, taken out while drawing and put back last.
     let mut parts = scaled
@@ -375,20 +375,27 @@ pub fn title_bar_elements(
     } else {
         colors.icon_inactive
     };
-    // Background (none: the bar shows through) and icon color.
-    let button_colors = |part| match (hover == Some(part), part) {
-        (true, TitleBarPart::Close) => (Some(colors.close_hover), colors.close_hover_icon),
-        (true, _) => (Some(colors.hover), colors.hover_icon),
-        (false, _) => (None, icon_color),
+    // Circle fill color (traffic-light style when focused or hovered, muted when
+    // unfocused) and optional dark glyph color shown on hover.
+    let button_colors = |part| {
+        let hovered = hover == Some(part);
+        let active = match part {
+            TitleBarPart::Close => [1.0, 0.373, 0.341],
+            TitleBarPart::Minimize => [0.996, 0.737, 0.180],
+            TitleBarPart::Maximize => [0.157, 0.784, 0.251],
+            TitleBarPart::Drag => unreachable!(),
+        };
+        let fill = if hovered || focused {
+            active
+        } else {
+            [0.33, 0.35, 0.39]
+        };
+        let glyph = hovered.then_some([0.12, 0.12, 0.12]);
+        (fill, glyph)
     };
     let close_loc = Point::from((rect.loc.x + rect.size.w - BUTTON_WIDTH, rect.loc.y));
     let maximize_loc = close_loc - Point::from((BUTTON_WIDTH, 0));
     let minimize_loc = maximize_loc - Point::from((BUTTON_WIDTH, 0));
-    let maximize_icon = if maximized {
-        Icon::Restore
-    } else {
-        Icon::Maximize
-    };
 
     let mut elements = Vec::with_capacity(4);
     let upload =
@@ -449,19 +456,9 @@ pub fn title_bar_elements(
     }
 
     for (slot, icon, part, loc) in [
+        (minimize, Icon::Minimize, TitleBarPart::Minimize, minimize_loc),
+        (maximize, Icon::Maximize, TitleBarPart::Maximize, maximize_loc),
         (close, Icon::Close, TitleBarPart::Close, close_loc),
-        (
-            maximize,
-            maximize_icon,
-            TitleBarPart::Maximize,
-            maximize_loc,
-        ),
-        (
-            minimize,
-            Icon::Minimize,
-            TitleBarPart::Minimize,
-            minimize_loc,
-        ),
     ] {
         let corner = match (part, radius) {
             (TitleBarPart::Close, Some(radius)) => {
@@ -469,12 +466,12 @@ pub fn title_bar_elements(
             }
             _ => 0,
         };
-        let (background, color) = button_colors(part);
-        let key = (icon, background, color, buffer_scale, corner);
+        let (fill, glyph) = button_colors(part);
+        let key = (icon, fill, glyph, buffer_scale, corner);
         let make = || {
             Some(ButtonTexture {
                 key,
-                buffer: button_buffer(icon, background, color, buffer_scale, corner),
+                buffer: button_buffer(icon, fill, glyph, buffer_scale, corner),
             })
         };
         if let Some(texture) = variant(slot, |texture| texture.key == key, BUTTON_LOOKS, make) {
@@ -507,19 +504,19 @@ pub fn title_bar_elements(
     elements
 }
 
-/// Draw one button cell (`BUTTON_WIDTH` x `TITLE_BAR_HEIGHT` logical pixels,
-/// at `scale` physical pixels each): a background (transparent unless
-/// hovered, so the bar shows through) and an anti-aliased 10px glyph in the
-/// middle. A nonzero `corner` (buffer pixels) rounds off the top-right
-/// corner: the close button's, when windows have rounded corners.
+/// Draw one circular button ("bolinha") centered in a `BUTTON_WIDTH` x
+/// `TITLE_BAR_HEIGHT` logical-pixel cell at `scale` physical pixels each.
+/// `glyph_color` is `Some` when hovered, drawing a crisp symbol inside the
+/// circle. A nonzero `corner` (buffer pixels) clips against the bar's
+/// rounded top-right corner.
 fn button_buffer(
     icon: Icon,
-    background: Option<[f32; 3]>,
-    color: [f32; 3],
+    fill: [f32; 3],
+    glyph_color: Option<[f32; 3]>,
     scale: i32,
     corner: i32,
 ) -> MemoryRenderBuffer {
-    let pixels = rasterize_button(icon, background, color, scale, corner);
+    let pixels = rasterize_button(icon, fill, glyph_color, scale, corner);
     MemoryRenderBuffer::from_slice(
         &pixels,
         Fourcc::Argb8888,
@@ -530,79 +527,90 @@ fn button_buffer(
     )
 }
 
-/// Premultiplied ARGB8888 pixels (little-endian: B, G, R, A) for a button,
-/// `scale` physical pixels per logical one, with the top-right corner
+/// Premultiplied ARGB8888 pixels (little-endian: B, G, R, A) for a circular
+/// button, `scale` physical pixels per logical one, with the top-right corner
 /// rounded by `corner` physical pixels.
 fn rasterize_button(
     icon: Icon,
-    background: Option<[f32; 3]>,
-    color: [f32; 3],
+    fill: [f32; 3],
+    glyph_color: Option<[f32; 3]>,
     scale: i32,
     corner: i32,
 ) -> Vec<u8> {
     let radius = f64::from(corner) / f64::from(scale);
     let (w, h) = (BUTTON_WIDTH * scale, TITLE_BAR_HEIGHT * scale);
     let s = scale as f64;
-    // Glyph center, in logical pixels. At scale 1, outline edges land on
-    // pixel centers, so 1px strokes are crisp; at 2, on pixel edges, where
-    // 2px strokes are.
     let (cx, cy) = (BUTTON_WIDTH as f64 / 2.0, TITLE_BAR_HEIGHT as f64 / 2.0);
     let mut pixels = Vec::with_capacity((w * h * 4) as usize);
     for y in 0..h {
         for x in 0..w {
             let p = ((x as f64 + 0.5) / s, (y as f64 + 0.5) / s);
-            let shape = rounded::top_right_coverage(p, f64::from(BUTTON_WIDTH), radius, s) as f32;
-            let coverage = glyph_coverage(icon, p, (cx, cy), s) as f32 * shape;
-            let (bg, bg_alpha) = match background {
-                Some(bg) => (bg, shape),
-                None => ([0.0; 3], 0.0),
+            let shape = rounded::top_right_coverage(p, BUTTON_WIDTH as f64, radius, s);
+            let dist = ((p.0 - cx).powi(2) + (p.1 - cy).powi(2)).sqrt() - BUTTON_RADIUS;
+            let circle = ((-dist * s + 0.5).clamp(0.0, 1.0) * shape) as f32;
+            let glyph = match glyph_color {
+                Some(gc) => {
+                    let g = (glyph_coverage(icon, p, (cx, cy), s) as f32).min(circle);
+                    Some((gc, g))
+                }
+                None => None,
             };
-            let channel = |i: usize| color[i] * coverage + bg[i] * bg_alpha * (1.0 - coverage);
-            let alpha = coverage + bg_alpha * (1.0 - coverage);
-            let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let (color, alpha) = match glyph {
+                Some((gc, g)) if circle > 0.0 => {
+                    let t = g / circle;
+                    (
+                        [
+                            fill[0] * (1.0 - t) + gc[0] * t,
+                            fill[1] * (1.0 - t) + gc[1] * t,
+                            fill[2] * (1.0 - t) + gc[2] * t,
+                        ],
+                        circle,
+                    )
+                }
+                _ => (fill, circle),
+            };
+            let byte = |v: f32| (v.clamp(0.0, 1.0) * alpha * 255.0).round() as u8;
+            let alpha_byte = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
             pixels.extend([
-                byte(channel(2)),
-                byte(channel(1)),
-                byte(channel(0)),
-                byte(alpha),
+                byte(color[2]),
+                byte(color[1]),
+                byte(color[0]),
+                alpha_byte,
             ]);
         }
     }
     pixels
 }
 
-/// How much of the pixel centered at `p` the glyph covers (0..=1). `p` is
-/// in logical pixels; a physical pixel is `1 / scale` of one.
+/// How much of the pixel centered at `p` the glyph inside the circle covers
+/// (0..=1). `p` is in logical pixels; a physical pixel is `1 / scale` of one.
 fn glyph_coverage(icon: Icon, p: (f64, f64), (cx, cy): (f64, f64), scale: f64) -> f64 {
     // A stroke `width` wide along a shape at distance `dist` from p,
     // anti-aliased over one physical pixel.
     let stroke = |dist: f64, width: f64| ((width / 2.0 - dist) * scale + 0.5).clamp(0.0, 1.0);
     match icon {
         Icon::Close => {
-            let r = 4.5;
+            let r = 2.8;
             let d1 = segment_distance(p, (cx - r, cy - r), (cx + r, cy + r));
             let d2 = segment_distance(p, (cx + r, cy - r), (cx - r, cy + r));
-            stroke(d1.min(d2), 1.4)
+            stroke(d1.min(d2), 1.3)
         }
-        Icon::Maximize => stroke(box_sdf(p, (cx, cy), 4.5).abs(), 1.0),
-        // A line along the bottom of where the maximize square sits.
+        Icon::Maximize => {
+            // Opposing diagonal arrows pointing to top-right and bottom-left.
+            let d = 2.6;
+            let h = 0.6;
+            let tr1 = segment_distance(p, (cx + h, cy - d), (cx + d, cy - d));
+            let tr2 = segment_distance(p, (cx + d, cy - d), (cx + d, cy - h));
+            let tr3 = segment_distance(p, (cx + 0.7, cy - 0.7), (cx + d, cy - d));
+            let bl1 = segment_distance(p, (cx - h, cy + d), (cx - d, cy + d));
+            let bl2 = segment_distance(p, (cx - d, cy + d), (cx - d, cy + h));
+            let bl3 = segment_distance(p, (cx - 0.7, cy + 0.7), (cx - d, cy + d));
+            stroke(tr1.min(tr2).min(tr3).min(bl1).min(bl2).min(bl3), 1.15)
+        }
         Icon::Minimize => stroke(
-            segment_distance(p, (cx - 4.5, cy + 4.5), (cx + 4.5, cy + 4.5)),
-            1.0,
+            segment_distance(p, (cx - 3.0, cy), (cx + 3.0, cy)),
+            1.3,
         ),
-        Icon::Restore => {
-            // A front square, and the part of a back square (up and right)
-            // that isn't hidden behind it. Together they span the same 10px
-            // as the maximize square, with edges on pixel centers.
-            let front = box_sdf(p, (cx - 1.5, cy + 1.5), 3.0);
-            let back = box_sdf(p, (cx + 1.5, cy - 1.5), 3.0);
-            let back = if front < -0.5 / scale {
-                0.0
-            } else {
-                stroke(back.abs(), 1.0)
-            };
-            stroke(front.abs(), 1.0).max(back)
-        }
     }
 }
 
@@ -613,15 +621,6 @@ fn segment_distance(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
     let t = ((apx * abx + apy * aby) / (abx * abx + aby * aby)).clamp(0.0, 1.0);
     let (dx, dy) = (apx - abx * t, apy - aby * t);
     (dx * dx + dy * dy).sqrt()
-}
-
-/// Signed distance from `p` to a square centered at `c` with half-size
-/// `half` (negative inside).
-fn box_sdf(p: (f64, f64), c: (f64, f64), half: f64) -> f64 {
-    let qx = (p.0 - c.0).abs() - half;
-    let qy = (p.1 - c.1).abs() - half;
-    let outside = (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt();
-    outside + qx.max(qy).min(0.0)
 }
 
 #[cfg(test)]
@@ -720,59 +719,33 @@ mod tests {
     }
 
     #[test]
-    fn button_glyphs_are_crisp_and_centered() {
-        let px = rasterize_button(
-            Icon::Maximize,
-            None,
-            crate::config::Config::default().colors.icon,
-            1,
-            0,
-        );
-        // The square's left edge (x = 13.5) lands on pixel column 13.
-        assert_eq!(alpha_at(&px, 13, TITLE_BAR_HEIGHT / 2), 255);
-        assert_eq!(alpha_at(&px, 12, TITLE_BAR_HEIGHT / 2), 0);
-        // Inside the outline and the cell's corner stay transparent.
-        assert_eq!(alpha_at(&px, BUTTON_WIDTH / 2, TITLE_BAR_HEIGHT / 2), 0);
+    fn button_circles_are_centered_and_crisp() {
+        let px = rasterize_button(Icon::Close, [1.0, 0.37, 0.34], None, 1, 0);
+        // Center of the circle is opaque; cell corners stay transparent.
+        assert_eq!(alpha_at(&px, BUTTON_WIDTH / 2, TITLE_BAR_HEIGHT / 2), 255);
         assert_eq!(alpha_at(&px, 0, 0), 0);
+        assert_eq!(alpha_at(&px, BUTTON_WIDTH - 1, TITLE_BAR_HEIGHT - 1), 0);
 
-        let px = rasterize_button(
+        // Hovered button draws a dark glyph inside the opaque circle.
+        let px_hover = rasterize_button(
             Icon::Close,
-            None,
-            crate::config::Config::default().colors.icon,
+            [1.0, 0.37, 0.34],
+            Some([0.12, 0.12, 0.12]),
             1,
             0,
         );
-        assert!(alpha_at(&px, BUTTON_WIDTH / 2, TITLE_BAR_HEIGHT / 2) > 200); // the cross
-        assert_eq!(alpha_at(&px, 0, 0), 0);
-
-        // Hovered buttons fill their whole cell.
-        let colors = crate::config::Config::default().colors;
-        let px = rasterize_button(
-            Icon::Close,
-            Some(colors.close_hover),
-            colors.close_hover_icon,
-            1,
-            0,
-        );
-        assert!(px.chunks(4).all(|p| p[3] == 255));
+        let center_idx = ((TITLE_BAR_HEIGHT / 2 * BUTTON_WIDTH + BUTTON_WIDTH / 2) * 4) as usize;
+        assert_eq!(px_hover[center_idx + 3], 255);
+        // Red channel (index 2 in BGRA) is darker at the center cross than in the unhovered fill.
+        assert!(px_hover[center_idx + 2] < 80);
     }
 
     #[test]
-    fn buttons_at_scale_2_have_crisp_2px_strokes() {
-        let px = rasterize_button(
-            Icon::Maximize,
-            None,
-            crate::config::Config::default().colors.icon,
-            2,
-            0,
-        );
+    fn buttons_at_scale_2_have_crisp_circles() {
+        let px = rasterize_button(Icon::Maximize, [0.16, 0.78, 0.25], None, 2, 0);
         assert_eq!(px.len() as i32, BUTTON_WIDTH * 2 * TITLE_BAR_HEIGHT * 2 * 4);
-        // The left edge (logical x = 13.5, 1px wide) covers columns 26-27.
-        let y = TITLE_BAR_HEIGHT;
-        assert_eq!(alpha_at_2x(&px, 25, y), 0);
-        assert_eq!(alpha_at_2x(&px, 26, y), 255);
-        assert_eq!(alpha_at_2x(&px, 27, y), 255);
-        assert_eq!(alpha_at_2x(&px, 28, y), 0);
+        assert_eq!(alpha_at_2x(&px, BUTTON_WIDTH, TITLE_BAR_HEIGHT), 255);
+        assert_eq!(alpha_at_2x(&px, 0, 0), 0);
     }
 
     #[test]

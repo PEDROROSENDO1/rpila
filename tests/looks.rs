@@ -396,34 +396,38 @@ fn colors_are_drawn() {
     pila.settle();
     let (x, y, w, _) = rect(&pila.window("a")["geometry"]);
     let bar_y = y - BAR / 2;
-    // In the bar away from its title; in a corner of a button, away from its
-    // icon; the middle of the close button's cross.
-    let (plain, close_corner, maximize_corner, cross) = (
+    // In the bar away from its title (at the left end); at the center of the
+    // close and maximize circles (at the right end).
+    let (plain, close_center, maximize_center) = (
         ((x + 4) as f64, bar_y as f64),
-        ((x + w - 3) as f64, (y - BAR + 3) as f64),
-        ((x + w - 36 - 3) as f64, (y - BAR + 3) as f64),
-        ((x + w - 18) as f64, bar_y as f64),
+        ((x + w - 13) as f64, bar_y as f64),
+        ((x + w - 26 - 13) as f64, bar_y as f64),
     );
     assert_eq!(pila.pixel(5.0, 795.0), [128, 64, 32, 255], "background");
     assert!(near(pila.pixel(plain.0, plain.1), [16, 32, 48, 255], 1));
-    assert!(near(pila.pixel(cross.0, cross.1), [192, 192, 0, 255], 40));
+    // Unhovered traffic-light circles: red close, green maximize.
+    assert!(near(pila.pixel(close_center.0, close_center.1), [255, 95, 87, 255], 3));
+    assert!(near(pila.pixel(maximize_center.0, maximize_center.1), [40, 200, 64, 255], 3));
 
-    pila.move_to(close_corner.0, close_corner.1);
+    pila.move_to(close_center.0, close_center.1);
     pila.settle();
-    let px = pila.pixel(close_corner.0, close_corner.1);
-    assert!(near(px, [96, 112, 128, 255], 1), "close hover: {px:?}");
-    assert!(near(pila.pixel(cross.0, cross.1), [0, 224, 0, 255], 40));
+    let px = pila.pixel(close_center.0, close_center.1);
+    assert!(near(px, [31, 31, 31, 255], 5), "close hover glyph: {px:?}");
 
-    pila.move_to(maximize_corner.0, maximize_corner.1);
+    pila.move_to(maximize_center.0, maximize_center.1);
     pila.settle();
-    let px = pila.pixel(maximize_corner.0, maximize_corner.1);
-    assert!(near(px, [64, 80, 96, 255], 1), "hover: {px:?}");
+    let px = pila.pixel(maximize_center.0 + 2.0, maximize_center.1 - 2.0);
+    assert!(px[1] < 120, "maximize hover glyph: {px:?}");
 
     pila.click_at(5.0, 795.0);
     pila.wait("unfocused", |s| s["focused"].is_null());
     pila.settle();
     assert!(near(pila.pixel(plain.0, plain.1), [32, 48, 64, 255], 1));
-    assert!(near(pila.pixel(cross.0, cross.1), [0, 192, 192, 255], 40));
+    assert!(near(
+        pila.pixel(close_center.0, close_center.1),
+        [84, 89, 99, 255],
+        3
+    ));
 }
 
 #[test]
@@ -458,17 +462,14 @@ fn a_reload_recolors_whats_already_drawn() {
         .create();
     pila.wait_focus("a");
     pila.settle();
-    let (x, y, w, _) = rect(&pila.window("a")["geometry"]);
+    let (x, y, _w, _) = rect(&pila.window("a")["geometry"]);
     let bar_y = (y - BAR / 2) as f64;
-    let cross = ((x + w - 18) as f64, bar_y);
-    let before = pila.pixel(cross.0, cross.1);
-    assert!(!near(before, [192, 192, 0, 255], 40), "{before:?}");
+    let before = pila.pixel((x + 4) as f64, bar_y);
+    assert!(!near(before, [16, 32, 48, 255], 1), "{before:?}");
     pila.write_config(COLORS);
     pila.wait_pixel_is((x + 4) as f64, bar_y, "the new bar", |px| {
         near(px, [16, 32, 48, 255], 1)
     });
-    let px = pila.pixel(cross.0, cross.1);
-    assert!(near(px, [192, 192, 0, 255], 40), "the button: {px:?}");
     assert_eq!(pila.pixel(5.0, 795.0), [128, 64, 32, 255]);
 }
 
