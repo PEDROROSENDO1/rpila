@@ -290,7 +290,10 @@ fn the_report_names_each_gpu_and_its_driver_without_lspci() {
     .unwrap();
     let path = std::env::var("PATH").unwrap();
     let gpu_lines = |ids: &std::path::Path| {
-        let env = [("PILA_REPORT_SYSFS", sys.as_path()), ("PILA_REPORT_PCI_IDS", ids)];
+        let env = [
+            ("PILA_REPORT_SYSFS", sys.as_path()),
+            ("PILA_REPORT_PCI_IDS", ids),
+        ];
         let out = report_with(&home, &path, "somebody", &env);
         assert!(out.status.success(), "{out:?}");
         let text = std::fs::read_to_string(home.join("pila-report.txt")).unwrap();
