@@ -202,6 +202,10 @@ impl Pila {
         if old.colors != self.config.colors {
             self.send_colors_event();
         }
+        // pila-wallpaper takes it up.
+        if old.wallpaper != self.config.wallpaper {
+            self.send_wallpaper_event();
+        }
         self.queue_redraw();
     }
 

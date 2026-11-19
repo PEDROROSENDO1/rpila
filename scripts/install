@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install pila as a login session, on any distro and with any display manager
 # that reads wayland-sessions (GDM, SDDM, LightDM, greetd front ends, ...):
-# the release binary (and pila-launcher's, pila-bar's, pila-switcher's, pila-osd's and pila-shot's), the session wrapper, the session entry and its icon,
+# the release binary (and pila-launcher's, pila-bar's, pila-switcher's, pila-osd's, pila-shot's and pila-wallpaper's), the session wrapper, the session entry and its icon,
 # the systemd user units the wrapper runs it as where there's systemd, and the
 # portal configs for screen sharing. Run it from your desktop session; sudo
 # asks once if the targets aren't writable. Afterwards log out and pick "pila"
@@ -64,7 +64,7 @@ if [ ! -x target/release/pila ]; then
     echo "target/release/pila not found; build it first (cargo build --release)" >&2
     exit 1
 fi
-for client in pila-launcher pila-bar pila-switcher pila-osd pila-shot; do
+for client in pila-launcher pila-bar pila-switcher pila-osd pila-shot pila-wallpaper; do
     if [ ! -x "launcher/target/release/$client" ]; then
         echo "launcher/target/release/$client not found; build it first" >&2
         echo "(cargo build --release --manifest-path launcher/Cargo.toml)" >&2

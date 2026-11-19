@@ -64,6 +64,10 @@ enabled = true
 [idle]
 monitors-off = 900
 
+[wallpaper]
+image = "/usr/share/backgrounds/pila.png"
+fit = "fit"
+
 [keyboard]
 layout = "us,de"
 variant = ",nodeadkeys"

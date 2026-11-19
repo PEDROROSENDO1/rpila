@@ -912,6 +912,22 @@ Key flows and invariants:
   `serve-clipboard` process of its own does that, started detached (`setsid`) with the PNG on
   its stdin, and the first process exits once it says the picture is offered.
   `scripts/apps shot` drives it on a headless Pila.
+- **Wallpaper** (`wallpaper/`, the `pila-wallpaper` command; `[wallpaper]` in Pila): Pila only
+  parses `[wallpaper]` (`config::WallpaperConfig`: the image as an absolute path, `~/` expanded,
+  a missing file a warning rather than an error since it may come later; `fit`) and hands it
+  over its IPC (`wallpaper` request and events, `ipc::Kind::Wallpaper`, sent by `apply_config`
+  when a reload changes it); it draws nothing new itself: `[colors] background` stays the clear
+  color. `pila-wallpaper`, in the default `autostart`, is an iced client in the launcher's
+  workspace: it follows the outputs on a thread of its own on iced_layershell's connection
+  (`screens.rs`, with pila-bar's `outputs.rs` by `#[path]`, opening each by its `WlOutput`) and
+  Pila's `wallpaper` and `colors` events (`pila_ipc::events`), and while there's a picture
+  covers each output with a layer surface (Background, anchored to every edge, exclusive zone
+  -1, no keyboard, namespace `pila-wallpaper`; none without an image). A new image or fit is
+  decoded on a thread (`picture::load`: the `image` crate's PNG, JPEG and WebP; shrunk once to
+  what covers a 4K monitor, `picture::shrunk`, but at `center`) and shown when ready, a picture
+  no longer wanted dropped; iced places it (`Placement::content_fit`) on
+  `[colors] background`. Nothing is drawn per frame: a surface redraws on a new picture, color
+  or size. `scripts/apps wallpaper` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

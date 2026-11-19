@@ -95,6 +95,7 @@ fn the_config_with_every_key_has_every_key() {
         ("animations", "[animations]"),
         ("cursor", "[cursor]"),
         ("idle", "[idle]"),
+        ("wallpaper", "[wallpaper]"),
         ("keyboard", "[keyboard]"),
         ("input", "[input]"),
         ("input.touchpad", "[input.touchpad]"),
@@ -187,6 +188,7 @@ const WORKSPACE: &[&str] = &["index", "active", "windows"];
 const LAYOUT: &[&str] = &["index", "name", "active"];
 /// A window switch in progress (null when there's none).
 const SWITCH: &[&str] = &["windows", "selected", "output"];
+const WALLPAPER: &[&str] = &["image", "fit"];
 const COLORS: &[&str] = &[
     "bar",
     "bar_inactive",
@@ -291,6 +293,11 @@ fn ipc_answers_and_events_keep_their_fields() {
         LAYOUT,
     );
     has_fields("the colors", &ask(&mut ipc, "colors")["colors"], COLORS);
+    has_fields(
+        "the wallpaper",
+        &ask(&mut ipc, "wallpaper")["wallpaper"],
+        WALLPAPER,
+    );
     assert!(ask(&mut ipc, "switch")["switch"].is_null());
     pila.key_press("Alt");
     pila.key("Tab");
@@ -306,6 +313,7 @@ fn ipc_answers_and_events_keep_their_fields() {
         "keyboard",
         "colors",
         "switch",
+        "wallpaper",
     ];
     ipc.ask(serde_json::json!({ "request": "subscribe", "events": kinds }));
     let mut seen = BTreeSet::new();
@@ -320,6 +328,7 @@ fn ipc_answers_and_events_keep_their_fields() {
             "outputs" => all_have("an outputs event", &event["outputs"], OUTPUT),
             "keyboard" => all_have("a keyboard event", &event["layouts"], LAYOUT),
             "colors" => has_fields("a colors event", &event["colors"], COLORS),
+            "wallpaper" => has_fields("a wallpaper event", &event["wallpaper"], WALLPAPER),
             "switch" => {
                 let switch = &event["switch"];
                 if !switch.is_null() {

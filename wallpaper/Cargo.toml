@@ -1,0 +1,31 @@
+[package]
+name = "pila-wallpaper"
+version = "0.7.1"
+edition = "2021"
+rust-version = "1.89"
+repository = "https://github.com/igalmarino/pila"
+description = "Pila's wallpaper: the image of [wallpaper] on every monitor, following the config as it's saved (iced, layer shell)"
+license = "GPL-3.0-or-later"
+publish = false
+# pila-launcher's workspace: its Cargo.lock and target directory.
+workspace = "../launcher"
+
+[dependencies]
+# As pila-launcher: software rendering (tiny-skia on wl_shm), no GPU set up,
+# libwayland-client loaded at runtime (`wayland-dlopen`).
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "wayland",
+    "thread-pool",
+    "crisp",
+    "image-without-codecs",
+] }
+iced_layershell = { version = "0.19.1", default-features = false }
+# The pictures (`picture.rs`): PNG, JPEG and WebP; the decoders iced's SVG
+# support (resvg) already brings to the workspace.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# Pila's [wallpaper] and colors (`pila_ipc.rs`, shared with pila-launcher).
+serde_json = "1"
+# The outputs (`screens.rs`), on iced_layershell's connection: the version
+# iced_layershell already brings.
+wayland-client = "0.31"

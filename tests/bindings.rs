@@ -523,10 +523,16 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 #[test]
 fn pila_bar_and_pila_launcher_come_from_the_example_config() {
     use std::os::unix::fs::PermissionsExt;
-    // A pila-bar, a pila-switcher and a pila-launcher on PATH that say they ran.
+    // A pila-wallpaper, a pila-bar, a pila-switcher and a pila-launcher on
+    // PATH that say they ran.
     let bin = std::env::temp_dir().join(format!("pila-own-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["pila-bar", "pila-switcher", "pila-launcher"] {
+    for name in [
+        "pila-wallpaper",
+        "pila-bar",
+        "pila-switcher",
+        "pila-launcher",
+    ] {
         let script = bin.join(name);
         std::fs::write(
             &script,
@@ -547,6 +553,7 @@ fn pila_bar_and_pila_launcher_come_from_the_example_config() {
     pila.wait_log("created the config from the example");
     assert_eq!(pila.wait_file("pila-bar"), "pila-bar\n");
     assert_eq!(pila.wait_file("pila-switcher"), "pila-switcher\n");
+    assert_eq!(pila.wait_file("pila-wallpaper"), "pila-wallpaper\n");
     pila.combo("Super+d");
     assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
 

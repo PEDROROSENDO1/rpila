@@ -1311,6 +1311,7 @@ struct ConfigFile {
     cursor: CursorFile,
     xwayland: XwaylandFile,
     idle: IdleFile,
+    wallpaper: WallpaperFile,
     environment: BTreeMap<String, EnvFile>,
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
@@ -1610,6 +1611,97 @@ impl IdleFile {
     }
 }
 
+/// How the wallpaper covers a monitor (`[wallpaper] fit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WallpaperFit {
+    /// The whole monitor, the image cropped to its shape.
+    Fill,
+    /// The whole image, `[colors] background` around it.
+    Fit,
+    /// The whole monitor and the whole image, out of shape.
+    Stretch,
+    /// The image at its size, in the middle.
+    Center,
+}
+
+impl WallpaperFit {
+    const NAMES: [(&'static str, WallpaperFit); 4] = [
+        ("fill", WallpaperFit::Fill),
+        ("fit", WallpaperFit::Fit),
+        ("stretch", WallpaperFit::Stretch),
+        ("center", WallpaperFit::Center),
+    ];
+
+    pub fn name(self) -> &'static str {
+        Self::NAMES
+            .iter()
+            .find(|(_, fit)| *fit == self)
+            .map_or("fill", |(name, _)| name)
+    }
+}
+
+/// `[wallpaper]`: the image pila-wallpaper shows behind everything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WallpaperConfig {
+    /// An absolute path (`~/` expanded); none: `[colors] background`.
+    pub image: Option<std::path::PathBuf>,
+    pub fit: WallpaperFit,
+}
+
+/// `[wallpaper]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct WallpaperFile {
+    image: Option<String>,
+    fit: Option<String>,
+}
+
+impl WallpaperFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(self, example, WallpaperFile { image, fit })
+    }
+
+    /// The section, and a warning if the image isn't there (yet).
+    fn validate(self, home: Option<&str>) -> Result<(WallpaperConfig, Option<String>), String> {
+        let name = need(self.fit, "wallpaper.fit")?;
+        let fit = WallpaperFit::NAMES
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, fit)| *fit)
+            .ok_or_else(|| {
+                format!("wallpaper.fit = {name:?}: must be fill, fit, stretch or center")
+            })?;
+        let image = match self.image.as_deref() {
+            None | Some("") => None,
+            Some(text) => Some(wallpaper_path(text, home)?),
+        };
+        let warning = image
+            .as_ref()
+            .filter(|path| !path.is_file())
+            .map(|path| format!("wallpaper.image: {} isn't there", path.display()));
+        Ok((WallpaperConfig { image, fit }, warning))
+    }
+}
+
+/// `[wallpaper] image` as a path: absolute, or `~/...` in `home`.
+fn wallpaper_path(text: &str, home: Option<&str>) -> Result<std::path::PathBuf, String> {
+    let path = match text.strip_prefix("~/") {
+        Some(rest) => {
+            let home = home
+                .filter(|h| !h.is_empty())
+                .ok_or_else(|| format!("wallpaper.image = {text:?}: HOME isn't set to expand ~"))?;
+            std::path::Path::new(home).join(rest)
+        }
+        None => std::path::PathBuf::from(text),
+    };
+    if !path.is_absolute() {
+        return Err(format!(
+            "wallpaper.image = {text:?}: must be an absolute path or start with ~/"
+        ));
+    }
+    Ok(path)
+}
+
 /// The largest `[shadow]` `size` and, either way, `offset` (logical pixels).
 const MAX_SHADOW: i32 = 64;
 
@@ -1737,6 +1829,8 @@ pub struct Config {
     pub xwayland: XwaylandConfig,
     /// `[idle]`: the monitors off after a while without input.
     pub idle: IdleConfig,
+    /// `[wallpaper]`, which Pila hands pila-wallpaper (`ipc.rs`).
+    pub wallpaper: WallpaperConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -1940,6 +2034,10 @@ impl Config {
         let cursor = file.cursor.or_example(example.cursor).validate()?;
         let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
         let idle = file.idle.or_example(example.idle).validate()?;
+        let (wallpaper, wallpaper_warning) = file
+            .wallpaper
+            .or_example(example.wallpaper)
+            .validate(env("HOME").as_deref())?;
         let window_rules = file
             .window_rules
             .into_iter()
@@ -2030,6 +2128,7 @@ impl Config {
         let mut entries = example.environment;
         entries.extend(file.environment);
         let environment = environment(entries, &mut warnings)?;
+        warnings.extend(wallpaper_warning);
         for (i, output) in outputs.iter().enumerate() {
             // Once a name, at its second section.
             let before = outputs[..i].iter().filter(|o| o.name == output.name);
@@ -2090,6 +2189,7 @@ impl Config {
             cursor,
             xwayland,
             idle,
+            wallpaper,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -2356,11 +2456,14 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher, pila-bar and pila-switcher come from
+        // As every setting: pila-launcher, pila-wallpaper, pila-bar and pila-switcher come from
         // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(config.autostart, ["pila-bar", "pila-switcher"]);
+        assert_eq!(
+            config.autostart,
+            ["pila-wallpaper", "pila-bar", "pila-switcher"]
+        );
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -2859,6 +2962,7 @@ mod tests {
             "pila-switcher",
             "pila-osd",
             "pila-shot",
+            "pila-wallpaper",
         ] {
             assert!(named.contains(tool), "{tool} isn't a default: {named}");
         }
@@ -3001,6 +3105,43 @@ mod tests {
             assert!(error.contains("idle.monitors-off"), "{text}: {error}");
         }
         assert!(idle("monitors-off = \"soon\"").is_err());
+    }
+
+    #[test]
+    fn the_wallpaper_is_an_absolute_path_and_a_fit() {
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.wallpaper.image, None);
+        assert_eq!(config.wallpaper.fit, WallpaperFit::Fill);
+        let home = |name: &str| (name == "HOME").then(|| "/home/someone".to_string());
+        let wallpaper = |text: &str| Config::from_toml(&format!("[wallpaper]\n{text}"), &home);
+        let config = wallpaper("image = \"~/Pictures/a.jpg\"\nfit = \"center\"").unwrap();
+        assert_eq!(
+            config.wallpaper.image.as_deref(),
+            Some(std::path::Path::new("/home/someone/Pictures/a.jpg"))
+        );
+        assert_eq!(config.wallpaper.fit, WallpaperFit::Center);
+        // Not there: a warning, as it may come later.
+        assert!(
+            config
+                .warnings
+                .iter()
+                .any(|w| w.contains("wallpaper.image")),
+            "{:?}",
+            config.warnings
+        );
+        assert_eq!(wallpaper("image = \"\"").unwrap().wallpaper.image, None);
+        for (text, what) in [
+            ("image = \"pictures/a.jpg\"", "absolute"),
+            ("fit = \"tile\"", "wallpaper.fit"),
+        ] {
+            let error = wallpaper(text).unwrap_err();
+            assert!(error.contains(what), "{text}: {error}");
+        }
+        let error = Config::from_toml("[wallpaper]\nimage = \"~/a.png\"", &no_env).unwrap_err();
+        assert!(error.contains("HOME"), "{error}");
+        for (name, fit) in WallpaperFit::NAMES {
+            assert_eq!(fit.name(), name);
+        }
     }
 
     #[test]

@@ -38,18 +38,19 @@ launcher = "pila-launcher"
 # every monitor with the workspaces (a click or the wheel switches), the tray,
 # the battery and a clock (--bottom for the bottom edge, --clock FORMAT as
 # strftime writes it). Any other bar works too, such as waybar. pila-switcher
-# shows the windows while Mod+Tab or Alt+Tab is held. Only one `autostart`
-# line can be active: to use the longer example, put it in place of the
-# active one.
+# shows the windows while Mod+Tab or Alt+Tab is held, and pila-wallpaper the
+# image of [wallpaper] (nothing while none is set; or swaybg). Only one
+# `autostart` line can be active: to use the longer example, put it in place
+# of the active one.
 # autostart = [                    # e.g.
-#     "swaybg -c 333355",
+#     "swaybg -i ~/Pictures/wallpaper.png",
 #     "pila-bar --bottom",
 #     "pila-switcher",
 #     "mako",
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
-autostart = ["pila-bar", "pila-switcher"]
+autostart = ["pila-wallpaper", "pila-bar", "pila-switcher"]
 
 # How many workspaces (virtual desktops) there are, 1 to 32. They span all
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
@@ -187,6 +188,19 @@ enabled = true
 [idle]
 # monitors-off = false             # e.g.: never
 monitors-off = 600                 # 10 minutes
+
+# The wallpaper behind everything, which pila-wallpaper (installed with Pila,
+# in `autostart`) shows on every monitor: a PNG, JPEG or WebP file, as an
+# absolute path or starting with ~/. Unset, [colors] background shows. fit:
+# fill (the whole monitor, the image cropped to its shape), fit (the whole
+# image, [colors] background around it), stretch, or center (the image at its
+# size). A saved change shows at once. Any other wallpaper program works too,
+# in place of pila-wallpaper in `autostart` (swaybg -i FILE, for instance);
+# this section is then left unused.
+[wallpaper]
+# image = "~/Pictures/wallpaper.jpg"  # e.g.
+# fit = "fit"                      # e.g.
+fit = "fill"
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and

@@ -94,7 +94,8 @@ A short report helps even if everything works:
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; the volume, brightness and media keys working out of
   the box, each change shown for a moment (`pila-osd`); screenshots of a monitor or a region
-  you drag, to a file or the clipboard (`pila-shot`); a shadow under each window (`[shadow]`); optional
+  you drag, to a file or the clipboard (`pila-shot`); a wallpaper set in the config
+  (`pila-wallpaper`); the screens off after a while without input; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.

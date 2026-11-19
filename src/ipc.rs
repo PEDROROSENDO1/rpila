@@ -314,6 +314,8 @@ pub enum Request {
     Colors,
     /// The Mod+Tab in progress, for pila-switcher.
     Switch,
+    /// `[wallpaper]`, for pila-wallpaper.
+    Wallpaper,
     /// Events of these kinds, from now on.
     Subscribe(Vec<Kind>),
     Focused,
@@ -344,6 +346,7 @@ pub fn parse_request(line: &[u8]) -> Result<Request, String> {
         "keyboard" => Request::Keyboard,
         "colors" => Request::Colors,
         "switch" => Request::Switch,
+        "wallpaper" => Request::Wallpaper,
         "subscribe" => Request::Subscribe(match request.get("events") {
             None => Kind::ALL.to_vec(),
             Some(Value::Array(names)) if !names.is_empty() => names
@@ -379,6 +382,9 @@ fn handle(
         }
         Request::Keyboard => Ok(json!({ "protocol": PROTOCOL, "layouts": state.ipc_layouts() })),
         Request::Colors => Ok(json!({ "protocol": PROTOCOL, "colors": state.ipc_colors() })),
+        Request::Wallpaper => {
+            Ok(json!({ "protocol": PROTOCOL, "wallpaper": state.ipc_wallpaper() }))
+        }
         Request::Switch => Ok(json!({ "protocol": PROTOCOL, "switch": state.ipc_switch() })),
         Request::Subscribe(kinds) => {
             state.subscribe(client, kinds);
@@ -440,16 +446,18 @@ pub enum Kind {
     Keyboard,
     Colors,
     Switch,
+    Wallpaper,
 }
 
 impl Kind {
-    const ALL: [Kind; 6] = [
+    const ALL: [Kind; 7] = [
         Kind::Windows,
         Kind::Workspaces,
         Kind::Outputs,
         Kind::Keyboard,
         Kind::Colors,
         Kind::Switch,
+        Kind::Wallpaper,
     ];
     /// Built after frames are drawn; the rest every loop iteration.
     const AFTER_FRAMES: [Kind; 3] = [Kind::Windows, Kind::Workspaces, Kind::Outputs];
@@ -462,10 +470,11 @@ impl Kind {
             Kind::Keyboard => "keyboard",
             Kind::Colors => "colors",
             Kind::Switch => "switch",
+            Kind::Wallpaper => "wallpaper",
         }
     }
 
-    /// The event's list (or object, for colors and the switch): named as the answer to the request of the same
+    /// The event's list (or object, for colors, the switch and the wallpaper): named as the answer to the request of the same
     /// name has it.
     fn field(self) -> &'static str {
         match self {
@@ -585,6 +594,12 @@ impl Pila {
         self.send_events_of(&[Kind::Colors]);
     }
 
+    /// The wallpaper, to its subscribers, if it changed since their last
+    /// event: when the config is applied (`apply_config`).
+    pub fn send_wallpaper_event(&mut self) {
+        self.send_events_of(&[Kind::Wallpaper]);
+    }
+
     /// The window switch started, stepped, lost a window or ended: its
     /// subscribers hear of it at the end of this loop iteration
     /// (`send_switch_events`), drawn or not, since a switch can end with
@@ -679,6 +694,7 @@ impl Pila {
             Kind::Keyboard => Value::Array(self.ipc_layouts()),
             Kind::Colors => self.ipc_colors(),
             Kind::Switch => self.ipc_switch(),
+            Kind::Wallpaper => self.ipc_wallpaper(),
         };
         let mut event = serde_json::Map::new();
         event.insert("event".into(), kind.name().into());
@@ -811,6 +827,16 @@ impl Pila {
     }
 
     /// The physical keyboard's layouts, in order.
+    /// `[wallpaper]`: the image's absolute path (null for none) and how it
+    /// fits.
+    fn ipc_wallpaper(&self) -> Value {
+        let wallpaper = &self.config.wallpaper;
+        json!({
+            "image": wallpaper.image.as_ref().map(|path| path.to_string_lossy()),
+            "fit": wallpaper.fit.name(),
+        })
+    }
+
     /// `[colors]` as the config writes them (`#rrggbb`, or `#rrggbbaa` when
     /// translucent), named with `_` for `-`.
     fn ipc_colors(&self) -> Value {

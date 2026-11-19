@@ -46,7 +46,7 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`), `pila-switcher` (`switcher/`), `pila-osd` (`osd/`) and `pila-shot` (`shot/`) are a cargo workspace of their own,
+- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`), `pila-switcher` (`switcher/`), `pila-osd` (`osd/`), `pila-shot` (`shot/`) and `pila-wallpaper` (`wallpaper/`) are a cargo workspace of their own,
   rooted in `launcher/`, with its own `Cargo.lock` (Smithay and iced_layershell need different
   winit betas): the same commands with `--manifest-path launcher/Cargo.toml` (or run from
   `launcher/`; `cargo fmt --all`); the binaries land in `launcher/target/`. CI, the packages
@@ -78,7 +78,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
   `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default
-  `pila-bar` and `pila-switcher`; no terminal starts by itself).
+  `pila-wallpaper`, `pila-bar` and `pila-switcher`; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -263,9 +263,9 @@ The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` c
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
 `launcher/` is `pila-launcher`, `bar/` is `pila-bar`, `switcher/` is `pila-switcher`, `osd/`
-is `pila-osd` and `shot/` is `pila-shot`, iced clients of their own that reach Pila only through
-Wayland and its IPC (see "Launcher", "Bar", "Switcher", "OSD" and "Screenshots" in
-`docs/ARCHITECTURE.md`).
+is `pila-osd`, `shot/` is `pila-shot` and `wallpaper/` is `pila-wallpaper`, iced clients of their
+own that reach Pila only through Wayland and its IPC (see "Launcher", "Bar", "Switcher", "OSD",
+"Screenshots" and "Wallpaper" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature

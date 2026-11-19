@@ -114,6 +114,15 @@ copies something else; Escape cancels (exit 1, no layer, the keyboard back on fo
 `pila-shot pick-output` prints `Monitor: eDP-1` after a click. Run it after changing pila-shot,
 the layer shell, captures or data-control.
 
+`wallpaper` drives `pila-wallpaper` (`run_wallpaper`; skipped where it or pila-shot isn't built in
+`launcher/target/release`, or `PILA_WALLPAPER_BIN`), started by the workload, editing the sealed
+config as a user saves it (`PILA_APPS_CONFIG`; pictures of one color written with the standard
+library, `write_png`, and the screen read back from `pila-shot output`, `read_png`): with no
+image it maps nothing; an image set maps a `pila-wallpaper` Background layer over the whole
+output with no keyboard and the screen shows it (`wallpaper.png`); another image saved shows
+with the same process; an added output gets a surface of its own; the image unset removes them.
+Run it after changing pila-wallpaper, `[wallpaper]`, the IPC or the layer shell.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes

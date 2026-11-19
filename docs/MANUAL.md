@@ -9,10 +9,10 @@
 
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
 desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
-touchpad and monitors. It comes with a bar, a launcher and a window switcher of its own
-(`pila-bar`, `pila-launcher` and `pila-switcher`, on by default); the rest of a desktop (notifications, a wallpaper, a lock
-screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
-has them all.
+touchpad and monitors. It comes with a bar, a launcher, a window switcher and a wallpaper of its
+own (`pila-bar`, `pila-launcher`, `pila-switcher` and `pila-wallpaper`, on by default); the rest
+of a desktop (notifications, a lock screen), or another bar and launcher, comes from separate
+programs, or from a desktop shell that has them all.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -46,8 +46,9 @@ This manual says how to use Pila and set it up. Every configuration option is de
   your system changes, so it's a safe way to try a config. Nested, the Mod key is Alt (the
   desktop around it keeps Super), and the mouse, touchpad and monitors belong to that desktop.
 
-At startup Pila runs the programs in `autostart`, or else its own bar and window switcher,
-`pila-bar` and `pila-switcher`; no terminal opens by itself: Mod+Return opens one.
+At startup Pila runs the programs in `autostart`, or else its own wallpaper, bar and window
+switcher, `pila-wallpaper`, `pila-bar` and `pila-switcher`; no terminal opens by itself:
+Mod+Return opens one.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
 `graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
@@ -217,6 +218,22 @@ windows without a wallpaper, and `snap-preview` the area a dragged window would 
 be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors. Pila's
 bar and launcher (`pila-bar`, `pila-launcher`) take the same colors, and change with them as
 soon as the file is saved.
+
+**Wallpaper.** `[wallpaper]` sets the picture behind everything, on every monitor: `image`, a
+PNG, JPEG or WebP file (an absolute path, or starting with `~/`), and `fit`, how it covers a
+monitor: `fill` (the whole monitor, the picture cropped to its shape; the default), `fit` (the
+whole picture, `[colors] background` around it), `stretch` or `center` (at its size). It
+changes as soon as the file is saved; without an image, `background` shows.
+
+```toml
+[wallpaper]
+image = "~/Pictures/wallpaper.jpg"
+fit = "fill"
+```
+
+`pila-wallpaper`, in the default `autostart`, shows it; `pila msg wallpaper` says what's set.
+Another wallpaper program works too, in its place in `autostart` (`swaybg -i FILE`); `[wallpaper]`
+is then unused. Its layer surfaces' namespace is `pila-wallpaper`.
 
 **Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
 64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
@@ -470,8 +487,8 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); by default its own bar and window switcher, `pila-bar` and `pila-switcher`, and no
-terminal. `autostart = []` starts
+Xwayland); by default its own wallpaper, bar and window switcher, `pila-wallpaper`, `pila-bar`
+and `pila-switcher`, and no terminal. `autostart = []` starts
 nothing.
 
 **Pila's own tools are defaults, never requirements.** Each is named in the default configuration
@@ -484,6 +501,7 @@ alone, and Pila works the same with another in its place:
 | `pila-switcher` | `autostart` | nothing: without it Mod+Tab still switches, unseen |
 | `pila-osd` | the volume, brightness and media keys' bindings | bindings of your own (wpctl or pactl alone, brightnessctl, playerctl, ...) |
 | `pila-shot` | `Mod+Shift+S` and `Mod+Ctrl+S`; the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own (grim, slurp and wl-copy, ...); `chooser_cmd` in those settings |
+| `pila-wallpaper` | `autostart`; the image in `[wallpaper]` | `swaybg -i FILE` or any other wallpaper program in `autostart` (`[wallpaper]` is then unused) |
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way
