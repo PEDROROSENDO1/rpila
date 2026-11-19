@@ -652,9 +652,9 @@ layout as it changes and switches it on a click:
 Programs such as kitty open links with `xdg-open`, from the `xdg-utils` package: without it, a
 click on a link does nothing.
 
-**Notifications from Pila** (an invalid configuration, for instance) are sent with
-`notify-send`, from the `libnotify` package, and shown by your notification daemon (mako,
-your shell's, ...). Without either, they only reach the log.
+**Notifications from Pila** (an invalid configuration, for instance) are sent over D-Bus and
+shown by your notification daemon (mako, your shell's, ...): no other program is needed. Without
+a daemon they only reach the log.
 
 ## Screenshots and screen sharing
 
@@ -869,7 +869,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | The volume, brightness or media keys do nothing | The volume keys run `wpctl` (package wireplumber, PipeWire's): install it, or bind them to your own commands (`pactl` on PulseAudio). The brightness keys need a backlight in `/sys/class/backlight` and either write access to it or logind (elogind); the media keys a player that speaks MPRIS; `pila-osd brightness +5%` or `pila-osd play-pause` run from a terminal says what's wrong. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "wpctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
 | `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
-| No notifications from Pila | Install `libnotify` and run a notification daemon (mako, or your shell's). |
+| No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |
 | Screen sharing shows nothing | Install `xdg-desktop-portal-wlr` and `slurp`, and start Pila from the login screen or `pila-session`. |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |

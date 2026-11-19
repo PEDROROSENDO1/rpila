@@ -71,14 +71,14 @@ fn a_config_warning_is_notified() {
     assert_eq!(pila.state()["workspaces"], 3);
 }
 
+/// Without a session bus, notifications only go to the log, which says
+/// why once.
 #[test]
-fn a_missing_notify_send_is_logged_once() {
-    let mut pila = TestPila::start_with(Options {
-        env: vec![("PATH".into(), "/nonexistent".into())],
-        ..Default::default()
-    });
+fn no_session_bus_is_logged_once() {
+    // The harness gives Pila no D-Bus variables.
+    let mut pila = TestPila::start();
     // Whatever level the log is at: a session's has no debug lines.
-    let warning = "WARN pila::config_reload: can't run notify-send";
+    let warning = "WARN pila::notifications: no desktop notifications";
     pila.write_config("workspaces = = 6\n");
     pila.wait_log(warning);
     pila.write_config("workspaces = = 7\n");
@@ -96,51 +96,45 @@ fn a_missing_notify_send_is_logged_once() {
     );
 }
 
-/// A `notify-send` that writes its arguments to `notified` in `dir`, a
-/// directory that's to be all of the `PATH`: a line per call, in one write,
-/// so a reader never sees some of a call's arguments without the rest.
-fn recording_notify_send(dir: &std::path::Path) -> String {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::create_dir_all(dir).unwrap();
-    let script = dir.join("notify-send");
-    let log = dir.join("notified");
-    std::fs::write(
-        &script,
-        format!("#!/bin/sh\necho \"$*\" >> {}\n", log.display()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    dir.display().to_string()
-}
-
+/// A bus with no notification daemon on it yet is logged; one started
+/// later (by `autostart`, say) gets the next notification.
 #[test]
-fn an_error_stays_on_screen_longer_than_a_success() {
-    let bin = std::env::temp_dir().join(format!("pila-notify-{}", std::process::id()));
-    let log = bin.join("notified");
-    let path = recording_notify_send(&bin);
+fn a_notification_daemon_started_later_gets_the_next_one() {
+    let bus = notifications::Bus::start();
     let mut pila = TestPila::start_with(Options {
-        env: vec![("PATH".into(), path)],
+        env: vec![bus.env()],
         ..Default::default()
     });
-    let wait_for = |text: &str| {
-        let started = std::time::Instant::now();
-        loop {
-            let got = std::fs::read_to_string(&log).unwrap_or_default();
-            if got.contains(text) {
-                return got;
-            }
-            assert!(started.elapsed() < common::TIMEOUT, "no {text:?} in {got}");
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    };
-    pila.write_config("workspaces = 3\n");
-    let got = wait_for("Config reloaded");
-    assert!(got.contains("--expire-time=3000"), "{got}");
-    std::fs::remove_file(&log).unwrap();
     pila.write_config("workspaces = = 6\n");
-    let got = wait_for("Config not reloaded");
-    assert!(got.contains("--expire-time=10000"), "{got}");
-    let _ = std::fs::remove_dir_all(&bin);
+    pila.wait_log("WARN pila::notifications: no desktop notifications");
+    let daemon = bus.notification_daemon();
+    pila.write_config("workspaces = = 7\n");
+    let shown = daemon.wait_for(1);
+    assert_eq!(shown[0].summary, "Config not reloaded", "{shown:#?}");
+}
+
+/// Notifications go to the daemon on the session bus, from `pila`; an error
+/// stays on screen longer than a success.
+#[test]
+fn an_error_stays_on_screen_longer_than_a_success() {
+    let bus = notifications::Bus::start();
+    let daemon = bus.notification_daemon();
+    let mut pila = TestPila::start_with(Options {
+        env: vec![bus.env()],
+        ..Default::default()
+    });
+    pila.write_config("workspaces = 3\n");
+    let shown = daemon.wait_for(1);
+    assert_eq!(
+        (shown[0].app_name.as_str(), shown[0].summary.as_str()),
+        ("pila", "Config reloaded")
+    );
+    assert_eq!(shown[0].expire_timeout, 3000, "{shown:#?}");
+    pila.write_config("workspaces = = 6\n");
+    let shown = daemon.wait_for(2);
+    assert_eq!(shown[1].summary, "Config not reloaded");
+    assert!(shown[1].body.contains("invalid string"), "{shown:#?}");
+    assert_eq!(shown[1].expire_timeout, 10000, "{shown:#?}");
 }
 
 #[test]

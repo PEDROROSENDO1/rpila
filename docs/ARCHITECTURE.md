@@ -31,7 +31,12 @@ Key flows and invariants:
   falls back to defaults on errors (`main` notifies of them once the session has had time to
   start a notification daemon, `state::notify_after_startup`), and reloaded when the file changes
   (`config_reload.rs`: inotify on its directory, a 250 ms settle timer, then
-  `Config::read`; an invalid file keeps the running config and notifies). `apply_config`
+  `Config::read`; an invalid file keeps the running config and notifies). Notifications
+  (`send_notification`, in the log too) go to the notification daemon over D-Bus
+  (`notifications.rs`: `Notifier::send` hands them to a thread of their own, started with the
+  first, which calls `org.freedesktop.Notifications.Notify` on the session bus Pila's programs
+  get, `[environment]`'s `DBUS_SESSION_BUS_ADDRESS` else Pila's, and keeps the connection); with
+  no bus or no daemon the log says so once, and the next one tries again. `apply_config`
   re-applies what changed: keyboard (`set_xkb_config`; a new keymap starts with every lock
   off, so `numlock` turns Num Lock on again, as at startup: `state::lock_num_lock`), rules (`refresh_rule_props`),
   the workspace count (`apply_workspace_count`), `[input]` on connected devices

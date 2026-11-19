@@ -11,10 +11,7 @@
 //! `[[output]]` (mode, scale and position on a TTY; the nested output's
 //! scale). `autostart` only runs at startup.
 
-use std::{
-    ffi::OsString, mem::MaybeUninit, os::unix::ffi::OsStrExt, process::Command, sync::Once,
-    time::Duration,
-};
+use std::{ffi::OsString, mem::MaybeUninit, os::unix::ffi::OsStrExt, time::Duration};
 
 use smithay::{
     desktop::layer_map_for_output,
@@ -280,30 +277,23 @@ impl Pila {
         self.send_notification(summary, body, ERROR_MS);
     }
 
-    /// A desktop notification (through `notify-send`, if there's a
-    /// notification daemon such as mako); also in the log. Without
-    /// `notify-send` they silently don't show, so the log says why, once.
+    /// A desktop notification, over D-Bus if there's a notification daemon
+    /// such as mako (`notifications.rs`: the log says once if there isn't);
+    /// also in the log. On the session bus Pila's programs get: an
+    /// `[environment]` one first.
     fn send_notification(&mut self, summary: &str, body: &str, milliseconds: u32) {
         info!(summary, body, "notification");
-        let mut cmd = Command::new("notify-send");
-        cmd.args(["--app-name=pila", summary]);
-        cmd.arg(format!("--expire-time={milliseconds}"));
-        if !body.is_empty() {
-            cmd.arg(body);
-        }
-        self.session_env(&mut cmd);
-        match cmd.spawn() {
-            Ok(child) => self.adopt_child(child),
-            Err(err) => {
-                static WARNED: Once = Once::new();
-                WARNED.call_once(|| {
-                    warn!(
-                        ?err,
-                        "can't run notify-send: no desktop notifications (package libnotify)"
-                    )
-                });
-            }
-        }
+        const BUS: &str = "DBUS_SESSION_BUS_ADDRESS";
+        let bus = match self
+            .config
+            .environment
+            .iter()
+            .find(|(name, _)| *name == BUS)
+        {
+            Some((_, value)) => value.clone(),
+            None => std::env::var(BUS).ok(),
+        };
+        self.notifier.send(bus, summary, body, milliseconds);
     }
 }
 

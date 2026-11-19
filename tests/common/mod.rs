@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 pub mod client;
+pub mod notifications;
 pub mod protocols;
 pub mod session_protocol;
 

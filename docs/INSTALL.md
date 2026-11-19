@@ -220,8 +220,6 @@ distros):
 - `xdg-desktop-portal-wlr`, `slurp`: screen sharing (`slurp` picks the screen to share)
 - `grim`, `slurp`: screenshots; Mod+Ctrl+S needs `grim`, Mod+Shift+S both and `wl-clipboard`
 - `xdg-desktop-portal-gtk`: the file chooser and other portals
-- `libnotify` (`libnotify-bin` on Debian, Ubuntu): `notify-send`, which Pila uses to tell you
-  about an invalid config, for instance; a notification daemon must show them (mako, or your shell's, ...)
 - `xdg-utils`: `xdg-open`, which programs such as kitty use to open links and files; without it
   a click on a link does nothing, and says nothing
 - `wl-clipboard`: `wl-copy`, which Mod+Shift+S needs to put a region of the screen on the clipboard;
@@ -238,9 +236,9 @@ distros):
   one the bar shows text alone
 
 ```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils wireplumber ttf-nerd-fonts-symbols   # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify-bin xdg-utils wl-clipboard swaylock pciutils wireplumber fonts-font-awesome # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp libnotify xdg-utils wl-clipboard swaylock pciutils wireplumber fontawesome-fonts-all  # Fedora
+sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber ttf-nerd-fonts-symbols   # Arch
+sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber fonts-font-awesome # Debian, Ubuntu
+sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber fontawesome-fonts-all  # Fedora
 ```
 
 The rest of a desktop (notifications, wallpaper, lock screen and idle, another bar or launcher)

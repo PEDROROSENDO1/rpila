@@ -123,6 +123,8 @@ pub struct Pila {
     /// Programs that commands needed and weren't installed, each told once
     /// (`missing_program.rs`).
     pub missing_programs: std::collections::HashSet<String>,
+    /// Desktop notifications, sent from a thread (`notifications.rs`).
+    pub notifier: crate::notifications::Notifier,
 
     /// Where a dragged window would snap to, shown above the windows
     /// (`snap.rs`), and the buffer it's drawn with.
@@ -553,6 +555,7 @@ impl Pila {
             pending_startup: Vec::new(),
             children: Vec::new(),
             missing_programs: Default::default(),
+            notifier: Default::default(),
             snap_preview: None,
             snap_preview_buffer: SolidColorBuffer::default(),
             config_path: None,
@@ -2142,14 +2145,6 @@ impl Pila {
             }
             Err(err) => warn!(command, ?err, "failed to spawn"),
         }
-    }
-
-    /// Keep a program pila started until it exits, so it can be reaped
-    /// (`reap_children`) instead of lingering as a zombie.
-    pub(crate) fn adopt_child(&mut self, child: std::process::Child) {
-        self.children.push((child, None));
-        // A SIGCHLD may have come before this one was listed.
-        self.reap_children();
     }
 
     /// Reap the programs pila started that exited (on SIGCHLD, `main.rs`).

@@ -57,7 +57,6 @@ overrides:
       - xdg-desktop-portal-gtk
       - grim
       - slurp
-      - libnotify-bin
       - xdg-utils
       - wl-clipboard
       # The volume keys' default bindings (pila-osd sets the brightness and
@@ -87,7 +86,6 @@ overrides:
       - xdg-desktop-portal-gtk
       - grim
       - slurp
-      - libnotify
       - xdg-utils
       - wl-clipboard
       # The volume keys' default bindings (pila-osd sets the brightness and

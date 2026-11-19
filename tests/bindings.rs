@@ -1210,51 +1210,36 @@ fn a_binding_whose_program_isnt_installed_says_so_once() {
     use std::os::unix::fs::PermissionsExt;
     let bin = std::env::temp_dir().join(format!("pila-missing-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    let notified = bin.join("notified");
-    for (name, body) in [
-        (
-            "notify-send",
-            format!("echo \"$*\" >> {}", notified.display()),
-        ),
-        ("exits-127", "exit 127".to_string()),
-    ] {
-        let script = bin.join(name);
-        std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    let script = bin.join("exits-127");
+    std::fs::write(&script, "#!/bin/sh\nexit 127\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
     let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let bus = notifications::Bus::start();
+    let daemon = bus.notification_daemon();
     let mut pila = TestPila::start_with(Options {
         config: "[bindings]\n\
                  \"Mod+F9\" = \"spawn surely-not-installed-xyz -q && true\"\n\
                  \"Mod+F10\" = \"spawn exits-127\"\n"
             .into(),
-        env: vec![("PATH".into(), path)],
+        env: vec![("PATH".into(), path), bus.env()],
         ..Options::default()
     });
-    let lines = || {
-        std::fs::read_to_string(&notified)
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_string)
-            .collect::<Vec<_>>()
-    };
     pila.combo("Super+F9");
-    let started = std::time::Instant::now();
-    while lines().is_empty() {
-        assert!(started.elapsed() < common::TIMEOUT, "no notification");
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    let first = lines();
+    let first = daemon.wait_for(1);
     assert!(
-        first[0].contains("surely-not-installed-xyz isn't installed")
-            && first[0].contains("surely-not-installed-xyz -q && true"),
-        "{first:?}"
+        first[0]
+            .summary
+            .contains("surely-not-installed-xyz isn't installed")
+            && first[0]
+                .body
+                .contains("surely-not-installed-xyz -q && true"),
+        "{first:#?}"
     );
     // Again, and the program that exits 127 itself: nothing more.
     pila.combo("Super+F9");
     pila.combo("Super+F10");
     pila.wait("both reaped", |s| s["children"] == 0);
-    let notified_once = |_: &Value| lines().len() == 1;
+    let notified_once = |_: &Value| daemon.shown().len() == 1;
     pila.stays(
         "one notification",
         std::time::Duration::from_millis(300),
