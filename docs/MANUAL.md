@@ -109,21 +109,22 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod` + right drag | Resize a window from its nearest corner |
 | `Ctrl+Alt+F1` to `F12` | Switch to another virtual terminal (not nested) |
 
-**Volume and brightness keys** show each change for a moment at the bottom of the monitor: an
-icon, a level bar and the percentage, dimmed while muted (`pila-osd`, installed with Pila; its
-icon comes from the same icon font as the bar's, else it names the level). It shows what the
-key left: the volume and the microphone read with wpctl, the brightness from the backlight. Without
-wpctl (PipeWire's WirePlumber) the volume keys do nothing; with PulseAudio, bind them to `pactl`
-instead. A binding of your own can show it too, after its change: `pila-osd volume`,
-`pila-osd mic` or `pila-osd brightness`.
+**Volume, brightness and media keys** show each change for a moment at the bottom of the
+monitor (`pila-osd`, installed with Pila): for the volume, the microphone and the brightness an
+icon, a level bar and the percentage, dimmed while muted; for a media key what it did (playing,
+paused, the next or previous track, stopped) and the track's title and artist, or that there's
+no player. The icons come from the same icon font as the bar's; without one it says in words
+what it shows.
 
-The brightness and media keys need no other program: `pila-osd brightness +5%` (or `-5%`)
-changes the backlight's brightness and shows it, writing it in `/sys/class/backlight` where you
+The volume keys run wpctl (PipeWire's WirePlumber), then `pila-osd volume` or `pila-osd mic`,
+which shows what wpctl left; without wpctl they do nothing, and with PulseAudio you bind them to
+`pactl` instead. The brightness and media keys need no other program: `pila-osd brightness +5%`
+(or `-5%`) changes the backlight's brightness, writing it in `/sys/class/backlight` where you
 may, else asking logind (or elogind) to, which needs no permissions of your own; `pila-osd
 play-pause`, `next`, `previous` and `stop` tell the media player that's playing (else a paused
-one) over MPRIS, as playerctl does, and show for a moment what it did (playing, paused, the next
-or previous track, stopped) with the track's title and artist, or that there's no player.
-Bindings of yours that run brightnessctl or playerctl keep working.
+one) over MPRIS, as playerctl does. A binding of your own can show a level after its change
+(`pila-osd volume`, `pila-osd mic` or `pila-osd brightness`), and yours that run brightnessctl or
+playerctl keep working.
 
 Any of these but the two drags and the VT switch can be changed or removed (the drags follow
 the `mod` setting), and any key bound to an action or a command, in `[bindings]`: see

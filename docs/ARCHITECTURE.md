@@ -882,15 +882,16 @@ Key flows and invariants:
   source, `level::wpctl_volume`; the brightness from `/sys/class/backlight`, the firmware's,
   then the platform's, then a raw one, `backlight::find`), then hands it (a `Popup`) to the run in the
   background over a socket in the runtime directory (`socket_path`, one per Wayland display;
-  `Level::encode`, one line) and exits, or binds it and becomes that run (`ui::run`): an
-  iced_layershell daemon with no surface while hidden. A level opens a surface if there's
+  `Popup::encode`, one line) and exits, or binds it and becomes that run (`ui::run`): an
+  iced_layershell daemon with no surface while hidden. A popup opens a surface if there's
   none (Overlay, anchored to the bottom edge alone so Pila centers it along it, `ui::MARGIN`
   above it and any exclusive zone; on the output Pila picks, the pointer's; no keyboard;
   `events_transparent`, an empty input region, so clicks go through; namespace `pila-osd`)
-  and is shown until `ui::SHOWN` after the last one (a count of levels, so only the last one's
+  and is shown until `ui::SHOWN` after the last one (a count of popups, so only the last one's
   timer hides it): an icon from the icon font (`glyphs::glyph`: Material Design's by thirds,
   else Font Awesome's; `icon_font.rs`, the bar's, by `#[path]`), else the level's name; a
-  square level bar; the percentage, or "muted", dimmed. Colors from `[colors]`, as the bar's
+  square level bar; the percentage, or "muted", dimmed. A media key's popup has its icon
+  (`glyphs::media_glyph`, else `State::word`) and the title, on one line. Colors from `[colors]`, as the bar's
   (`pila_ipc::styles`). `scripts/apps osd` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
