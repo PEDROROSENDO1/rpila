@@ -99,25 +99,13 @@ PILA_SHOT_BIN; skipped where it isn't), over a maximized foot:
     Escape cancels (exit 1, no surface left);
   - `pila-shot pick-output`: a click prints "Monitor: eDP-1".
 
-And pila-wallpaper (wallpaper: built in launcher/ with cargo build
---release, or PILA_WALLPAPER_BIN; skipped where it isn't, or without
-pila-shot to look at the screen), started in the run, with the sealed config
-edited as a user saves it:
-
-  - with no [wallpaper] image it opens nothing;
-  - an image set covers the output with a Background layer surface that takes
-    no keyboard, and the screen shows it; another image saved shows at once;
-  - an added output gets a surface of its own, and the image unset takes them
-    away.
-
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
                                      weston-terminal, xterm, launcher,
-                                     bar, switcher, osd, shot, wallpaper,
-                                     fcitx5-foot,
+                                     bar, switcher, osd, shot, fcitx5-foot,
                                      fcitx5-gtk4, fcitx5-launcher)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
@@ -170,8 +158,6 @@ SWITCHER_APP, SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = "pila-switcher
 OSD_APP, OSD_SIZE, OSD_MARGIN = "pila-osd", (320, 52), 96
 # pila-shot and its layer surfaces' namespace (`shot/src/ui.rs`).
 SHOT_APP = "pila-shot"
-# pila-wallpaper and its layer surfaces' namespace (`wallpaper/src/ui.rs`).
-WALLPAPER_APP = "pila-wallpaper"
 # Apps for it to find (in the sealed XDG_DATA_HOME): what they write to the
 # runtime directory says they ran.
 LAUNCHER_APPS = {
@@ -1132,92 +1118,7 @@ class Workload:
         self.wait(lambda s: not self.shots(s), 3)
         return self.finish()
 
-    # --- pila-wallpaper ---
-
-    def wallpapers(self, state):
-        return [l for l in state["layers"] if l["namespace"] == WALLPAPER_APP and l["geometry"]
-                and l["geometry"]["h"]]
-
-    def run_wallpaper(self):
-        """pila-wallpaper (module docs)."""
-        self.mark(f"{self.app} begin")
-        shot = os.environ["PILA_APPS_SHOT"]
-        config = os.environ["PILA_APPS_CONFIG"]
-        pictures = os.path.join(os.environ["XDG_RUNTIME_DIR"], "pictures")
-        os.makedirs(pictures, exist_ok=True)
-        red, blue = os.path.join(pictures, "red.png"), os.path.join(pictures, "blue.png")
-        write_png(red, 64, 48, (220, 30, 30))
-        write_png(blue, 64, 48, (30, 40, 220))
-        base = open(config).read()
-
-        def set_image(path):
-            text = base + (f'\n[wallpaper]\nimage = "{path}"\n' if path else "")
-            with open(config + ".tmp", "w") as f:
-                f.write(text)
-            os.rename(config + ".tmp", config)
-
-        def screen_corner():
-            """The color at the top-left corner of the screen, as pila-shot sees it."""
-            out = os.path.join(pictures, "screen.png")
-            subprocess.run([shot, "output", "--file", out], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, check=False, timeout=20)
-            pixels = read_png(out)
-            return pixels[0][0] if pixels else None
-
-        def near(color, wanted):
-            return color is not None and all(abs(a - b) <= 8 for a, b in zip(color, wanted))
-
-        wallpaper = subprocess.Popen([os.environ["PILA_APPS_WALLPAPER"]],
-                                     stdout=open(os.path.join(self.out, "wallpaper.log"), "a"),
-                                     stderr=subprocess.STDOUT)
-        time.sleep(1.0)
-        self.check("with no image it opens nothing", not self.wallpapers(self.state()))
-
-        set_image(red)
-        state = self.wait(lambda s: self.wallpapers(s), 10)
-        if not self.check("an image set covers the output", state is not None, "no surface within 10 s"):
-            wallpaper.terminate()
-            return self.finish()
-        layer, = self.wallpapers(state)
-        g = layer["geometry"]
-        self.check("a Background layer surface over the whole output, with no keyboard",
-                   layer["layer"] == "background" and (g["x"], g["y"], g["w"], g["h"]) == (0, 0, 1920, 1080)
-                   and layer["keyboard"] == "none", f"{layer['layer']} at {g}, keyboard {layer['keyboard']}")
-        end = time.monotonic() + 5
-        color = screen_corner()
-        while not near(color, (220, 30, 30)) and time.monotonic() < end:
-            time.sleep(0.2)
-            color = screen_corner()
-        self.check("the screen shows the image", near(color, (220, 30, 30)), f"corner {color}")
-        if shutil.which("grim"):
-            subprocess.run(["grim", os.path.join(self.out, "wallpaper.png")], check=False)
-
-        set_image(blue)
-        end = time.monotonic() + 5
-        color = screen_corner()
-        while not near(color, (30, 40, 220)) and time.monotonic() < end:
-            time.sleep(0.2)
-            color = screen_corner()
-        self.check("another image saved shows at once, the same process", near(color, (30, 40, 220))
-                   and wallpaper.poll() is None, f"corner {color}, exit {wallpaper.poll()}")
-
-        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
-        state = self.wait(lambda s: sorted(l["output"] for l in self.wallpapers(s)) == ["HDMI-A-1", "eDP-1"], 5)
-        self.check("an added output gets a surface of its own", state is not None,
-                   f"{[l['output'] for l in self.wallpapers(self.state())]}")
-        self.ctl(cmd="output_remove", name="HDMI-A-1")
-
-        set_image(None)
-        gone = self.wait(lambda s: not self.wallpapers(s), 5)
-        self.check("the image unset takes the surfaces away, the process left running",
-                   gone is not None and wallpaper.poll() is None, f"exit {wallpaper.poll()}")
-        wallpaper.terminate()
-        wallpaper.wait(5)
-        return self.finish()
-
     def run(self):
-        if self.app == "wallpaper":
-            return self.run_wallpaper()
         if self.app == "shot":
             return self.run_shot()
         if self.app == "osd":
@@ -1364,77 +1265,16 @@ def judge(app, out):
     return all(results)
 
 
-def write_png(path, width, height, rgb):
-    """A PNG of one color (RGB, 8 bits), with the standard library."""
-    import struct
-    import zlib
-    raw = b"".join(b"\0" + bytes(rgb) * width for _ in range(height))
-
-    def chunk(kind, data):
-        body = kind + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
-    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    with open(path, "wb") as f:
-        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw))
-                + chunk(b"IEND", b""))
-
-
-def read_png(path):
-    """An 8-bit RGB or RGBA PNG's rows of (r, g, b), with the standard
-    library; None if it can't be read."""
-    import struct
-    import zlib
-    try:
-        data = open(path, "rb").read()
-    except OSError:
-        return None
-    if data[:8] != b"\x89PNG\r\n\x1a\n":
-        return None
-    pos, idat, width = 8, b"", 0
-    while pos < len(data):
-        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
-        body = data[pos + 8:pos + 8 + length]
-        if kind == b"IHDR":
-            width, height, depth, color = struct.unpack(">IIBB", body[:10])
-            if depth != 8 or color not in (2, 6):
-                return None
-            channels = 3 if color == 2 else 4
-        elif kind == b"IDAT":
-            idat += body
-        pos += 12 + length
-    raw, stride = zlib.decompress(idat), width * channels
-    rows, previous = [], bytearray(stride)
-    for y in range(height):
-        kind = raw[y * (stride + 1)]
-        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
-        for i in range(stride):
-            left = line[i - channels] if i >= channels else 0
-            up, corner = previous[i], previous[i - channels] if i >= channels else 0
-            if kind == 1:
-                line[i] = (line[i] + left) & 255
-            elif kind == 2:
-                line[i] = (line[i] + up) & 255
-            elif kind == 3:
-                line[i] = (line[i] + (left + up) // 2) & 255
-            elif kind == 4:
-                p = left + up - corner
-                pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
-                line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
-        rows.append([tuple(line[x:x + 3]) for x in range(0, stride, channels)])
-        previous = line
-    return rows
-
-
 def data_file(relative):
     """Whether a data directory of the system has `relative`."""
     dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
     return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
 
 
-def missing_for(app, launcher, bar, switcher, osd, shot, wallpaper):
+def missing_for(app, launcher, bar, switcher, osd, shot):
     """What `app`'s run needs and the system lacks, if anything (`launcher`,
-    `bar`, `switcher`, `osd`, `shot`, `wallpaper`: pila-launcher's, pila-bar's,
-    pila-switcher's, pila-osd's, pila-shot's and pila-wallpaper's binaries)."""
+    `bar`, `switcher`, `osd`, `shot`: pila-launcher's, pila-bar's,
+    pila-switcher's, pila-osd's and pila-shot's binaries)."""
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
@@ -1446,14 +1286,10 @@ def missing_for(app, launcher, bar, switcher, osd, shot, wallpaper):
         return f"no {switcher} (cargo build --release in launcher/, or PILA_SWITCHER_BIN)"
     if app == "osd" and not os.access(osd, os.X_OK):
         return f"no {osd} (cargo build --release in launcher/, or PILA_OSD_BIN)"
-    if app in ("shot", "wallpaper") and not os.access(shot, os.X_OK):
+    if app == "shot" and not os.access(shot, os.X_OK):
         return f"no {shot} (cargo build --release in launcher/, or PILA_SHOT_BIN)"
-    if app == "wallpaper" and not os.access(wallpaper, os.X_OK):
-        return f"no {wallpaper} (cargo build --release in launcher/, or PILA_WALLPAPER_BIN)"
     if app in ("launcher", "bar", "switcher", "osd", "shot"):
         return "" if shutil.which("foot") else "foot not installed"
-    if app == "wallpaper":
-        return ""
     command, how = IME_APPS[app]
     tools = ([command("")[0]] if command else []) + ["fcitx5"]
     tools += ["wl-paste"] if how in ("clipboard", "launcher") else []
@@ -1472,7 +1308,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    names = list(APPS) + ["launcher", "bar", "switcher", "osd", "shot", "wallpaper"] + list(IME_APPS)
+    names = list(APPS) + ["launcher", "bar", "switcher", "osd", "shot"] + list(IME_APPS)
     unknown = [a for a in argv if a not in names]
     if unknown:
         print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)
@@ -1493,11 +1329,9 @@ def main(argv):
         repo, "launcher/target/release", SWITCHER_APP)
     osd = os.environ.get("PILA_OSD_BIN") or os.path.join(repo, "launcher/target/release", OSD_APP)
     shot = os.environ.get("PILA_SHOT_BIN") or os.path.join(repo, "launcher/target/release", SHOT_APP)
-    wallpaper = os.environ.get("PILA_WALLPAPER_BIN") or os.path.join(
-        repo, "launcher/target/release", WALLPAPER_APP)
     ok = True
     for app in argv or names:
-        missing = missing_for(app, launcher, bar, switcher, osd, shot, wallpaper)
+        missing = missing_for(app, launcher, bar, switcher, osd, shot)
         if missing:
             print(f"\nSKIP  {app} ({missing})")
             continue
@@ -1527,7 +1361,6 @@ def main(argv):
                    PILA_HEADLESS_CHECK_INVARIANTS="1", PILA_APPS_BAR=os.path.abspath(bar),
                    PILA_APPS_SWITCHER=os.path.abspath(switcher),
                    PILA_APPS_OSD=os.path.abspath(osd), PILA_APPS_SHOT=os.path.abspath(shot),
-                   PILA_APPS_WALLPAPER=os.path.abspath(wallpaper), PILA_APPS_CONFIG=config,
                    RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
         workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"
         with open(os.path.join(out, "pila.log"), "w") as log:

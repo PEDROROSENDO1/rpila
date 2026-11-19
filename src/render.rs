@@ -191,6 +191,8 @@ pub struct Scene {
     pub hidden_windows: Vec<WlSurface>,
     /// `corner-radius` from the config, for the snap preview.
     pub corner_radius: u32,
+    /// `[wallpaper]`'s picture, under everything (`wallpaper.rs`).
+    pub wallpaper: Option<crate::wallpaper::SceneWallpaper>,
     pub colors: Colors,
 }
 
@@ -211,6 +213,7 @@ impl Scene {
             window_menu: None,
             hidden_windows: Vec::new(),
             corner_radius: 0,
+            wallpaper: None,
             colors,
         }
     }
@@ -574,6 +577,13 @@ fn scene_elements_from(
         visible,
         None,
     ));
+    if let Some(wallpaper) = &scene.wallpaper {
+        elements.extend(
+            wallpaper
+                .elements(output_location, scale, visible)
+                .map(PilaRenderElement::Texture),
+        );
+    }
     elements
 }
 

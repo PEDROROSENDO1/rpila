@@ -32,8 +32,7 @@ let
       "-Wl,--pop-state"
     ]
   );
-  # pila-launcher, pila-bar, pila-switcher, pila-osd, pila-shot and pila-wallpaper (launcher/, bar/,
-  # switcher/, osd/, shot/, wallpaper/): a cargo workspace of
+  # pila-launcher, pila-bar, pila-switcher, pila-osd and pila-shot (launcher/, bar/, switcher/, osd/, shot/): a cargo workspace of
   # their own, rooted in launcher/, with its own lock. They load
   # libwayland-client and libxkbcommon at runtime too.
   clients = rustPlatform.buildRustPackage {
@@ -54,8 +53,6 @@ let
         ./osd/src
         ./shot/Cargo.toml
         ./shot/src
-        ./wallpaper/Cargo.toml
-        ./wallpaper/src
       ];
     };
     cargoLock.lockFile = ./launcher/Cargo.lock;
@@ -138,7 +135,7 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   postInstall = ''
-    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar ${clients}/bin/pila-switcher ${clients}/bin/pila-osd ${clients}/bin/pila-shot ${clients}/bin/pila-wallpaper -t $out/bin
+    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar ${clients}/bin/pila-switcher ${clients}/bin/pila-osd ${clients}/bin/pila-shot -t $out/bin
     install -Dm755 resources/session/pila-session $out/bin/pila-session
     install -Dm755 scripts/report $out/bin/pila-report
     # pila-check finds its helpers in share/pila/check next to its bin.

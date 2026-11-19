@@ -13,7 +13,7 @@ A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://
 Windows float and overlap, with server-side title bars, like a classic desktop. It comes with
 a bar, an app launcher and a window switcher of its own (`pila-bar`, `pila-launcher`,
 `pila-switcher`, on by default); the rest
-(wallpapers, notifications, lock screens), or another bar and launcher, come from the usual
+(notifications, lock screens), or another bar and launcher, come from the usual
 Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
@@ -95,7 +95,7 @@ A short report helps even if everything works:
   attention marked with an amber title bar; the volume, brightness and media keys working out of
   the box, each change shown for a moment (`pila-osd`); screenshots of a monitor or a region
   you drag, to a file or the clipboard (`pila-shot`); a wallpaper set in the config
-  (`pila-wallpaper`); the screens off after a while without input; a shadow under each window (`[shadow]`); optional
+  (`[wallpaper]`); the screens off after a while without input; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.

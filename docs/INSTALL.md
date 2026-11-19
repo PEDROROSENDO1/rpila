@@ -56,10 +56,10 @@ differ between releases):
 | Alpine | `libseat-dev libinput-dev eudev-dev mesa-dev libxkbcommon-dev xwayland pkgconf` |
 
 Then `cargo build --release`, and for the launcher, the bar, the window switcher, the
-on-screen display, the screenshots and the wallpaper (a cargo workspace of their own, in `launcher/`) `cargo
+on-screen display and the screenshots (a cargo workspace of their own, in `launcher/`) `cargo
 build --release --manifest-path launcher/Cargo.toml`, which puts `pila-launcher`, `pila-bar`,
-`pila-switcher`, `pila-osd`, `pila-shot` and `pila-wallpaper` in `launcher/target/release`.
-`scripts/install` builds and installs all seven.
+`pila-switcher`, `pila-osd` and `pila-shot` in `launcher/target/release`. `scripts/install`
+builds and installs all six.
 
 ## Debian, Ubuntu and Fedora
 
@@ -235,5 +235,5 @@ sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils s
 sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber  # Fedora
 ```
 
-The rest of a desktop (notifications, wallpaper, lock screen and idle, another bar or launcher)
+The rest of a desktop (notifications, a lock screen, another bar or launcher)
 is in the manual's [Building your desktop](MANUAL.md#building-your-desktop).

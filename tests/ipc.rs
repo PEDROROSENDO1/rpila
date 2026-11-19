@@ -992,35 +992,6 @@ fn keyboard_layouts_are_listed_switched_and_followed() {
     assert_eq!(out.status.code(), Some(1), "{}", error(&out));
 }
 
-/// `wallpaper` gives `[wallpaper]` for pila-wallpaper: the image's absolute
-/// path (`~/` expanded) or null, and how it fits; a saved change comes as an
-/// event, and only that change.
-#[test]
-fn the_wallpaper_is_listed_and_followed() {
-    let mut pila = TestPila::start_with(Options {
-        env: vec![("HOME".into(), "/home/someone".into())],
-        ..Options::default()
-    });
-    let answer = query(&pila, &["wallpaper"]);
-    assert_eq!(answer["wallpaper"]["image"], Value::Null, "{answer}");
-    assert_eq!(answer["wallpaper"]["fit"], "fill", "{answer}");
-    let (mut events, _) = Subscription::new(&pila, Some(&["wallpaper"]));
-    let first = events.line().expect("the first event");
-    assert_eq!(first["event"], "wallpaper");
-    assert_eq!(first["wallpaper"], answer["wallpaper"]);
-    pila.write_config("[wallpaper]\nimage = \"~/Pictures/sea.png\"\nfit = \"center\"\n");
-    let changed = events.wait("wallpaper", "the new image", |e| {
-        !e["wallpaper"]["image"].is_null()
-    });
-    assert_eq!(
-        changed["wallpaper"]["image"], "/home/someone/Pictures/sea.png",
-        "{changed}"
-    );
-    assert_eq!(changed["wallpaper"]["fit"], "center");
-    let shown = text(&msg(&pila, &["wallpaper"]));
-    assert!(shown.contains("fit  center"), "{shown}");
-}
-
 /// `colors` gives `[colors]` as the config writes them, for clients that
 /// look like Pila (pila-bar, pila-launcher); subscribers hear of a change
 /// when the config is saved, and of nothing else.

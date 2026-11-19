@@ -216,6 +216,8 @@ pub struct Pila {
     pub idle_inhibitors: IdleInhibitors,
     /// `[idle] monitors-off`'s timer (`idle.rs`).
     pub monitors_off: crate::idle::MonitorsOff,
+    /// `[wallpaper]`'s picture (`wallpaper.rs`).
+    pub wallpaper: crate::wallpaper::Wallpaper,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -590,6 +592,7 @@ impl Pila {
             globals,
             idle_inhibitors: IdleInhibitors::default(),
             monitors_off: Default::default(),
+            wallpaper: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -803,6 +806,7 @@ impl Pila {
                 .filter_map(|window| Some(window.wl_surface()?.into_owned()))
                 .collect(),
             corner_radius: self.config.corner_radius,
+            wallpaper: self.scene_wallpaper(),
             ..Scene::blank(self.config.colors)
         }
     }
@@ -1949,6 +1953,7 @@ impl Pila {
     /// reserved already (`reserve_xwayland`), so X11 apps among them work.
     pub fn start_session(&mut self, commands: Vec<String>) {
         self.idle_config_changed();
+        self.wallpaper_config_changed();
         self.pending_startup = commands;
         if !self.export_environment() {
             self.run_pending_startup();

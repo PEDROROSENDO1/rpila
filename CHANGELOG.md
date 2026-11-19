@@ -4,10 +4,9 @@
 
 - **A wallpaper, set in the config:** `[wallpaper] image` (a PNG, JPEG or WebP file) and `fit`
   (`fill`, `fit`, `stretch` or `center`) put a picture behind everything on every monitor, and a
-  saved change shows at once. `pila-wallpaper`, a new program installed with Pila and in the
-  default `autostart`, shows it; without an image, `[colors] background` shows as before. Any
-  other wallpaper program can take its place in `autostart`. `pila msg wallpaper` and a
-  `wallpaper` event in the IPC give the setting to other programs.
+  saved change shows at once. Pila draws it itself, from the first frame, as one texture on the
+  GPU (a picture decoded on a thread, shrunk to what the largest monitor needs); without an
+  image, `[colors] background` shows as before. A wallpaper program (swaybg) draws over it.
 - **The screens turn off by themselves:** after 10 minutes without input the monitors turn off,
   and any key, click or move of the pointer turns them back on (that first key or click does
   nothing else). `[idle] monitors-off` sets the seconds, or `false` for never; a video playing

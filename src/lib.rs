@@ -73,6 +73,7 @@ pub mod transients;
 pub mod udev;
 pub mod urgency;
 pub mod virtual_keyboard;
+pub mod wallpaper;
 pub mod window_menu;
 pub mod winit;
 pub mod workspace_slide;

@@ -1425,3 +1425,117 @@ fn a_rule_refusing_a_window_its_blur_refuses_its_popups_theirs() {
     assert_eq!(pila.pixel(636.0, 400.0), CLEAR);
     assert_eq!(pila.state()["blur"]["entries"], 0);
 }
+
+// --- [wallpaper] -------------------------------------------------------------
+
+/// A picture of one color, `width` x `height`, in a directory of the test's.
+fn picture(name: &str, file: &str, (width, height): (u32, u32), rgb: [u8; 3]) -> String {
+    let dir = std::env::temp_dir().join(format!("pila-wallpaper-{}-{name}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(file);
+    image::RgbImage::from_pixel(width, height, image::Rgb(rgb))
+        .save(&path)
+        .unwrap();
+    path.display().to_string()
+}
+
+fn wallpaper_config(image: &str, fit: &str) -> String {
+    format!("[wallpaper]\nimage = \"{image}\"\nfit = \"{fit}\"\n")
+}
+
+#[test]
+fn the_wallpaper_covers_every_output_and_follows_the_saved_config() {
+    let red = picture("follows", "red.png", (64, 48), [200, 20, 20]);
+    let blue = picture("follows", "blue.jpg", (64, 48), [20, 20, 200]);
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        config: wallpaper_config(&red, "fill"),
+        ..Default::default()
+    });
+    for (x, y) in [(5.0, 5.0), (640.0, 400.0), (1280.0 + 512.0, 384.0)] {
+        pila.wait_pixel_is(x, y, "the red wallpaper", |px| {
+            near(px, [200, 20, 20, 255], 3)
+        });
+    }
+    // A JPEG saved in its place: there at once, on both.
+    pila.write_config(&wallpaper_config(&blue, "fill"));
+    for (x, y) in [(640.0, 400.0), (1280.0 + 512.0, 384.0)] {
+        pila.wait_pixel_is(x, y, "the blue wallpaper", |px| {
+            near(px, [20, 20, 200, 255], 6)
+        });
+    }
+    // None: the background color again.
+    pila.write_config("");
+    pila.wait_pixel_is(640.0, 400.0, "the background", |px| near(px, BACKGROUND, 2));
+}
+
+#[test]
+fn fit_shows_the_whole_picture_on_the_background() {
+    let square = picture("fit", "square.png", (100, 100), [200, 20, 20]);
+    let mut pila = TestPila::with_config(&wallpaper_config(&square, "fit"));
+    // 1280 x 800: an 800 x 800 square in the middle.
+    pila.wait_pixel_is(640.0, 400.0, "the picture", |px| {
+        near(px, [200, 20, 20, 255], 3)
+    });
+    let px = pila.pixel(100.0, 400.0);
+    assert!(near(px, BACKGROUND, 2), "left of it: {px:?}");
+    let px = pila.pixel(1180.0, 400.0);
+    assert!(near(px, BACKGROUND, 2), "right of it: {px:?}");
+}
+
+#[test]
+fn a_background_layer_surface_draws_over_the_wallpaper() {
+    let red = picture("over", "red.png", (64, 48), [200, 20, 20]);
+    let mut pila = TestPila::with_config(&wallpaper_config(&red, "fill"));
+    pila.wait_pixel_is(640.0, 400.0, "the wallpaper", |px| {
+        near(px, [200, 20, 20, 255], 3)
+    });
+    let client = pila.client();
+    let (wallpaper, _) = client.layer_surface(
+        "wallpaper",
+        &LayerSpec {
+            layer: Layer::Background,
+            anchor: Anchor::Left | Anchor::Top,
+            size: (200, 200),
+            ..LayerSpec::default()
+        },
+        BLUE,
+    );
+    client.wait_surface_configured(wallpaper);
+    pila.wait_pixel_is(100.0, 100.0, "the layer surface", |px| {
+        near(px, [0, 0, 255, 255], 2)
+    });
+    let px = pila.pixel(640.0, 400.0);
+    assert!(
+        near(px, [200, 20, 20, 255], 3),
+        "beside it, the wallpaper: {px:?}"
+    );
+}
+
+#[test]
+fn a_blur_shows_the_wallpaper_behind_it() {
+    let red = picture("blur", "red.png", (64, 48), [200, 20, 20]);
+    let mut pila =
+        TestPila::with_config(&format!("{}{GLASS_RULE}", wallpaper_config(&red, "fill")));
+    let client = pila.client();
+    let (glass, _) = client.layer_surface(
+        "glass",
+        &LayerSpec {
+            layer: Layer::Top,
+            size: (200, 200),
+            ..LayerSpec::default()
+        },
+        [0, 0, 0, 0],
+    );
+    client.wait_surface_configured(glass);
+    wait_near(&mut pila, 640.0, 400.0, [200, 20, 20, 255]);
+}
+
+#[test]
+fn a_wallpaper_that_cant_be_read_says_so_and_shows_the_background() {
+    let mut pila = TestPila::with_config(&wallpaper_config("/nonexistent/picture.png", "fill"));
+    pila.wait_log("no wallpaper");
+    let px = pila.pixel(640.0, 400.0);
+    assert!(near(px, BACKGROUND, 2), "{px:?}");
+    assert!(pila.alive());
+}

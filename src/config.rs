@@ -1640,7 +1640,7 @@ impl WallpaperFit {
     }
 }
 
-/// `[wallpaper]`: the image pila-wallpaper shows behind everything.
+/// `[wallpaper]`: the picture Pila draws behind everything (`wallpaper.rs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WallpaperConfig {
     /// An absolute path (`~/` expanded); none: `[colors] background`.
@@ -1829,7 +1829,7 @@ pub struct Config {
     pub xwayland: XwaylandConfig,
     /// `[idle]`: the monitors off after a while without input.
     pub idle: IdleConfig,
-    /// `[wallpaper]`, which Pila hands pila-wallpaper (`ipc.rs`).
+    /// `[wallpaper]`: the picture behind everything (`wallpaper.rs`).
     pub wallpaper: WallpaperConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
@@ -2456,14 +2456,11 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher, pila-wallpaper, pila-bar and pila-switcher come from
+        // As every setting: pila-launcher, pila-bar and pila-switcher come from
         // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(
-            config.autostart,
-            ["pila-wallpaper", "pila-bar", "pila-switcher"]
-        );
+        assert_eq!(config.autostart, ["pila-bar", "pila-switcher"]);
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -2962,7 +2959,6 @@ mod tests {
             "pila-switcher",
             "pila-osd",
             "pila-shot",
-            "pila-wallpaper",
         ] {
             assert!(named.contains(tool), "{tool} isn't a default: {named}");
         }

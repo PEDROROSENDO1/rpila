@@ -2,8 +2,9 @@
 
 `scripts/check` drives a real Pila with real programs (a terminal, xterm, fuzzel, grim,
 waybar if installed: windows opening and closing, minimize, maximize, workspace switches, a
-launcher, a capture, a capture stream, a blurred window, a fullscreen one) and judges the log: the scenarios finished without a panic, animations
-ran (`starts` on `pila::animation`), waybar's surfaces follow their layer rule, grim got a
+launcher, a capture, a capture stream, a blurred window, a fullscreen one), over a wallpaper
+(the base config's `[wallpaper]`, else a 4K gradient it writes with python3), and judges the log: the scenarios finished without a panic, animations
+ran (`starts` on `pila::animation`), the wallpaper loaded, waybar's surfaces follow their layer rule, grim got a
 picture, the stream got frames, monitors were identified from their EDID (bare metal), and the
 frame statistics (no missed refresh, frames shown late included, CPU per frame on average within 4 ms, for the outputs'
 frames and, on average over all of them, the captures'; bare metal, if a night light set gamma,
@@ -113,15 +114,6 @@ pila-shot mid-drag, shows the selection), served by one `pila-shot` process unti
 copies something else; Escape cancels (exit 1, no layer, the keyboard back on foot); and
 `pila-shot pick-output` prints `Monitor: eDP-1` after a click. Run it after changing pila-shot,
 the layer shell, captures or data-control.
-
-`wallpaper` drives `pila-wallpaper` (`run_wallpaper`; skipped where it or pila-shot isn't built in
-`launcher/target/release`, or `PILA_WALLPAPER_BIN`), started by the workload, editing the sealed
-config as a user saves it (`PILA_APPS_CONFIG`; pictures of one color written with the standard
-library, `write_png`, and the screen read back from `pila-shot output`, `read_png`): with no
-image it maps nothing; an image set maps a `pila-wallpaper` Background layer over the whole
-output with no keyboard and the screen shows it (`wallpaper.png`); another image saved shows
-with the same process; an added output gets a surface of its own; the image unset removes them.
-Run it after changing pila-wallpaper, `[wallpaper]`, the IPC or the layer shell.
 
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime

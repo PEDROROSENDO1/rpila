@@ -11,7 +11,6 @@ pila msg [--json] outputs            The monitors
 pila msg [--json] workspaces         The workspaces
 pila msg [--json] keyboard           The keyboard layouts, and which is in use
 pila msg [--json] colors             The colors of [colors]
-pila msg [--json] wallpaper          The image of [wallpaper] and how it fits
 pila msg [--json] focused            The focused window
 pila msg [--json] version            Pila's version
 pila msg [--json] subscribe [EVENTS] Events as they happen, until Pila quits
@@ -66,9 +65,8 @@ actions are those of `config.example.toml`.
 | `keyboard` | | `protocol`, `layouts` |
 | `colors` | | `protocol`, `colors` |
 | `switch` | | `protocol`, `switch`: the window switch in progress, or null |
-| `wallpaper` | | `protocol`, `wallpaper` |
 | `focused` | | `protocol`, `window`: a window, or null |
-| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard`, `colors`, `switch`, `wallpaper` (all if left out) | `protocol`; then events (below) |
+| `subscribe` | `events`: a list of `windows`, `workspaces`, `outputs`, `keyboard`, `colors`, `switch` (all if left out) | `protocol`; then events (below) |
 | `action` | `action`: as in `[bindings]` | nothing more |
 | `focus` | `id` | nothing more |
 | `close` | `id` | nothing more |
@@ -108,11 +106,6 @@ keyboard) types with a keymap of its own, these are still the physical keyboard'
 translucent: those of the configuration file, the example's where it leaves one out. For
 programs that want to look like Pila's title bars, as `pila-bar` and `pila-launcher` do.
 
-**The wallpaper:** an object with `[wallpaper]`'s settings: `image`, the picture's absolute path
-(`~/` expanded; null when none is set), and `fit`, how it covers a monitor (`fill`, `fit`,
-`stretch` or `center`). For a program that shows the wallpaper, as `pila-wallpaper` does; Pila
-draws `[colors] background` where nothing covers it.
-
 **The window switch:** while Mod+Tab or Alt+Tab is held (or a switching swipe goes on), an object:
 `windows`, the ids of the windows it goes through, most recently used first (minimized ones
 included); `selected`, the id of the one it's on; `output`, the name of the monitor the pointer
@@ -133,9 +126,9 @@ now, and then one whenever that kind changes:
 ```
 
 Each event is the whole list, as the request of the same name answers it (`keyboard` events carry
-`layouts`; `colors` events the `colors` object, `switch` events the `switch` object or null,
-`wallpaper` events the `wallpaper` object): replace what you had. The switch's events come at
-once, at each step of it. Colors and the wallpaper change when a saved configuration changes them.
+`layouts`; `colors` events the `colors` object, `switch` events the `switch` object or null):
+replace what you had. The switch's events come at once, at each step of it. Colors change when a
+saved configuration changes them.
 A window being moved or resized with the pointer keeps, in events, the `x`, `y`, `width` and
 `height` it had before, until it's let go: a drag sends one event, when it ends, rather than one
 a frame (`windows` answers with where it is now). Events come once things settle on screen, as taskbars hear about them

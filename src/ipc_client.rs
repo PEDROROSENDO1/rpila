@@ -18,15 +18,12 @@ Requests:
   workspaces          The workspaces
   keyboard            The keyboard layouts, and which is in use
   colors              The colors of [colors], as pila-bar takes them
-  wallpaper           The image of [wallpaper] and how it fits, as
-                      pila-wallpaper takes them
   switch              The Mod+Tab in progress: its windows, most recent
                       first, and the one selected
   focused             The focused window
   version             Pila's version
   subscribe [EVENTS]  Events as they happen: windows, workspaces, outputs,
-                      keyboard, colors, switch, wallpaper (all of them
-                      unless named),
+                      keyboard, colors, switch (all of them unless named),
                       until Pila quits
   action <action>     Run an action, as in [bindings]: action workspace 2
   focus <id>          Focus a window, by its id in `windows`
@@ -71,14 +68,14 @@ fn request(args: &[String]) -> Result<Value, String> {
         _ => Err(format!("{name} takes one window id")),
     };
     match name.as_str() {
-        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "wallpaper"
-        | "focused" | "version"
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "focused"
+        | "version"
             if rest.is_empty() =>
         {
             Ok(json!({ "request": name }))
         }
-        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "wallpaper"
-        | "focused" | "version" => Err(format!("{name} takes no arguments")),
+        "windows" | "outputs" | "workspaces" | "keyboard" | "colors" | "switch" | "focused"
+        | "version" => Err(format!("{name} takes no arguments")),
         "action" if rest.is_empty() => Err("action needs an action".to_string()),
         "action" => Ok(json!({ "request": "action", "action": rest.join(" ") })),
         "subscribe" if rest.is_empty() => Ok(json!({ "request": "subscribe" })),
@@ -237,13 +234,6 @@ fn text_of(name: &str, answer: &Value) -> Vec<String> {
             .flatten()
             .map(|(name, color)| format!("{}  {}", name.replace('_', "-"), plain(color)))
             .collect(),
-        "wallpaper" => vec![
-            format!(
-                "image  {}",
-                answer["wallpaper"]["image"].as_str().unwrap_or("none")
-            ),
-            format!("fit  {}", plain(&answer["wallpaper"]["fit"])),
-        ],
         "switch" => match answer["switch"].as_object() {
             None => vec!["no window switch".to_string()],
             Some(switch) => {
