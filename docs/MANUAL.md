@@ -8,11 +8,11 @@
 # Pila user manual
 
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
-desktops. Pila draws the windows, their title bars and shadows, and handles the keyboard, mouse,
-touchpad and monitors, and the wallpaper. It comes with a bar, a launcher and a window switcher of
-its own (`pila-bar` and `pila-launcher`, on by default) and draws its window switcher; the rest of a desktop
-(notifications, a lock screen), or another bar and launcher, comes from separate programs, or
-from a desktop shell that has them all.
+desktops. Pila draws the windows, their title bars and shadows, the wallpaper and the window switcher,
+and handles the keyboard, mouse, touchpad and monitors. It comes with a bar and a launcher of its
+own (`pila-bar` and `pila-launcher`, on by default); the rest of a desktop (notifications, a lock
+screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
+has them all.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -46,8 +46,8 @@ This manual says how to use Pila and set it up. Every configuration option is de
   your system changes, so it's a safe way to try a config. Nested, the Mod key is Alt (the
   desktop around it keeps Super), and the mouse, touchpad and monitors belong to that desktop.
 
-At startup Pila runs the programs in `autostart`, or else its own bar and window switcher,
-`pila-bar`; no terminal opens by itself: Mod+Return opens one.
+At startup Pila runs the programs in `autostart`, by default its own bar, `pila-bar`; no
+terminal opens by itself: Mod+Return opens one.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
 `graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
