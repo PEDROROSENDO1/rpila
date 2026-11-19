@@ -824,6 +824,37 @@ Key flows and invariants:
   (`ui::tray_tooltip_left`), from the bar's width, asked for then (`window::size`:
   iced_layershell reports no size when a surface opens). `scripts/apps bar` drives both on a
   headless Pila.
+- **Switcher** (`switcher/`, the `pila-switcher` command): a window switcher of Pila's own, in the
+  default `autostart`, that only shows the switch Pila does (see "Window switching"): Pila keeps
+  the keys and the order, so the switcher takes no keyboard and a quick tap is never lost to a
+  client still mapping. Like the bar, a separate iced client on iced_layershell in the
+  launcher's cargo workspace, rendered with tiny-skia; it needs `PILA_SOCKET` and exits without
+  it. It subscribes to the IPC's `colors`, `windows` and `switch` events (`pila_ipc::events`,
+  the launcher's file, which the bar and the switcher include by `#[path]`), which
+  `model::Model` applies (no Wayland or iced in it, so it's unit tested): the windows by id,
+  the switch in progress, and a count of switches, so that the delay of one that ended
+  (`model::Change::Started`, `Model::is_due`) can't show the next, nor its previews land in it.
+  An iced_layershell daemon with no surface while no switch goes on: a switch still on
+  `ui::DELAY` (150 ms) after it started gets a layer surface (Overlay, no anchor so Pila centers
+  it, on the output Pila picks, the pointer's, as the event's `output`; no keyboard; namespace
+  `pila-switcher`) of tiles, `ui::COLUMNS` to a row and `ui::ROWS` rows shown
+  (`model::first_shown` keeping the selected one's in view), resized when windows leave the
+  switch (`SizeChange`), removed when it ends. A tile is the window's preview over its app's
+  icon and its title (control characters dropped), the selected one in the accent color.
+  At each switch's start, on threads: the icons and names (`ui::find_apps`: the launcher's
+  `apps::scan` and `icons::find` by `#[path]`, a window's entry by `matching::app_for`, the
+  desktop ID, any case, then `StartupWMClass`, which `apps::parse` reads for it, then the ID's
+  last part; else an icon named as the app id), and the previews (`previews::capture`): a
+  Wayland connection of their own, opened for that switch and closed after, binds
+  ext-foreign-toplevel-list (whose identifiers are the IPC's ids), the window capture sources
+  and ext-image-copy-capture, and captures the switch's windows one at a time, the selected one
+  first, into an shm buffer (a memfd, XRGB or ARGB), each within `previews::TIMEOUT`, shrunk
+  to `previews::THUMBNAIL` (`previews::thumbnail_of`) before the next: one frame of Pila's per
+  window per switch (a capture, counted apart in the frame statistics), one full-size buffer at
+  a time, nothing between switches. A window with no preview yet shows its icon large. The
+  switcher must be a privileged client (not sandboxed) for those globals. A click on a tile
+  sends `focus` (`pila_ipc::focus`, on a thread), which ends the switch on that window.
+  `scripts/apps switcher` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

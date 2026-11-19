@@ -2163,6 +2163,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pila-switcher"
+version = "0.7.1"
+dependencies = [
+ "iced",
+ "iced_layershell",
+ "image",
+ "libc",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -83,6 +83,15 @@ gone when it leaves, a right
 click on it opens its menu with a grab (`tray.png`), a click elsewhere closes it with no grab
 left, and the item leaves when fcitx5 quits. `bar.png` shows the bar. Run it after changing the bar, the layer shell or ext-workspace.
 
+`switcher` drives `pila-switcher` (`run_switcher`; skipped where it isn't built in
+`launcher/target/release`, or `PILA_SWITCHER_BIN`), started by the workload with three foot
+windows (`--app-id switch-a` ...): a quick Super+Tab, there and back, maps no `pila-switcher`
+layer; Super held with a tap of Tab maps one, an Overlay centered on the output, a tile per window
+in a row, with no keyboard while the window switched to keeps it (`switcher.png`); another Tab steps
+on with it shown; letting go of Super removes it, on the window switched to; and with Alt+Tab
+held (Alt isn't Mod there), a click on the last tile switches to the least recent window and
+removes it, with no grab left. Run it after changing the switcher, `switcher.rs` or the IPC.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes

@@ -32,8 +32,8 @@ serde_json = "1"
 
 # A workspace of its own, with its own Cargo.lock: iced_layershell needs a
 # winit-core beta older than the one Smithay pins, and one lock file can't
-# hold both. pila-bar (../bar) shares it: one lock, one target directory, one
-# build of iced for both.
+# hold both. pila-bar (../bar) and pila-switcher (../switcher) share it: one
+# lock, one target directory, one build of iced for all.
 [workspace]
-members = [".", "../bar"]
-default-members = [".", "../bar"]
+members = [".", "../bar", "../switcher"]
+default-members = [".", "../bar", "../switcher"]

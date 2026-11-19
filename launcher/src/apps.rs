@@ -24,6 +24,11 @@ pub struct App {
     pub terminal: bool,
     /// `Path`: the directory to start it in.
     pub path: Option<String>,
+    /// `StartupWMClass`: the app id (or X11 class) its windows have, where it
+    /// isn't the entry's ID. For pila-switcher, which finds a window's app by
+    /// it; the launcher has no use for it.
+    #[allow(dead_code)]
+    pub wm_class: Option<String>,
 }
 
 /// What a scan needs to know about the session.
@@ -162,6 +167,7 @@ pub fn parse(id: &str, text: &str, session: &Session) -> Option<App> {
     let mut only_show_in = None;
     let mut not_show_in = None;
     let mut try_exec = None;
+    let mut wm_class = None;
     // How good a localized key is: the unlocalized one is the worst.
     let rank = |locale: Option<&str>| -> Option<usize> {
         match locale {
@@ -209,6 +215,7 @@ pub fn parse(id: &str, text: &str, session: &Session) -> Option<App> {
             ("OnlyShowIn", None) => only_show_in = Some(list(value)),
             ("NotShowIn", None) => not_show_in = Some(list(value)),
             ("TryExec", None) => try_exec = Some(unescape(value)),
+            ("StartupWMClass", None) => wm_class = Some(unescape(value)).filter(|c| !c.is_empty()),
             _ => {}
         }
     }
@@ -240,6 +247,7 @@ pub fn parse(id: &str, text: &str, session: &Session) -> Option<App> {
         icon,
         terminal,
         path,
+        wm_class,
     })
 }
 
@@ -389,6 +397,7 @@ mod tests {
              Exec=nautilus --new-window %U\n\
              Icon=org.gnome.Nautilus\n\
              Path=/tmp\n\
+             StartupWMClass=nautilus\n\
              [Desktop Action new]\n\
              Name=Other\n\
              Exec=other\n")
@@ -399,6 +408,7 @@ mod tests {
         assert_eq!(app.exec, "nautilus --new-window %U");
         assert_eq!(app.icon.as_deref(), Some("org.gnome.Nautilus"));
         assert_eq!(app.path.as_deref(), Some("/tmp"));
+        assert_eq!(app.wm_class.as_deref(), Some("nautilus"));
         assert!(!app.terminal);
     }
 
@@ -506,6 +516,7 @@ mod tests {
             icon: None,
             terminal: false,
             path: None,
+            wm_class: None,
         };
         let apps = [
             app("Firefox", "Web Browser", "firefox"),
