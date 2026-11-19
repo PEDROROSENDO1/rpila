@@ -1972,10 +1972,11 @@ impl Pila {
     /// systemd: that's how a test instance on another VT leaves the login
     /// session's services alone.
     ///
-    /// The export runs in the background (a stuck bus mustn't freeze pila);
-    /// `run_pending_startup` follows when it's done or after
-    /// `EXPORT_TIMEOUT`. Returns false if nothing was started. A reload that
-    /// changes `[environment]` exports again (nothing then waits for it).
+    /// The export runs on a thread (`session_bus::export`: D-Bus itself, no
+    /// program; a stuck bus mustn't freeze pila); `run_pending_startup`
+    /// follows when it's done or after `EXPORT_TIMEOUT`. Returns false if
+    /// nothing was started. A reload that changes `[environment]` or
+    /// `[cursor]`'s theme or size exports again (nothing then waits for it).
     pub(crate) fn export_environment(&mut self) -> bool {
         if !self.backend.as_ref().is_some_and(Backend::is_session) {
             return false;
@@ -1984,41 +1985,27 @@ impl Pila {
             info!("no D-Bus session bus; screen sharing through portals won't work");
             return false;
         };
+        let bus = bus.to_string_lossy().into_owned();
         let runtime = std::env::var_os("XDG_RUNTIME_DIR").unwrap_or_default();
-        let systemd = is_user_bus(&bus.to_string_lossy(), &runtime.to_string_lossy());
-        let mut cmd = Command::new("dbus-update-activation-environment");
-        if systemd {
-            cmd.arg("--systemd");
-        }
-        cmd.args(SESSION_ENV);
-        // `[environment]`'s, for what the bus and systemd start (a removed
-        // one stays as the bus has it).
-        let set = self.config.environment.iter().filter(|(_, v)| v.is_some());
-        cmd.args(set.map(|(name, _)| name));
-        // The cursor `[cursor]` sets, for apps that draw their own.
-        if self.config.cursor.theme.is_some() {
-            cmd.arg("XCURSOR_THEME");
-        }
-        if self.config.cursor.size.is_some() {
-            cmd.arg("XCURSOR_SIZE");
-        }
-        self.session_env(&mut cmd);
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(err) => {
-                warn!(?err, "can't run dbus-update-activation-environment");
-                return false;
-            }
-        };
+        let systemd = is_user_bus(&bus, &runtime.to_string_lossy());
+        let vars = self.exported_env();
 
         let (sender, channel) = calloop::channel::channel();
-        let waiter = std::thread::Builder::new()
+        let exporter = std::thread::Builder::new()
             .name("pila-dbus-env".into())
             .spawn(move || {
-                let _ = sender.send(child.wait());
+                let _ = sender.send(crate::session_bus::export(
+                    &bus,
+                    systemd,
+                    &vars,
+                    EXPORT_TIMEOUT,
+                ));
             });
-        if let Err(err) = waiter {
-            warn!(?err, "can't wait for dbus-update-activation-environment");
+        if let Err(err) = exporter {
+            warn!(
+                ?err,
+                "can't start exporting the environment to the session bus"
+            );
             return false;
         }
         let done = self
@@ -2026,28 +2013,105 @@ impl Pila {
             .insert_source(channel, move |event, _, state| {
                 if let calloop::channel::Event::Msg(result) = event {
                     match result {
-                        Ok(status) if status.success() => {
-                            info!(systemd, "exported the environment to the session bus")
-                        }
-                        Ok(status) => warn!(?status, "dbus-update-activation-environment failed"),
-                        Err(err) => warn!(?err, "dbus-update-activation-environment failed"),
+                        Ok(()) => info!(systemd, "exported the environment to the session bus"),
+                        Err(err) => warn!(err, "can't export the environment"),
                     }
                     state.run_pending_startup();
                 }
             });
         if let Err(err) = done {
-            warn!(?err, "can't wait for dbus-update-activation-environment");
+            warn!(?err, "can't wait for the environment's export");
             return false;
         }
         let timeout = Timer::from_duration(EXPORT_TIMEOUT);
         let _ = self.loop_handle.insert_source(timeout, |_, _, state| {
             if !state.pending_startup.is_empty() {
-                warn!("dbus-update-activation-environment hangs; starting the session anyway");
+                warn!("the session bus doesn't answer; starting the session anyway");
                 state.run_pending_startup();
             }
             TimeoutAction::Drop
         });
         true
+    }
+
+    /// What `export_environment` hands the bus: `SESSION_ENV`, the variables
+    /// `[environment]` sets and those `[cursor]` sets, with the values
+    /// Pila's programs get. One a program doesn't get (no `DISPLAY` without
+    /// Xwayland) isn't sent; one `[environment]` removes stays as the bus
+    /// has it.
+    fn exported_env(&self) -> Vec<(String, String)> {
+        let env = self.spawned_env();
+        let mut names: Vec<&str> = SESSION_ENV.to_vec();
+        names.extend(
+            self.config
+                .environment
+                .iter()
+                .filter(|(_, value)| value.is_some())
+                .map(|(name, _)| name.as_str()),
+        );
+        if self.config.cursor.theme.is_some() {
+            names.push("XCURSOR_THEME");
+        }
+        if self.config.cursor.size.is_some() {
+            names.push("XCURSOR_SIZE");
+        }
+        let mut vars: Vec<(String, String)> = Vec::new();
+        for name in names {
+            if vars.iter().any(|(known, _)| known == name) {
+                continue;
+            }
+            // The last word on it is Pila's; else the program inherits it.
+            let value = match env.iter().rev().find(|(known, _)| known == name) {
+                Some((_, value)) => value.clone(),
+                None => std::env::var(name).ok(),
+            };
+            if let Some(value) = value {
+                vars.push((name.to_string(), value));
+            }
+        }
+        vars
+    }
+
+    /// The variables everything Pila starts gets set (`Some`) or removed
+    /// (`None`), on top of Pila's own environment, in order: a name can come
+    /// twice, and the last one counts. `[environment]` comes first, so the
+    /// variables Pila sets itself (`config::PILA_ENV`, and `[cursor]`'s)
+    /// stay as Pila sets them.
+    fn spawned_env(&self) -> Vec<(String, Option<String>)> {
+        let mut env = self.config.environment.clone();
+        let mut set = |name: &str, value: Option<String>| env.push((name.to_string(), value));
+        set(
+            "WAYLAND_DISPLAY",
+            Some(self.socket_name.to_string_lossy().into_owned()),
+        );
+        set("XDG_CURRENT_DESKTOP", Some(DESKTOP_NAME.to_string()));
+        set("XDG_SESSION_TYPE", Some("wayland".to_string()));
+        for var in OTHER_COMPOSITORS_ENV {
+            set(var, None);
+        }
+        // systemd's socket for `pila.service` is Pila's alone: a child that
+        // speaks the protocol would answer for Pila.
+        set(crate::sd_notify::NOTIFY_SOCKET, None);
+        let socket = self.ipc_socket.as_ref();
+        set(
+            "PILA_SOCKET",
+            socket.map(|path| path.to_string_lossy().into_owned()),
+        );
+        // X11 apps go to pila's Xwayland, never the host's X server.
+        set(
+            "DISPLAY",
+            self.x11_display().map(|display| format!(":{display}")),
+        );
+        // Apps that draw their own cursor (X11 ones among them) use the
+        // theme and size Pila draws its own with; unset, they inherit
+        // Pila's XCURSOR_THEME and XCURSOR_SIZE, which Pila reads too.
+        if let Some(theme) = &self.config.cursor.theme {
+            set("XCURSOR_THEME", Some(theme.clone()));
+        }
+        if let Some(size) = self.config.cursor.size {
+            set("XCURSOR_SIZE", Some(size.to_string()));
+        }
+        env
     }
 
     /// The environment of everything pila starts. Its output goes to pila's
@@ -2057,9 +2121,8 @@ impl Pila {
     /// signal source (`main.rs`), and a blocked mask survives exec, so
     /// programs would otherwise ignore `kill` and Ctrl+C, and so would
     /// everything they start. It gets the limit of open files Pila was
-    /// started with (`raise_file_limit`). `[environment]` comes first, so
-    /// the variables Pila sets itself (`config::PILA_ENV`, and `[cursor]`'s)
-    /// stay as Pila sets them.
+    /// started with (`raise_file_limit`), and the variables of
+    /// `spawned_env`.
     pub(crate) fn session_env(&self, cmd: &mut Command) {
         let file_limit = STARTING_FILE_LIMIT.get().copied();
         // SAFETY: between fork and exec only async-signal-safe calls are
@@ -2083,38 +2146,11 @@ impl Pila {
         if let Ok(stderr) = std::io::stderr().as_fd().try_clone_to_owned() {
             cmd.stdout(Stdio::from(stderr));
         }
-        for (name, value) in &self.config.environment {
+        for (name, value) in self.spawned_env() {
             match value {
                 Some(value) => cmd.env(name, value),
                 None => cmd.env_remove(name),
             };
-        }
-        cmd.env("WAYLAND_DISPLAY", &self.socket_name)
-            .env("XDG_CURRENT_DESKTOP", DESKTOP_NAME)
-            .env("XDG_SESSION_TYPE", "wayland");
-        for var in OTHER_COMPOSITORS_ENV {
-            cmd.env_remove(var);
-        }
-        // systemd's socket for `pila.service` is Pila's alone: a child that
-        // speaks the protocol would answer for Pila.
-        cmd.env_remove(crate::sd_notify::NOTIFY_SOCKET);
-        match &self.ipc_socket {
-            Some(path) => cmd.env("PILA_SOCKET", path),
-            None => cmd.env_remove("PILA_SOCKET"),
-        };
-        // X11 apps go to pila's Xwayland, never the host's X server.
-        match self.x11_display() {
-            Some(display) => cmd.env("DISPLAY", format!(":{display}")),
-            None => cmd.env_remove("DISPLAY"),
-        };
-        // Apps that draw their own cursor (X11 ones among them) use the
-        // theme and size Pila draws its own with; unset, they inherit
-        // Pila's XCURSOR_THEME and XCURSOR_SIZE, which Pila reads too.
-        if let Some(theme) = &self.config.cursor.theme {
-            cmd.env("XCURSOR_THEME", theme);
-        }
-        if let Some(size) = self.config.cursor.size {
-            cmd.env("XCURSOR_SIZE", size.to_string());
         }
     }
 

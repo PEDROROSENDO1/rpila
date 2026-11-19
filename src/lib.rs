@@ -54,6 +54,7 @@ pub mod rules;
 pub mod scale;
 pub mod screencopy;
 pub mod sd_notify;
+pub mod session_bus;
 pub mod session_lock;
 pub mod session_management;
 pub mod session_protocol;

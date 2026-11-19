@@ -231,7 +231,7 @@ Key flows and invariants:
   where the host draws it (`Backend::draws_cursor`). The theme and size are `[cursor]`'s, else
   `XCURSOR_THEME`'s and `XCURSOR_SIZE`'s (`CursorTheme::load`); set in the config, `session_env`
   hands them to what Pila starts and `export_environment` to the session bus, and a reload that
-  changes them loads a new `CursorTheme` (`apply_config`). A thread reads the xcursor theme at
+  changes them loads a new `CursorTheme` and exports them again (`apply_config`). A thread reads the xcursor theme at
   startup, every shape at every nominal size up to `LARGEST_IMAGE` times the size, and
   until then the built-in arrow stands in (one buffer, kept: a new one each frame would be
   damage), so no frame reads a file. `get` picks the image for a buffer scale, `get_magnified`
@@ -1257,9 +1257,11 @@ Key flows and invariants:
   exports that environment to the D-Bus session bus (`export_environment`, `SESSION_ENV`, with
   `PILA_SOCKET` for shells started as services, and the variables `[environment]` sets): on the systemd
   user bus (a login session) also to `systemd --user`, which starts the portals and
-  pipewire there (`--systemd`); on a private bus (`scripts/tty`, `dbus-run-session`) the
+  pipewire there; on a private bus (`scripts/tty`, `dbus-run-session`) the
   bus alone, so a test instance leaves the login session's services alone. The export
-  runs in the background (a stuck bus mustn't freeze Pila); the startup programs follow
+  is D-Bus itself, no program (`session_bus::export`: `UpdateActivationEnvironment`, then
+  systemd's `SetEnvironment`, with the values Pila's programs get, `spawned_env`), on a thread
+  (a stuck bus mustn't freeze Pila); the startup programs follow
   when it's done or after `EXPORT_TIMEOUT`. Nested, apps use the host's portals. Spawned
   programs are kept in `Pila::children` and reaped on SIGCHLD (`reap_children`), each of
   `spawn`'s with its command: one that exits 127, the shell's "command not found", has the

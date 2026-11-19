@@ -185,14 +185,14 @@ impl Pila {
         }
         // A new theme or size: Pila's cursor at once (the redraw below), and
         // the apps started from now on (`session_env`).
-        if (&old.cursor.theme, old.cursor.size)
-            != (&self.config.cursor.theme, self.config.cursor.size)
-        {
+        let cursor_changed = (&old.cursor.theme, old.cursor.size)
+            != (&self.config.cursor.theme, self.config.cursor.size);
+        if cursor_changed {
             self.cursor_theme = crate::cursor::CursorTheme::load(&self.config.cursor);
         }
         // What Pila starts from now on gets it (`session_env`); on bare
         // metal, the bus and systemd too.
-        if old.environment != self.config.environment {
+        if cursor_changed || old.environment != self.config.environment {
             self.export_environment();
         }
         // pila-bar and pila-launcher take them up.

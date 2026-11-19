@@ -19,7 +19,10 @@
   and media keys need nothing but `pila-osd` (below), so brightnessctl and playerctl are no
   longer recommended by the packages. A daemon started after Pila still gets the next
   notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
-  `lspci`, so the packages no longer suggest pciutils.
+  `lspci`, so the packages no longer suggest pciutils. On a TTY, Pila gives the session bus
+  and `systemd --user` its environment over D-Bus too, without
+  `dbus-update-activation-environment` (which some distros package apart, such as Fedora's
+  dbus-tools), and again when a reload changes `[cursor]`'s theme or size.
 - **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
   terminal, the launcher, `autostart`) fails because a program it needs isn't installed, a
   notification names it ("wpctl isn't installed") and the command, once a session per
