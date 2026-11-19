@@ -94,20 +94,61 @@ section_system() {
     echo "wl-copy: $(command -v wl-copy >/dev/null && echo installed || echo missing)"
 }
 
-section_gpu() {
-    local card driver vendor device
-    echo "## GPU"
-    if command -v lspci >/dev/null; then
-        lspci -k 2>/dev/null | grep -EA3 'VGA|3D|Display' | grep -vE '^--|Subsystem'
-    else
-        for card in /sys/class/drm/card[0-9]; do
-            [ -e "$card/device" ] || continue
-            driver="$(basename "$(readlink -f "$card/device/driver")")"
-            vendor="$(cat "$card/device/vendor" 2>/dev/null)"
-            device="$(cat "$card/device/device" 2>/dev/null)"
-            echo "$(basename "$card"): driver $driver, PCI $vendor:$device"
-        done
+# The name pci.ids gives a vendor (`1002`) or, with a device (`1638`), one of
+# its devices; nothing without the file (package hwdata or pciutils) or the ID.
+# PILA_REPORT_PCI_IDS names the file instead (the tests).
+pci_name() {
+    local vendor="$1" device="${2:-}" ids
+    local files=(/usr/share/hwdata/pci.ids /usr/share/misc/pci.ids /usr/share/pci.ids)
+    if [ -n "${PILA_REPORT_PCI_IDS:-}" ]; then
+        files=("$PILA_REPORT_PCI_IDS")
     fi
+    for ids in "${files[@]}"; do
+        [ -r "$ids" ] || continue
+        awk -v vendor="$vendor" -v device="$device" '
+            /^[0-9a-f][0-9a-f][0-9a-f][0-9a-f]  / {
+                if (found) exit
+                if (substr($0, 1, 4) == vendor) {
+                    found = 1
+                    if (device == "") { print substr($0, 7); exit }
+                }
+                next
+            }
+            found && /^\t[0-9a-f][0-9a-f][0-9a-f][0-9a-f]  / && substr($0, 2, 4) == device {
+                print substr($0, 8)
+                exit
+            }
+        ' "$ids"
+        return 0
+    done
+}
+
+# Each GPU the kernel has (/sys/class/drm/cardN): its name, PCI IDs and
+# driver, without lspci. PILA_REPORT_SYSFS stands for /sys (the tests).
+section_gpu() {
+    local card name dev driver vendor device revision label names
+    echo "## GPU"
+    for card in "${PILA_REPORT_SYSFS:-/sys}"/class/drm/card*; do
+        name="$(basename "$card")"
+        [[ "$name" =~ ^card[0-9]+$ ]] && [ -e "$card/device" ] || continue
+        dev="$card/device"
+        driver="$(basename "$(readlink -f "$dev/driver")" 2>/dev/null)"
+        vendor="$(cat "$dev/vendor" 2>/dev/null)"
+        vendor="${vendor#0x}"
+        device="$(cat "$dev/device" 2>/dev/null)"
+        device="${device#0x}"
+        revision="$(cat "$dev/revision" 2>/dev/null)"
+        revision="${revision#0x}"
+        label="$(cat "$dev/label" 2>/dev/null)"
+        if [ -z "$vendor" ]; then
+            echo "$name: driver ${driver:-none}"
+            continue
+        fi
+        names="$(pci_name "$vendor") $(pci_name "$vendor" "$device")"
+        names="${names# }"
+        names="${names% }"
+        echo "$name: ${names:+$names }(PCI $vendor:$device${revision:+, rev $revision}${label:+, \"$label\"}), driver ${driver:-none}"
+    done
     if [ -r /proc/driver/nvidia/version ]; then
         head -n 1 /proc/driver/nvidia/version
     fi

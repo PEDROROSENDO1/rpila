@@ -6,7 +6,8 @@
   (libnotify) is no longer needed, only a notification daemon such as mako; and the brightness
   and media keys need nothing but `pila-osd` (below), so brightnessctl and playerctl are no
   longer recommended by the packages. A daemon started after Pila still gets the next
-  notification.
+  notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
+  `lspci`, so the packages no longer suggest pciutils.
 - **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
   terminal, the launcher, `autostart`) fails because a program it needs isn't installed, a
   notification names it ("wpctl isn't installed") and the command, once a session per

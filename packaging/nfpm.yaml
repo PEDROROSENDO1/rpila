@@ -63,10 +63,9 @@ overrides:
       # tells the media players itself).
       - wireplumber
     # Not installed by default: a desktop shell may have its own lock
-    # screen, and only pila-report uses lspci.
+    # screen.
     suggests:
       - swaylock
-      - pciutils
       - fonts-font-awesome
   # Built on the oldest Fedora maintained, 44: its glibc is the minimum.
   rpm:
@@ -92,8 +91,7 @@ overrides:
       # tells the media players itself).
       - wireplumber
     # Not installed by default: a desktop shell may have its own lock
-    # screen, and only pila-report uses lspci.
+    # screen.
     suggests:
       - swaylock
-      - pciutils
       - fontawesome-fonts-all

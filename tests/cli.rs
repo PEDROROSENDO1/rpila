@@ -158,6 +158,16 @@ fn report(home: &std::path::Path) -> std::process::Output {
 
 /// Run scripts/report in `home` as `user`, with this build first on `path`.
 fn report_on_path(home: &std::path::Path, path: &str, user: &str) -> std::process::Output {
+    report_with(home, path, user, &[])
+}
+
+/// Run scripts/report as `report_on_path` does, with `env` too.
+fn report_with(
+    home: &std::path::Path,
+    path: &str,
+    user: &str,
+    env: &[(&str, &std::path::Path)],
+) -> std::process::Output {
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/report");
     let bin = std::path::Path::new(env!("CARGO_BIN_EXE_pila"))
         .parent()
@@ -170,6 +180,7 @@ fn report_on_path(home: &std::path::Path, path: &str, user: &str) -> std::proces
         .env("USER", user)
         .env("XDG_STATE_HOME", home.join("state"))
         .env_remove("XDG_CONFIG_HOME")
+        .envs(env.iter().copied())
         .output()
         .expect("run scripts/report")
 }
@@ -232,6 +243,80 @@ fn the_report_says_which_gpu_pila_uses_however_long_the_log() {
     assert!(
         text.contains("Also for its monitors: /dev/dri/card0"),
         "{text}"
+    );
+}
+
+#[test]
+fn the_report_names_each_gpu_and_its_driver_without_lspci() {
+    use std::os::unix::fs::symlink;
+    let home = report_home("gpu-names");
+    // A /sys of its own: a PCI GPU with a connector beside it, and one
+    // that isn't PCI.
+    let sys = home.join("sys");
+    let drivers = sys.join("bus/pci/drivers");
+    std::fs::create_dir_all(drivers.join("amdgpu")).unwrap();
+    std::fs::create_dir_all(drivers.join("simpledrm")).unwrap();
+    let pci = sys.join("devices/pci0000:00/0000:03:00.0");
+    std::fs::create_dir_all(&pci).unwrap();
+    for (name, value) in [
+        ("vendor", "0x1002"),
+        ("device", "0x1638"),
+        ("revision", "0xd1"),
+        ("label", "Onboard IGD"),
+    ] {
+        std::fs::write(pci.join(name), format!("{value}\n")).unwrap();
+    }
+    symlink(drivers.join("amdgpu"), pci.join("driver")).unwrap();
+    let platform = sys.join("devices/platform/simple-framebuffer.0");
+    std::fs::create_dir_all(&platform).unwrap();
+    symlink(drivers.join("simpledrm"), platform.join("driver")).unwrap();
+    let drm = sys.join("class/drm");
+    for (card, device) in [("card1", &pci), ("card1-DP-1", &pci), ("card0", &platform)] {
+        std::fs::create_dir_all(drm.join(card)).unwrap();
+        symlink(device, drm.join(card).join("device")).unwrap();
+    }
+    let ids = home.join("pci.ids");
+    std::fs::write(
+        &ids,
+        "# comment\n\
+         1000  Another vendor\n\
+         \t1638  Not this one\n\
+         1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\
+         \t1636  Renoir\n\
+         \t1638  Cezanne\n\
+         \t\t1002 0123  A subsystem\n\
+         1003  Next vendor\n",
+    )
+    .unwrap();
+    let path = std::env::var("PATH").unwrap();
+    let gpu_lines = |ids: &std::path::Path| {
+        let env = [("PILA_REPORT_SYSFS", sys.as_path()), ("PILA_REPORT_PCI_IDS", ids)];
+        let out = report_with(&home, &path, "somebody", &env);
+        assert!(out.status.success(), "{out:?}");
+        let text = std::fs::read_to_string(home.join("pila-report.txt")).unwrap();
+        let gpu = text.split("## GPU\n").nth(1).unwrap();
+        let lines: Vec<String> = gpu
+            .lines()
+            .take_while(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        lines
+    };
+    assert_eq!(
+        gpu_lines(&ids),
+        [
+            "card0: driver simpledrm",
+            "card1: Advanced Micro Devices, Inc. [AMD/ATI] Cezanne \
+             (PCI 1002:1638, rev d1, \"Onboard IGD\"), driver amdgpu",
+        ]
+    );
+    // Without pci.ids, the IDs alone.
+    assert_eq!(
+        gpu_lines(&home.join("no-pci.ids")),
+        [
+            "card0: driver simpledrm",
+            "card1: (PCI 1002:1638, rev d1, \"Onboard IGD\"), driver amdgpu",
+        ]
     );
 }
 

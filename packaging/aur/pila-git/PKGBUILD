@@ -35,7 +35,6 @@ optdepends=(
     'wl-clipboard: Mod+Shift+S, a region of the screen to the clipboard (wl-copy)'
     'swaylock: locking the session'
     'xdg-utils: opening links and files from programs such as kitty (xdg-open)'
-    'pciutils: the GPU and its driver in pila-report (lspci)'
     'ttf-nerd-fonts-symbols: icons in pila-bar and pila-osd (or otf-font-awesome, or any Nerd Font)'
     'wireplumber: the volume and mute keys (wpctl)'
 )

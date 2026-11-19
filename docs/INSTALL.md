@@ -226,7 +226,6 @@ distros):
   without it, that binding does nothing
 - `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
   lock screen doesn't need it
-- `pciutils`: `lspci`, with which `pila-report` names the GPU and its driver
 - `wireplumber` (PipeWire's session manager, which most distros install with PipeWire):
   `wpctl`, which the volume and mute keys use; without it they do nothing (the brightness and
   media keys need nothing but `pila-osd`, installed with Pila)
@@ -236,9 +235,9 @@ distros):
   one the bar shows text alone
 
 ```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber ttf-nerd-fonts-symbols   # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber fonts-font-awesome # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock pciutils wireplumber fontawesome-fonts-all  # Fedora
+sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber ttf-nerd-fonts-symbols   # Arch
+sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber fonts-font-awesome # Debian, Ubuntu
+sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk grim slurp xdg-utils wl-clipboard swaylock wireplumber fontawesome-fonts-all  # Fedora
 ```
 
 The rest of a desktop (notifications, wallpaper, lock screen and idle, another bar or launcher)
