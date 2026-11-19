@@ -7,6 +7,7 @@ mod battery;
 mod clock;
 mod desktop;
 mod glyphs;
+mod icon_font;
 mod outputs;
 #[path = "../../launcher/src/pila_ipc.rs"]
 mod pila_ipc;

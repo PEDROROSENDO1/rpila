@@ -1,0 +1,28 @@
+[package]
+name = "pila-osd"
+version = "0.7.1"
+edition = "2021"
+rust-version = "1.89"
+repository = "https://github.com/igalmarino/pila"
+description = "Pila's on-screen display: the volume, microphone or brightness level for a moment after a key changes it (iced, layer shell)"
+license = "GPL-3.0-or-later"
+publish = false
+# pila-launcher's workspace: its Cargo.lock and target directory.
+workspace = "../launcher"
+
+[dependencies]
+# As pila-launcher: software rendering (tiny-skia on wl_shm), no GPU set up,
+# libwayland-client loaded at runtime (`wayland-dlopen`).
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "wayland",
+    "thread-pool",
+    "crisp",
+] }
+iced_layershell = { version = "0.19.1", default-features = false }
+# Pila's colors (`pila_ipc.rs`, shared with pila-launcher).
+serde_json = "1"
+# The icon font (`icon_font.rs`, shared with pila-bar): the versions iced's
+# text already brings.
+fontdb = "0.23"
+ttf-parser = "0.25"

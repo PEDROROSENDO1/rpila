@@ -795,7 +795,8 @@ Key flows and invariants:
   `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;
   with no battery there's no thread. Its icon comes from an icon font the user has installed
   (`glyphs.rs`), found once on a thread at startup with fontdb and ttf-parser, the versions
-  iced's text already brings (`glyphs::find`: families by name, `Symbols Nerd Font` first, then
+  iced's text already brings (`glyphs::find` through `icon_font::find`, which pila-osd shares:
+  families by name, `Symbols Nerd Font` first, then
   checked to have the glyphs drawn); one icon, never two: a Nerd Font's Material Design batteries
   by tens (each also in a charging version), or else Font Awesome's by quarters (also at those
   code points in Nerd Fonts), in the accent color while charging (`glyphs::battery`); a clock
@@ -855,6 +856,25 @@ Key flows and invariants:
   switcher must be a privileged client (not sandboxed) for those globals. A click on a tile
   sends `focus` (`pila_ipc::focus`, on a thread), which ends the switch on that window.
   `scripts/apps switcher` drives it on a headless Pila.
+- **OSD** (`osd/`, the `pila-osd` command): Pila's on-screen display, run by the default
+  bindings of the volume and brightness keys right after their change
+  (`wpctl ... && pila-osd volume`, `config.example.toml`), so a failed change (no PipeWire)
+  shows nothing, and those bindings stay plain commands a user can swap. Like the launcher, an
+  iced client on iced_layershell in its cargo workspace: a run reads its level
+  (`level::read`: the volume and the microphone from `wpctl get-volume` of the default sink and
+  source, `level::wpctl_volume`; the brightness from `/sys/class/backlight`, the firmware's,
+  then the platform's, then a raw one, `level::backlight`), then hands it to the run in the
+  background over a socket in the runtime directory (`socket_path`, one per Wayland display;
+  `Level::encode`, one line) and exits, or binds it and becomes that run (`ui::run`): an
+  iced_layershell daemon with no surface while hidden. A level opens a surface if there's
+  none (Overlay, anchored to the bottom edge alone so Pila centers it along it, `ui::MARGIN`
+  above it and any exclusive zone; on the output Pila picks, the pointer's; no keyboard;
+  `events_transparent`, an empty input region, so clicks go through; namespace `pila-osd`)
+  and is shown until `ui::SHOWN` after the last one (a count of levels, so only the last one's
+  timer hides it): an icon from the icon font (`glyphs::glyph`: Material Design's by thirds,
+  else Font Awesome's; `icon_font.rs`, the bar's, by `#[path]`), else the level's name; a
+  square level bar; the percentage, or "muted", dimmed. Colors from `[colors]`, as the bar's
+  (`pila_ipc::styles`). `scripts/apps osd` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

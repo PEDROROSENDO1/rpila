@@ -2163,6 +2163,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pila-osd"
+version = "0.7.1"
+dependencies = [
+ "fontdb",
+ "iced",
+ "iced_layershell",
+ "serde_json",
+ "ttf-parser",
+]
+
+[[package]]
 name = "pila-switcher"
 version = "0.7.1"
 dependencies = [

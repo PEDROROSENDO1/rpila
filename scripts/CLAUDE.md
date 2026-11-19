@@ -92,6 +92,16 @@ on with it shown; letting go of Super removes it, on the window switched to; and
 held (Alt isn't Mod there), a click on the last tile switches to the least recent window and
 removes it, with no grab left. Run it after changing the switcher, `switcher.rs` or the IPC.
 
+`osd` drives `pila-osd` (`run_osd`; skipped where it isn't built in `launcher/target/release`,
+or `PILA_OSD_BIN`) over a maximized foot, with a `wpctl` of the run's own that prints a volume
+from a file: `pila-osd volume` maps a `pila-osd` layer, an Overlay at the bottom center, its
+margin above the edge, with no keyboard, and the pointer over it is on foot (clicks go
+through: an empty input region) (`osd.png`); a second run, muted, goes to the first (one
+process) and it's still shown (`osd-muted.png`); it goes away on its own; `pila-osd brightness`
+shows the backlight's where `/sys/class/backlight` has one, and exits 1 with nothing shown where
+it hasn't; so does `pila-osd volume` with no wpctl. Run it after changing pila-osd or the layer
+shell.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes

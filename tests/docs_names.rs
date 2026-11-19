@@ -56,6 +56,7 @@ fn the_docs_name_only_code_that_exists() {
         "launcher/src",
         "bar/src",
         "switcher/src",
+        "osd/src",
     ] {
         files_under(&root.join(dir), &mut sources);
     }

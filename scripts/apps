@@ -72,20 +72,33 @@ three foot windows:
   - a click on a tile while Alt+Tab is held switches to that window and takes
     it away, leaving no grab.
 
+And pila-osd (osd: built in launcher/ with cargo build --release, or
+PILA_OSD_BIN; skipped where it isn't), run as the volume keys run it, with a
+wpctl of the run's own that says the volume, over a maximized foot:
+
+  - `pila-osd volume` shows it: an Overlay layer surface at the bottom
+    center of the output, above the bottom edge, taking no keyboard (foot
+    keeps it) and no pointer (the pointer over it is on foot);
+  - a second run while it's shown, muted this time, goes to the first: one
+    pila-osd process, still shown; and it goes away on its own;
+  - `pila-osd brightness` shows the backlight's where there's one, and
+    where there's none exits with an error and shows nothing; so does
+    `pila-osd volume` without wpctl.
+
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
                                      weston-terminal, xterm, launcher,
-                                     bar, switcher, fcitx5-foot,
+                                     bar, switcher, osd, fcitx5-foot,
                                      fcitx5-gtk4, fcitx5-launcher)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
 (app.log) and a screenshot at the end (grim, if installed). Uses
 target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
 (package dbus); xterm needs Xwayland; fcitx5-gtk4 reads the text back with
-wl-paste (package wl-clipboard); launcher, bar and switcher need foot. Standard
+wl-paste (package wl-clipboard); launcher, bar, switcher and osd need foot. Standard
 library only.
 """
 
@@ -126,6 +139,9 @@ BAR_APP, BAR_HEIGHT, BAR_BUTTON = "pila-bar", 28, 28
 # pila-switcher, its layer surface's namespace, and its tiles' size, the
 # spacing between them and the padding around them all (`switcher/src/ui.rs`).
 SWITCHER_APP, SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = "pila-switcher", (200, 157), 4, 12
+# pila-osd, its layer surface's namespace, size and margin above the bottom
+# edge (`osd/src/ui.rs`).
+OSD_APP, OSD_SIZE, OSD_MARGIN = "pila-osd", (320, 52), 96
 # Apps for it to find (in the sealed XDG_DATA_HOME): what they write to the
 # runtime directory says they ran.
 LAUNCHER_APPS = {
@@ -844,7 +860,109 @@ class Workload:
         switcher.wait(5)
         return self.finish()
 
+    # --- pila-osd ---
+
+    def osds(self, state):
+        return [l for l in state["layers"] if l["namespace"] == OSD_APP and l["geometry"]
+                and l["geometry"]["h"]]
+
+    def osd_processes(self):
+        mine = f"XDG_RUNTIME_DIR={os.environ['XDG_RUNTIME_DIR']}".encode()
+        count = 0
+        for pid in filter(str.isdigit, os.listdir("/proc")):
+            try:
+                with open(f"/proc/{pid}/stat") as f:
+                    stat = f.read()
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    argv0 = f.read().split(b"\0")[0].decode(errors="replace")
+                with open(f"/proc/{pid}/environ", "rb") as f:
+                    environ = f.read().split(b"\0")
+            except OSError:
+                continue
+            if os.path.basename(argv0) == OSD_APP and mine in environ and stat.rsplit(")", 1)[1].split()[0] != "Z":
+                count += 1
+        return count
+
+    def run_osd(self):
+        """pila-osd (module docs)."""
+        self.mark(f"{self.app} begin")
+        osd = os.environ["PILA_APPS_OSD"]
+        # A wpctl of the run's own: the volume it says is in a file.
+        bin_dir = os.path.join(os.environ["XDG_RUNTIME_DIR"], "osd-bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        said = os.path.join(bin_dir, "volume")
+        with open(os.path.join(bin_dir, "wpctl"), "w") as f:
+            f.write(f"#!/bin/sh\ncat {shlex.quote(said)}\n")
+        os.chmod(os.path.join(bin_dir, "wpctl"), 0o755)
+        env = dict(os.environ, PATH=bin_dir + ":" + os.environ["PATH"])
+        log = open(os.path.join(self.out, "osd.log"), "a")
+
+        def run(*args, path=None):
+            return subprocess.Popen([osd, *args], stdout=log, stderr=subprocess.STDOUT,
+                                    env=dict(env, PATH=path) if path else env)
+
+        subprocess.Popen(["foot"], stdout=open(os.path.join(self.out, "app.log"), "w"), stderr=subprocess.STDOUT)
+        if not self.check("foot opens", self.wait(lambda s: s["focused"] == "foot", 20) is not None):
+            return self.finish()
+        self.ctl(cmd="combo", keys="Super+m")
+        self.wait(lambda s: self.window(s)["maximized"], 3)
+
+        with open(said, "w") as f:
+            f.write("Volume: 0.45\n")
+        first = run("volume")
+        state = self.wait(lambda s: self.osds(s), 20)
+        if not self.check("pila-osd volume shows it", state is not None, "no surface within 20 s"):
+            first.terminate()
+            return self.finish()
+        layer, = self.osds(state)
+        g, (w, h) = layer["geometry"], OSD_SIZE
+        self.check("an Overlay at the bottom center, above the bottom edge",
+                   layer["layer"] == "overlay" and (g["w"], g["h"]) == (w, h)
+                   and g["x"] == (1920 - w) // 2 and g["y"] == 1080 - OSD_MARGIN - h, f"{layer['layer']} at {g}")
+        self.move(g["x"] + w // 2, g["y"] + h // 2)
+        state = self.wait(lambda s: s["pointer"]["focus"] == "foot", 2) or self.state()
+        self.check("it takes no keyboard and no pointer: foot keeps both",
+                   layer["keyboard"] == "none" and state["focused"] == "foot"
+                   and state["pointer"]["focus"] == "foot",
+                   f"keyboard {layer['keyboard']}, focused {state['focused']}, pointer on {state['pointer']['focus']}")
+        if shutil.which("grim"):
+            subprocess.run(["grim", os.path.join(self.out, "osd.png")], check=False)
+
+        with open(said, "w") as f:
+            f.write("Volume: 0.40 [MUTED]\n")
+        second = run("volume")
+        second.wait(5)
+        state = self.state()
+        self.check("a second run goes to the first: one pila-osd, still shown",
+                   second.returncode == 0 and self.osd_processes() == 1 and self.osds(state),
+                   f"exit {second.returncode}, {self.osd_processes()} processes, layers {self.osds(state)}")
+        if shutil.which("grim"):
+            time.sleep(0.2)
+            subprocess.run(["grim", os.path.join(self.out, "osd-muted.png")], check=False)
+        gone = self.wait(lambda s: not self.osds(s), 4)
+        self.check("it goes away on its own", gone is not None)
+
+        brightness = run("brightness")
+        brightness.wait(5)
+        if os.listdir("/sys/class/backlight") if os.path.isdir("/sys/class/backlight") else []:
+            shown = self.wait(lambda s: self.osds(s), 3)
+            self.check("pila-osd brightness shows the backlight's", brightness.returncode == 0 and shown is not None,
+                       f"exit {brightness.returncode}")
+            self.wait(lambda s: not self.osds(s), 4)
+        else:
+            self.check("pila-osd brightness without a backlight exits with an error",
+                       brightness.returncode == 1 and not self.osds(self.state()), f"exit {brightness.returncode}")
+        no_wpctl = run("volume", path="/nonexistent")
+        no_wpctl.wait(5)
+        self.check("pila-osd volume without wpctl exits with an error and shows nothing",
+                   no_wpctl.returncode == 1 and not self.osds(self.state()), f"exit {no_wpctl.returncode}")
+        first.terminate()
+        first.wait(5)
+        return self.finish()
+
     def run(self):
+        if self.app == "osd":
+            return self.run_osd()
         if self.app == "switcher":
             return self.run_switcher()
         if self.app in IME_APPS:
@@ -993,10 +1111,10 @@ def data_file(relative):
     return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
 
 
-def missing_for(app, launcher, bar, switcher):
+def missing_for(app, launcher, bar, switcher, osd):
     """What `app`'s run needs and the system lacks, if anything (`launcher`,
-    `bar`, `switcher`: pila-launcher's, pila-bar's and pila-switcher's
-    binaries)."""
+    `bar`, `switcher`, `osd`: pila-launcher's, pila-bar's, pila-switcher's and
+    pila-osd's binaries)."""
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
@@ -1006,7 +1124,9 @@ def missing_for(app, launcher, bar, switcher):
         return f"no {bar} (cargo build --release in launcher/, or PILA_BAR_BIN)"
     if app == "switcher" and not os.access(switcher, os.X_OK):
         return f"no {switcher} (cargo build --release in launcher/, or PILA_SWITCHER_BIN)"
-    if app in ("launcher", "bar", "switcher"):
+    if app == "osd" and not os.access(osd, os.X_OK):
+        return f"no {osd} (cargo build --release in launcher/, or PILA_OSD_BIN)"
+    if app in ("launcher", "bar", "switcher", "osd"):
         return "" if shutil.which("foot") else "foot not installed"
     command, how = IME_APPS[app]
     tools = ([command("")[0]] if command else []) + ["fcitx5"]
@@ -1026,7 +1146,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    names = list(APPS) + ["launcher", "bar", "switcher"] + list(IME_APPS)
+    names = list(APPS) + ["launcher", "bar", "switcher", "osd"] + list(IME_APPS)
     unknown = [a for a in argv if a not in names]
     if unknown:
         print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)
@@ -1045,9 +1165,10 @@ def main(argv):
     bar = os.environ.get("PILA_BAR_BIN") or os.path.join(repo, "launcher/target/release", BAR_APP)
     switcher = os.environ.get("PILA_SWITCHER_BIN") or os.path.join(
         repo, "launcher/target/release", SWITCHER_APP)
+    osd = os.environ.get("PILA_OSD_BIN") or os.path.join(repo, "launcher/target/release", OSD_APP)
     ok = True
     for app in argv or names:
-        missing = missing_for(app, launcher, bar, switcher)
+        missing = missing_for(app, launcher, bar, switcher, osd)
         if missing:
             print(f"\nSKIP  {app} ({missing})")
             continue
@@ -1076,6 +1197,7 @@ def main(argv):
                    XDG_DATA_HOME=os.path.join(home, ".local/share"),
                    PILA_HEADLESS_CHECK_INVARIANTS="1", PILA_APPS_BAR=os.path.abspath(bar),
                    PILA_APPS_SWITCHER=os.path.abspath(switcher),
+                   PILA_APPS_OSD=os.path.abspath(osd),
                    RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
         workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"
         with open(os.path.join(out, "pila.log"), "w") as log:
