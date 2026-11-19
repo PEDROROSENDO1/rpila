@@ -320,7 +320,8 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
   message states; `.locked()` (`sync.rs`) for a mutex, `get_or_insert` for user data, else
   `let`-`else`, logging what means something went wrong.
 - **Settings:** a new one is read when used or re-applied in `apply_config`. Its default is
-  written in `config.example.toml` alone, as an active line (examples stay commented out): the
+  written in `config.example.toml` alone, as an active line (examples stay commented out, and
+  come before it: `the_examples_come_before_the_value_they_would_replace`): the
   code takes what a user's file leaves out from it (`Config::parse_with`) and has no default
   values of its own (`need` fails without one; `every_default_comes_from_the_example` checks).
   The same goes for the default bindings and gestures, its `[bindings]` and `[gestures]`. Keep

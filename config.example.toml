@@ -5,7 +5,8 @@
 # out of your own file is taken from. So every setting is optional, and a
 # file with only the lines you changed works too. Commented-out values are
 # examples (marked "e.g.") or depend on the machine (mod, terminal, the
-# keymap); take the `#` off one to use it.
+# keymap), and come before the active value they'd replace; take the `#` off
+# one to use it.
 # PILA_MOD, PILA_TERMINAL and PILA_LAUNCHER override the matching settings.
 # An invalid file is reported in the log and in a notification, and Pila starts
 # with the defaults.
@@ -28,8 +29,8 @@
 # type; apps that run in a terminal start in kitty (--terminal COMMAND for
 # another; the others as for `terminal` where kitty isn't installed). Any other
 # launcher works too, such as fuzzel.
-launcher = "pila-launcher"
 # launcher = "fuzzel"              # e.g.
+launcher = "pila-launcher"
 
 # Commands run at startup (`pila -c` replaces them); [] for none. X11 apps
 # among them start Xwayland as they connect. No terminal starts unless it's
@@ -38,8 +39,8 @@ launcher = "pila-launcher"
 # the battery and a clock (--bottom for the bottom edge, --clock FORMAT as
 # strftime writes it). Any other bar works too, such as waybar. pila-switcher
 # shows the windows while Mod+Tab or Alt+Tab is held. Only one `autostart`
-# line can be active: to use the longer example, replace this one with it.
-autostart = ["pila-bar", "pila-switcher"]
+# line can be active: to use the longer example, put it in place of the
+# active one.
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
 #     "pila-bar --bottom",
@@ -48,6 +49,7 @@ autostart = ["pila-bar", "pila-switcher"]
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
+autostart = ["pila-bar", "pila-switcher"]
 
 # How many workspaces (virtual desktops) there are, 1 to 32. They span all
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
@@ -104,16 +106,16 @@ default-bindings = true
 # through Xwayland as the fallback); your file's own value for one replaces it,
 # and NAME = false drops it.
 [environment]
-QT_QPA_PLATFORM = "wayland;xcb"    # Qt: Wayland, X11 without its plugin
-ELECTRON_OZONE_PLATFORM_HINT = "auto"  # Electron (VS Code, Discord, ...)
-MOZ_ENABLE_WAYLAND = "1"           # older Firefox and Thunderbird
-_JAVA_AWT_WM_NONREPARENTING = "1"  # Java's X11 windows, blank without it
 # SDL_VIDEODRIVER = "wayland,x11"  # e.g.: SDL 2 games; older SDLs (games that
 #                                  # bring their own) then fail to start
 # GDK_BACKEND = "wayland,x11"      # e.g.: GTK picks Wayland by itself already
 # LANGUAGE = "zh_CN:zh_Hans:zh"    # e.g.
 # XMODIFIERS = "@im=fcitx"         # e.g.: fcitx5 in X11 apps (XIM)
 # QT_QPA_PLATFORMTHEME = false     # e.g.: removed
+QT_QPA_PLATFORM = "wayland;xcb"    # Qt: Wayland, X11 without its plugin
+ELECTRON_OZONE_PLATFORM_HINT = "auto"  # Electron (VS Code, Discord, ...)
+MOZ_ENABLE_WAYLAND = "1"           # older Firefox and Thunderbird
+_JAVA_AWT_WM_NONREPARENTING = "1"  # Java's X11 windows, blank without it
 
 # The shadow under each window, stronger for the focused one. None for a
 # maximized or fullscreen window, or one whose app draws its own (past its
@@ -174,8 +176,8 @@ shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 # no DISPLAY; turned off while Xwayland runs, it stays for its apps until it
 # stops. Read as soon as the file is saved.
 [xwayland]
-enabled = true
 # idle-timeout = 10                # e.g.
+enabled = true
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and
@@ -200,13 +202,13 @@ wheel-binding-cooldown = 150
 # Unset options keep libinput's defaults for the device; tap is on. Options a
 # device doesn't support are skipped.
 [input.touchpad]
-tap = true                       # tap to click
 # natural-scroll = true            # e.g.: content follows the fingers
 # accel-speed = 0.3                # e.g.: -1 (slowest) to 1 (fastest)
 # accel-profile = "flat"           # e.g.: "adaptive" or "flat" (no acceleration)
 # disable-while-typing = true      # e.g.: ignore the touchpad briefly while typing
 # click-method = "clickfinger"     # e.g.: 1/2/3 fingers = left/right/middle; or "button-areas"
 # middle-emulation = true          # e.g.: left + right together = middle
+tap = true                       # tap to click
 
 # The same options as the touchpad's, for mice and trackballs.
 [input.mouse]
@@ -252,6 +254,13 @@ tap = true                       # tap to click
 # the one here, and "none" removes it. Mod+1 .. Mod+N go to workspace 1 .. N,
 # and Mod+Shift+1 .. Mod+Shift+N move the window there, for each workspace up
 # to 9 (N = workspaces; the other digits reach the apps).
+#
+# Examples:
+# "Mod+Shift+Return" = "spawn kitty -e htop"
+# "XF86AudioPlay" = "none"         # to the app, as a key of its own
+# "Mod+J" = "none"
+# "Mod" = "none"                   # tapping Mod alone opens nothing
+#
 "Mod+Return" = "terminal"
 "Mod+D" = "launcher"
 "Mod" = "launcher"                 # tap Mod alone
@@ -287,16 +296,19 @@ tap = true                       # tap to click
 # screenshot tool works too, in place of these lines: grim with slurp and
 # wl-clipboard, for instance. (pila-shot also picks the screen to share: that's
 # in xdg-desktop-portal-wlr's settings, see the manual.)
+# "Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"   # e.g.
 "Mod+Shift+S" = "spawn pila-shot region"
 "Mod+Ctrl+S" = "spawn pila-shot output"
-# "Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"   # e.g.
 # The volume and brightness keys, held to go on, each change shown for a
 # moment by pila-osd (installed with Pila); the volume with wpctl (PipeWire's
 # WirePlumber), up to 100%, the brightness by pila-osd itself, never quite
 # off. The media keys tell the player that's playing, through pila-osd too
 # (MPRIS). Without wpctl the volume keys do nothing. Other tools work too, in
-# place of these lines: brightnessctl and playerctl, for instance (pactl on
-# PulseAudio is among the examples below).
+# place of these lines: pactl on PulseAudio, brightnessctl and playerctl, for
+# instance.
+# "XF86AudioRaiseVolume" = { action = "spawn pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat = true }  # e.g.
+# "XF86MonBrightnessUp" = { action = "spawn brightnessctl set 5%+", repeat = true }  # e.g.
+# "XF86AudioPlay" = "spawn playerctl play-pause"   # e.g.
 "XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && pila-osd volume", repeat = true }
 "XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && pila-osd volume", repeat = true }
 "XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && pila-osd volume"
@@ -308,8 +320,6 @@ tap = true                       # tap to click
 "XF86AudioNext" = "spawn pila-osd next"
 "XF86AudioPrev" = "spawn pila-osd previous"
 "XF86AudioStop" = "spawn pila-osd stop"
-# "XF86MonBrightnessUp" = { action = "spawn brightnessctl set 5%+", repeat = true }  # e.g.
-# "XF86AudioPlay" = "spawn playerctl play-pause"   # e.g.
 "Mod+Page_Down" = "workspace-next"
 "Mod+Page_Up" = "workspace-prev"
 "Mod+Shift+Page_Down" = "move-to-workspace-next"
@@ -320,13 +330,6 @@ tap = true                       # tap to click
 "Mod+Shift+WheelScrollUp" = "move-to-workspace-prev"
 "Mod+Shift+Q" = "close"
 "Mod+Shift+E" = "quit"
-#
-# Examples:
-# "Mod+Shift+Return" = "spawn kitty -e htop"
-# "XF86AudioRaiseVolume" = { action = "spawn pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat = true }  # PulseAudio
-# "XF86AudioPlay" = "none"         # to the app, as a key of its own
-# "Mod+J" = "none"
-# "Mod" = "none"                   # tapping Mod alone opens nothing
 
 [gestures]
 # Touchpad swipes Pila handles itself (on a TTY), as "swipe-<fingers>-<way>"
@@ -337,17 +340,18 @@ tap = true                       # tap to click
 # stretch of the same swipe and ends when the fingers lift.
 #
 # Your own file's gestures come after these, as for [bindings].
+#
+# Examples:
+# "swipe-3-down" = "minimize"
+# "swipe-4-up" = "snap-left"
+# "swipe-4-down" = "snap-right"
+#
 "swipe-3-left" = "cycle-focus"
 "swipe-3-right" = "cycle-focus-back"
 "swipe-3-up" = "maximize"
 "swipe-3-down" = "restore"
 "swipe-4-left" = "workspace-next"
 "swipe-4-right" = "workspace-prev"
-#
-# Examples:
-# "swipe-3-down" = "minimize"
-# "swipe-4-up" = "snap-left"
-# "swipe-4-down" = "snap-right"
 
 # Monitors, matched by connector name (shown in the log as "output connected",
 # e.g. eDP-1, DP-1, HDMI-A-1). Without an entry, a monitor uses its preferred

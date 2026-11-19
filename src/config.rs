@@ -3395,6 +3395,37 @@ mod tests {
     }
 
     #[test]
+    fn the_examples_come_before_the_value_they_would_replace() {
+        // In each table, a commented-out `key = ...` comes before the active
+        // line of that key, never after it.
+        let key_of = |line: &str| -> Option<String> {
+            let (key, _) = line.split_once('=')?;
+            let key = key.trim();
+            let plain = |c: char| c.is_ascii_alphanumeric() || "_-+\"".contains(c);
+            (!key.is_empty() && key.chars().all(plain)).then(|| key.to_string())
+        };
+        let mut table = String::from("the top level");
+        let mut active = std::collections::HashSet::new();
+        for (number, line) in EXAMPLE.lines().enumerate() {
+            if line.starts_with('[') {
+                table = line.to_string();
+                continue;
+            }
+            if let Some(example) = line.strip_prefix("# ") {
+                if let Some(key) = key_of(example) {
+                    assert!(
+                        !active.contains(&(table.clone(), key.clone())),
+                        "line {}: the example of {key} in {table} comes after its active line",
+                        number + 1
+                    );
+                }
+            } else if let Some(key) = key_of(line) {
+                active.insert((table.clone(), key));
+            }
+        }
+    }
+
+    #[test]
     fn example_lines_uncomment_into_their_tables() {
         // A tester took the `#` off a line of the bindings' list, which then
         // sat above [bindings] and so landed in [input.mouse].
