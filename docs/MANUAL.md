@@ -875,7 +875,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | `pila-shot region` or `pila-shot output` run from a terminal says what's wrong. A configuration of your own that binds them to grim needs grim (and slurp and wl-clipboard): Pila tells you when one of its programs isn't installed. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |
-| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `slurp`: change its `chooser_cmd` to `pila-shot pick-output`, or delete it. |
+| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `slurp`: change its `chooser_cmd` to `pila-shot pick-output`, or delete it (`scripts/tty` does the first by itself). |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |

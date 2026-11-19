@@ -10,9 +10,9 @@
   `~/Pictures`). The cursor is left out. From a terminal, `pila-shot output [NAME]` and
   `pila-shot region` take `--file PATH` (`-` for a pipe) or `--clipboard`. It also picks the
   monitor to share for screen sharing (`pila-shot pick-output`, in the portal's configuration
-  Pila installs), so slurp isn't needed there either; a copy of that configuration of your own
-  in `~/.config/xdg-desktop-portal-wlr/pila` still runs slurp until you change its
-  `chooser_cmd`. The packages no longer recommend grim, slurp and wl-clipboard, and
+  Pila installs), so slurp isn't needed there either. A copy of that configuration in
+  `~/.config/xdg-desktop-portal-wlr/pila` still runs slurp until you change its `chooser_cmd`;
+  `scripts/tty` changes the copy it made itself. The packages no longer recommend grim, slurp and wl-clipboard, and
   `pila-report` says whether `wpctl` is installed instead of `wl-copy`.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; and the brightness

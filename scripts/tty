@@ -11,7 +11,8 @@
 # it starts for screen sharing (xdg-desktop-portal + xdg-desktop-portal-wlr)
 # are its own and the login session's services are left alone. They find
 # resources/xdg/xdg-desktop-portal/pila-portals.conf through XDG_CONFIG_DIRS;
-# xdg-desktop-portal-wlr's settings are copied to ~/.config if missing.
+# xdg-desktop-portal-wlr's settings are copied to ~/.config if missing (and an
+# older copy's slurp becomes pila-shot).
 #
 #   scripts/tty                        release build, ~/.config/pila/config.toml
 #   scripts/tty <config.toml>          another config
@@ -77,11 +78,17 @@ fi
 export XDG_CONFIG_DIRS="$PWD/resources/xdg:${XDG_CONFIG_DIRS:-/etc/xdg}"
 
 # xdg-desktop-portal-wlr only looks in ~/.config (or /etc/xdg) for its config.
+# A copy made by an older scripts/tty picked the screen with slurp: it moves to
+# pila-shot. One the user changed is left alone.
 xdpw_config="${XDG_CONFIG_HOME:-$HOME/.config}/xdg-desktop-portal-wlr/pila"
+old_chooser="chooser_cmd=slurp -f 'Monitor: %o' -or"
 if [ ! -e "$xdpw_config" ]; then
     mkdir -p "$(dirname "$xdpw_config")"
     cp resources/xdg/xdg-desktop-portal-wlr/pila "$xdpw_config"
-    echo "Installed $xdpw_config (screen sharing picks a screen with slurp)."
+    echo "Installed $xdpw_config (screen sharing picks a screen with pila-shot)."
+elif grep -qxF "$old_chooser" "$xdpw_config"; then
+    sed -i "s|^chooser_cmd=slurp -f 'Monitor: %o' -or\$|chooser_cmd=pila-shot pick-output|" "$xdpw_config"
+    echo "Updated $xdpw_config: pila-shot picks the screen to share, not slurp."
 fi
 
 # Keep the last run's log: after a crash, it's the one that matters.

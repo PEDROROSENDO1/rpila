@@ -514,6 +514,55 @@ fn scripts_check_and_tty_say_when_the_given_binary_is_missing() {
     }
 }
 
+/// scripts/tty gives xdg-desktop-portal-wlr Pila's settings in ~/.config,
+/// where it reads them: a missing copy is made, a copy of an older one
+/// (slurp picking the screen) moves to pila-shot, and one of the user's own
+/// is left alone.
+#[test]
+fn scripts_tty_keeps_the_screen_sharing_settings_current() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scripts_copy("xdpw");
+    let shipped = "resources/xdg/xdg-desktop-portal-wlr/pila";
+    std::fs::create_dir_all(dir.join(shipped).parent().unwrap()).unwrap();
+    std::fs::copy(
+        format!("{}/{shipped}", env!("CARGO_MANIFEST_DIR")),
+        dir.join(shipped),
+    )
+    .unwrap();
+    let fake = dir.join("fake-pila");
+    std::fs::write(&fake, "#!/bin/sh\n").unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    wait_until_executable(&fake);
+    let config = dir.join("config");
+    let settings = config.join("xdg-desktop-portal-wlr/pila");
+    let tty = || {
+        let out = copied_script(&dir, "tty")
+            .env("PILA_BIN", &fake)
+            .env("XDG_CONFIG_HOME", &config)
+            .env_remove("WAYLAND_DISPLAY")
+            .env_remove("DISPLAY")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        std::fs::read_to_string(&settings).unwrap()
+    };
+    // None yet: Pila's.
+    let ours = std::fs::read_to_string(dir.join(shipped)).unwrap();
+    assert_eq!(tty(), ours);
+    // An older copy.
+    let older = "[screencast]\nchooser_type=simple\nchooser_cmd=slurp -f 'Monitor: %o' -or\n";
+    std::fs::write(&settings, older).unwrap();
+    assert_eq!(
+        tty(),
+        "[screencast]\nchooser_type=simple\nchooser_cmd=pila-shot pick-output\n"
+    );
+    // The user's own.
+    let own = "[screencast]\nchooser_type=dmenu\nchooser_cmd=fuzzel -d\n";
+    std::fs::write(&settings, own).unwrap();
+    assert_eq!(tty(), own);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn scripts_check_refuses_an_option_it_doesnt_know() {
     let dir = scripts_copy("option");
