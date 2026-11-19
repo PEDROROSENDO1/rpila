@@ -113,8 +113,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 monitor (`pila-osd`, installed with Pila): for the volume, the microphone and the brightness an
 icon, a level bar and the percentage, dimmed while muted; for a media key what it did (playing,
 paused, the next or previous track, stopped) and the track's title and artist, or that there's
-no player. The icons come from the same icon font as the bar's; without one it says in words
-what it shows.
+no player. Its icons are built in, as the bar's.
 
 The volume keys run wpctl (PipeWire's WirePlumber), then `pila-osd volume` or `pila-osd mic`,
 which shows what wpctl left; without wpctl they do nothing, and with PulseAudio you bind them to
@@ -568,14 +567,11 @@ shows in a tooltip below the clock while the pointer rests on it: `--date FORMAT
 `--height PIXELS` makes it 16 to 96 pixels high instead of 28, its text growing with it, and
 `--output NAME` puts it on that monitor alone (named as `pila msg outputs` shows; once per
 monitor for several). A monitor connected later gets its bar too, if it's one of those. The
-battery shows how full the laptop's batteries are together, with an arrow up while charging,
-and turns amber at 15% or less while running down; a mouse's or a headset's battery isn't
-counted, and `--no-battery` leaves it out. With an icon font installed, a Nerd Font (its symbols
-alone, `Symbols Nerd Font`, are enough) or Font Awesome, both packaged by most distributions, the
-battery shows its icon too, one icon: with a Nerd Font its level by tens, with a bolt beside it
-while charging; with Font Awesome, which has fewer, its level by quarters, in the accent color
-while charging. The clock gets a clock icon before it from the same font. Without one, words and
-numbers alone. The tray shows the icons apps put there (fcitx5,
+battery shows how full the laptop's batteries are together, an icon of its level by tens (with a
+bolt inside while charging) and the percentage, and turns amber at 15% or less while running
+down; a mouse's or a headset's battery isn't counted, and `--no-battery` leaves it out. The
+clock has a clock icon before it. The icons are built in (Material Design Icons): no icon font
+to install. The tray shows the icons apps put there (fcitx5,
 network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
 does what the app does on a click, the middle button its second action, the wheel what it does
 with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it);

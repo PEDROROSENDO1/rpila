@@ -37,14 +37,6 @@ impl Battery {
     pub fn low(&self) -> bool {
         self.state == State::Discharging && self.percent <= LOW
     }
-
-    /// The text the bar shows: the percentage, an arrow up while charging.
-    pub fn text(&self) -> String {
-        match self.state {
-            State::Charging => format!("\u{2191}{}%", self.percent),
-            _ => format!("{}%", self.percent),
-        }
-    }
 }
 
 /// One battery as sysfs has it.
@@ -229,7 +221,6 @@ mod tests {
         let battery = read(&sysfs.0).unwrap();
         assert_eq!(battery.percent, 42, "by what it holds: 2.0 of 4.8");
         assert_eq!(battery.state, State::Discharging);
-        assert_eq!(battery.text(), "42%");
         assert!(!battery.low());
     }
 
@@ -255,7 +246,6 @@ mod tests {
         let battery = read(&sysfs.0).unwrap();
         assert_eq!(battery.percent, 50);
         assert_eq!(battery.state, State::Charging);
-        assert_eq!(battery.text(), "\u{2191}50%");
     }
 
     #[test]

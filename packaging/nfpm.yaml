@@ -10,7 +10,8 @@ priority: optional
 maintainer: Ignacio Galmarino <igalmarino@gmail.com>
 description: A stacking Wayland compositor built on Smithay
 homepage: https://github.com/igalmarino/pila
-license: GPL-3.0-or-later
+# Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
+license: GPL-3.0-or-later AND Apache-2.0
 
 contents:
   - src: stage/usr/bin/*
@@ -66,7 +67,6 @@ overrides:
     # screen.
     suggests:
       - swaylock
-      - fonts-font-awesome
   # Built on the oldest Fedora maintained, 44: its glibc is the minimum.
   rpm:
     depends:
@@ -94,4 +94,3 @@ overrides:
     # screen.
     suggests:
       - swaylock
-      - fontawesome-fonts-all

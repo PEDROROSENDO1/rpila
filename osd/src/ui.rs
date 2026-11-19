@@ -1,4 +1,4 @@
-//! The popup: an icon (or the level's name, without an icon font), a square
+//! The popup: an icon (built in, `glyphs.rs`), a square
 //! level bar and the percentage; or for a media key, its icon and the
 //! track's title (shortened to fit, `fit`). At the bottom of the monitor, as a layer
 //! surface (an Overlay anchored to the bottom edge, which the compositor
@@ -22,8 +22,8 @@ use iced_layershell::{
 };
 
 use crate::{
-    glyphs::{self, IconFont},
-    level::{Kind, Level},
+    glyphs,
+    level::Level,
     media::Media,
     pila_ipc,
     style::{self, Style},
@@ -41,6 +41,11 @@ const HEIGHT: u32 = 52;
 /// exclusive zones).
 const MARGIN: i32 = 96;
 const ICON_SIZE: f32 = 22.0;
+
+/// An icon in its place on the line: a little air after it.
+fn icon_box<'a>(icon: iced::widget::Svg<'a>) -> Element<'a, Message> {
+    container(icon).width(ICON_SIZE + 6.0).into()
+}
 /// How much of a title fits beside the icon, in narrow characters (a wide
 /// one, CJK's, counts two): 14 px text in what's left of `WIDTH`.
 const TITLE_FITS: usize = 34;
@@ -54,7 +59,6 @@ pub enum Message {
     Show(Popup),
     /// The time to hide after the popup numbered `.0` is up.
     Expired(u64),
-    Fonts(Option<IconFont>),
     Closed(window::Id),
     /// Pila's colors, new or changed.
     Style(Style),
@@ -65,7 +69,6 @@ struct Osd {
     popup: Popup,
     /// Counts the popups shown, so that only the last one's time hides it.
     shown: u64,
-    icons: Option<IconFont>,
     style: Style,
 }
 
@@ -77,7 +80,6 @@ pub fn run(listener: UnixListener, first: Popup) -> ExitCode {
             window: None,
             popup: first.clone(),
             shown: 0,
-            icons: None,
             style: Style::default(),
         };
         let show = osd.show(first.clone());
@@ -85,9 +87,8 @@ pub fn run(listener: UnixListener, first: Popup) -> ExitCode {
             Some(listener) => Task::run(popups(listener), Message::Show),
             None => Task::none(),
         };
-        let fonts = Task::perform(glyphs::found(), Message::Fonts);
         let styles = Task::run(pila_ipc::styles(CLIENT), Message::Style);
-        (osd, Task::batch([show, popups, fonts, styles]))
+        (osd, Task::batch([show, popups, styles]))
     };
     let result = iced_layershell::daemon(boot, NAMESPACE, Osd::update, Osd::view)
         .subscription(Osd::subscription)
@@ -149,10 +150,6 @@ impl Osd {
                 None => Task::none(),
             },
             Message::Expired(_) => Task::none(),
-            Message::Fonts(icons) => {
-                self.icons = icons;
-                Task::none()
-            }
             Message::Closed(id) => {
                 if self.window == Some(id) {
                     self.window = None;
@@ -221,18 +218,10 @@ impl Osd {
             .into()
     }
 
-    /// A media key's: its icon (or what it did, in a word) and the title.
+    /// A media key's: its icon and the title.
     fn media_line(&self, media: &Media) -> Element<'_, Message> {
-        let icon: Element<'_, Message> = match self.icons {
-            Some(icons) => text(glyphs::media_glyph(media.state, icons.material))
-                .font(icons.font)
-                .size(ICON_SIZE)
-                .width(ICON_SIZE + 6.0)
-                .into(),
-            None => text(media.state.word()).font(style::FONT_STRONG).into(),
-        };
         row![
-            icon,
+            icon_box(glyphs::media(media.state).view(ICON_SIZE, self.style.text)),
             text(fit(&media.title, TITLE_FITS))
                 .wrapping(Wrapping::None)
                 .width(Length::Fill),
@@ -242,23 +231,14 @@ impl Osd {
         .into()
     }
 
-    /// A level's: its icon (or name), the bar and the percentage.
+    /// A level's: its icon, the bar and the percentage.
     fn level_line(&self, level: Level) -> Element<'_, Message> {
         let st = self.style;
         let dim = level.muted;
-        let icon: Element<'_, Message> = match self.icons {
-            Some(icons) => text(glyphs::glyph(&level, icons.material))
-                .font(icons.font)
-                .size(ICON_SIZE)
-                .width(ICON_SIZE + 6.0)
-                .into(),
-            None => text(match level.kind {
-                Kind::Volume => "Volume",
-                Kind::Mic => "Microphone",
-                Kind::Brightness => "Brightness",
-            })
-            .into(),
-        };
+        // In the popup's text color (`view`), dimmed while muted.
+        let icon = icon_box(
+            glyphs::level(&level).view(ICON_SIZE, if dim { st.text_dim } else { st.text }),
+        );
         let fill = if dim { st.text_dim } else { st.accent };
         let bar = progress_bar(0.0..=100.0, level.percent.min(100) as f32)
             .length(Length::Fill)

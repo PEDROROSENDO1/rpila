@@ -14,14 +14,14 @@
 
 mod backlight;
 mod glyphs;
-#[path = "../../bar/src/icon_font.rs"]
-mod icon_font;
 mod level;
 mod media;
 #[path = "../../launcher/src/pila_ipc.rs"]
 mod pila_ipc;
 #[path = "../../launcher/src/style.rs"]
 mod style;
+#[path = "../../bar/src/symbols.rs"]
+mod symbols;
 mod ui;
 
 use std::{

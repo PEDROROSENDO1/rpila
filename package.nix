@@ -46,6 +46,7 @@ let
         ./launcher/src
         ./bar/Cargo.toml
         ./bar/src
+        ./bar/icons
         ./switcher/Cargo.toml
         ./switcher/src
         ./osd/Cargo.toml
@@ -171,7 +172,11 @@ rustPlatform.buildRustPackage {
   meta = {
     description = "A stacking Wayland compositor built on Smithay";
     homepage = "https://github.com/igalmarino/pila";
-    license = lib.licenses.gpl3Plus;
+    # Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
+    license = with lib.licenses; [
+      gpl3Plus
+      asl20
+    ];
     mainProgram = "pila";
     platforms = lib.platforms.linux;
   };

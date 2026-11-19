@@ -219,3 +219,5 @@ dev container in which Pila runs nested on your desktop).
 Pila is free software: you can redistribute it and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation, either version 3 of
 the License, or (at your option) any later version. See [LICENSE](https://github.com/igalmarino/pila/blob/main/LICENSE).
+The icons built into `pila-bar` and `pila-osd` are Material Design Icons, under the Apache
+License 2.0 ([`bar/icons`](bar/icons/README.md)).

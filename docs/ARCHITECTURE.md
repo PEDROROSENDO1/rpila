@@ -798,16 +798,11 @@ Key flows and invariants:
   (`battery::updates`, unless `--no-battery`) is a thread that reads `/sys/class/power_supply`
   every 5 s (batteries whose `scope` isn't `Device`, so no mouse's; together by what they hold,
   `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;
-  with no battery there's no thread. Its icon comes from an icon font the user has installed
-  (`glyphs.rs`), found once on a thread at startup with fontdb and ttf-parser, the versions
-  iced's text already brings (`glyphs::find` through `icon_font::find`, which pila-osd shares:
-  families by name, `Symbols Nerd Font` first, then
-  checked to have the glyphs drawn); one icon, never two: a Nerd Font's Material Design batteries
-  by tens (each also in a charging version), or else Font Awesome's by quarters (also at those
-  code points in Nerd Fonts), in the accent color while charging (`glyphs::battery`); a clock
-  before the clock, Material Design's or else Font Awesome's, if the font has one
-  (`IconFont::clock`); none found, the battery and the clock are text alone, never a missing
-  glyph's box. Square everywhere: each workspace is a block inset in a cell as high as the bar
+  with no battery there's no thread. Its icon and the clock's are built in (`symbols.rs`, which
+  pila-osd shares by `#[path]`: Material Design Icons' SVG files in `bar/icons/`, Apache
+  License 2.0, by `include_bytes!`, one `svg::Handle` each made once, drawn in the text's
+  color), so no icon font is looked for: the battery by tens, a charging version of each
+  (`glyphs::battery`), and `glyphs::CLOCK`. Square everywhere: each workspace is a block inset in a cell as high as the bar
   (`ui::inset`; the margin clicks too), the active one in the accent color and bold
   (`style::FONT_STRONG`: bold, not semibold, since iced's text takes another family for a
   weight the user's font lacks), every label as wide as in bold so none moves; the right side
@@ -872,7 +867,7 @@ Key flows and invariants:
   the level it left; `pila-osd play-pause|next|previous|stop` (`media::run`) calls that method
   of MPRIS's player interface on the session bus, of the player that's playing, else a paused
   one, else any (by bus name, `media::control`), then shows what it did (`media::State`: its
-  icon, `glyphs::media_glyph`) and the track's "title — artist" (`Media`, shortened to fit,
+  icon, `glyphs::media`) and the track's "title — artist" (`Media`, shortened to fit,
   `ui::fit`), or that there's no player. Players change after they answer: `media::settle`
   reads the status or track again until it changes (up to `SETTLE`, 400 ms), else play-pause
   shows the opposite of what was and a skip the player's name. What a run shows is a `Popup`
@@ -888,10 +883,9 @@ Key flows and invariants:
   above it and any exclusive zone; on the output Pila picks, the pointer's; no keyboard;
   `events_transparent`, an empty input region, so clicks go through; namespace `pila-osd`)
   and is shown until `ui::SHOWN` after the last one (a count of popups, so only the last one's
-  timer hides it): an icon from the icon font (`glyphs::glyph`: Material Design's by thirds,
-  else Font Awesome's; `icon_font.rs`, the bar's, by `#[path]`), else the level's name; a
+  timer hides it): a built-in icon (`glyphs::level`, by thirds; pila-bar's `symbols.rs`, by `#[path]`); a
   square level bar; the percentage, or "muted", dimmed. A media key's popup has its icon
-  (`glyphs::media_glyph`, else `State::word`) and the title, on one line. Colors from `[colors]`, as the bar's
+  (`glyphs::media`) and the title, on one line. Colors from `[colors]`, as the bar's
   (`pila_ipc::styles`). `scripts/apps osd` drives it on a headless Pila.
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler

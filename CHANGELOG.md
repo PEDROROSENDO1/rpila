@@ -42,14 +42,11 @@
   from the configuration, and change as soon as it's saved (they had the defaults whatever the
   configuration said). `pila msg colors` lists them, and `pila msg subscribe colors` follows them
   (a new request and event in the IPC).
-- **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an arrow up
-  while charging, amber at 15% or less while running down (a mouse's battery isn't counted);
-  `--no-battery` leaves it out. With an icon font installed (a Nerd Font, or Font Awesome), its
-  icon shows too, one icon: the level by tens with a Nerd Font, a bolt beside it while charging
-  (by quarters with Font Awesome, in the accent color while charging), and the clock a clock
-  icon before it. The
-  packages suggest one (`ttf-nerd-fonts-symbols` on Arch, Font Awesome on Debian, Ubuntu and
-  Fedora).
+- **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an icon
+  of the level by tens (a bolt inside while charging) and the percentage, amber at 15% or less
+  while running down (a mouse's battery isn't counted); `--no-battery` leaves it out. The clock
+  has a clock icon before it. The icons of `pila-bar` and `pila-osd` are built in (Material
+  Design Icons, Apache License 2.0): no icon font to install.
 - **The clock is the time alone, the date in its tooltip:** `pila-bar`'s clock shows `%H:%M` by
   default, and the date (`%A %e %B %Y`, in your language) shows below it while the pointer rests
   on it; `--date FORMAT` sets it (`''` for none), and `--clock '%a %e %b  %H:%M'` puts the date

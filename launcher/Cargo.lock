@@ -2138,13 +2138,11 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 name = "pila-bar"
 version = "0.7.1"
 dependencies = [
- "fontdb",
  "iced",
  "iced_layershell",
  "image",
  "libc",
  "serde_json",
- "ttf-parser",
  "wayland-client",
  "wayland-protocols",
  "zbus",
@@ -2166,11 +2164,9 @@ dependencies = [
 name = "pila-osd"
 version = "0.7.1"
 dependencies = [
- "fontdb",
  "iced",
  "iced_layershell",
  "serde_json",
- "ttf-parser",
  "zbus",
 ]
 

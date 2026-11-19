@@ -1,130 +1,50 @@
-//! Icons drawn as text, from an icon font the user has installed: a Nerd
-//! Font (any of them, `Symbols Nerd Font` included) or Font Awesome
-//! (`icon_font.rs`). Looked for once, on a thread at startup (`find`): without
-//! one the bar shows words and numbers alone, never a missing glyph's box.
-//!
-//! The battery is one icon. A Nerd Font has Material Design's batteries,
-//! by tens, each also with a bolt inside for charging; Font Awesome has
-//! batteries by quarters only (at the same code points in Nerd Fonts), so
-//! with it a charging battery is drawn in the accent color instead.
-
-use iced::Font;
+//! Which built-in icon (`symbols.rs`) the bar shows: the battery's level by
+//! tens, with a bolt inside while charging, and a clock.
 
 use crate::{
     battery::{Battery, State},
-    icon_font,
+    symbols::Symbol,
 };
 
-/// Font Awesome's battery levels, empty to full.
-const QUARTERS: [char; 5] = ['\u{f244}', '\u{f243}', '\u{f242}', '\u{f241}', '\u{f240}'];
-
-/// Material Design's batteries in Nerd Fonts, 0% to 100% by tens: as
-/// they are (`md-battery_outline`, `md-battery_10`.., `md-battery`), and
-/// charging (`md-battery_charging_outline`, `md-battery_charging_10`..).
-const TENS: [char; 11] = [
-    '\u{f008e}',
-    '\u{f007a}',
-    '\u{f007b}',
-    '\u{f007c}',
-    '\u{f007d}',
-    '\u{f007e}',
-    '\u{f007f}',
-    '\u{f0080}',
-    '\u{f0081}',
-    '\u{f0082}',
-    '\u{f0079}',
+/// The batteries, 0% to 100% by tens: as they are, and charging.
+const TENS: [Symbol; 11] = [
+    Symbol::Battery0,
+    Symbol::Battery10,
+    Symbol::Battery20,
+    Symbol::Battery30,
+    Symbol::Battery40,
+    Symbol::Battery50,
+    Symbol::Battery60,
+    Symbol::Battery70,
+    Symbol::Battery80,
+    Symbol::Battery90,
+    Symbol::Battery100,
 ];
-const TENS_CHARGING: [char; 11] = [
-    '\u{f089f}',
-    '\u{f089c}',
-    '\u{f0086}',
-    '\u{f0087}',
-    '\u{f0088}',
-    '\u{f089d}',
-    '\u{f0089}',
-    '\u{f089e}',
-    '\u{f008a}',
-    '\u{f008b}',
-    '\u{f0085}',
+const TENS_CHARGING: [Symbol; 11] = [
+    Symbol::Charging0,
+    Symbol::Charging10,
+    Symbol::Charging20,
+    Symbol::Charging30,
+    Symbol::Charging40,
+    Symbol::Charging50,
+    Symbol::Charging60,
+    Symbol::Charging70,
+    Symbol::Charging80,
+    Symbol::Charging90,
+    Symbol::Charging100,
 ];
 
-/// A clock: Material Design's outline (`md-clock_outline`, as the
-/// batteries' outlines) in a Nerd Font, else Font Awesome's.
-const CLOCK_MATERIAL: char = '\u{f0150}';
-const CLOCK_AWESOME: char = '\u{f017}';
+/// The clock's, before the time.
+pub const CLOCK: Symbol = Symbol::Clock;
 
-/// The icon font found, whether it has Material Design's batteries, and
-/// its clock, if it has one.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct IconFont {
-    pub font: Font,
-    pub tens: bool,
-    pub clock: Option<char>,
-}
-
-/// An icon to draw, and whether in the accent color.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Icon {
-    pub glyph: char,
-    pub accent: bool,
-}
-
-/// The battery's one icon: its level, with a bolt inside while charging; in
-/// a font with quarters only, its level, in the accent color while
-/// charging. Plugged in and not charging, its level alone.
-pub fn battery(battery: &Battery, tens: bool) -> Icon {
-    let charging = battery.state == State::Charging;
-    let percent = usize::from(battery.percent.min(100));
-    if tens {
-        let level = (percent + 5) / 10;
-        let glyph = match charging {
-            true => TENS_CHARGING[level],
-            false => TENS[level],
-        };
-        return Icon {
-            glyph,
-            accent: false,
-        };
+/// The battery's one icon: its level to the nearest ten, with a bolt
+/// inside while charging. Plugged in and not charging, its level alone.
+pub fn battery(battery: &Battery) -> Symbol {
+    let level = (usize::from(battery.percent.min(100)) + 5) / 10;
+    match battery.state {
+        State::Charging => TENS_CHARGING[level],
+        _ => TENS[level],
     }
-    let level = match percent {
-        88.. => 4,
-        63.. => 3,
-        38.. => 2,
-        13.. => 1,
-        _ => 0,
-    };
-    Icon {
-        glyph: QUARTERS[level],
-        accent: charging,
-    }
-}
-
-/// The icon font installed, if there's one with the batteries by quarters
-/// (and whether it has them by tens too, and a clock): `icon_font::find`.
-pub fn find() -> Option<IconFont> {
-    let (font, (tens, clock)) = icon_font::find(|face| {
-        let all = |glyphs: &[char]| glyphs.iter().all(|&c| face.glyph_index(c).is_some());
-        let clock = [CLOCK_MATERIAL, CLOCK_AWESOME]
-            .into_iter()
-            .find(|&c| face.glyph_index(c).is_some());
-        all(&QUARTERS).then(|| (all(&TENS) && all(&TENS_CHARGING), clock))
-    })?;
-    Some(IconFont { font, tens, clock })
-}
-
-/// The icon font, from a thread of its own: one answer, `None` if there's
-/// none (or the thread couldn't start).
-pub fn found() -> impl iced::futures::Future<Output = Option<IconFont>> {
-    let (sender, receiver) = iced::futures::channel::oneshot::channel();
-    let spawned = std::thread::Builder::new()
-        .name("pila-bar-fonts".into())
-        .spawn(move || {
-            let _ = sender.send(find());
-        });
-    if let Err(err) = spawned {
-        eprintln!("pila-bar: no icons: {err}");
-    }
-    async move { receiver.await.ok().flatten() }
 }
 
 #[cfg(test)]
@@ -133,31 +53,13 @@ mod tests {
 
     #[test]
     fn one_battery_icon() {
-        let at = |percent, state, tens| battery(&Battery { percent, state }, tens);
-        let plain = |glyph| Icon {
-            glyph,
-            accent: false,
-        };
-        // By tens, a bolt inside while charging.
-        assert_eq!(at(100, State::Discharging, true), plain(TENS[10]));
-        assert_eq!(at(64, State::Discharging, true), plain(TENS[6]));
-        assert_eq!(at(65, State::Discharging, true), plain(TENS[7]));
-        assert_eq!(at(4, State::Discharging, true), plain(TENS[0]));
-        assert_eq!(at(42, State::Charging, true), plain(TENS_CHARGING[4]));
-        assert_eq!(at(100, State::Plugged, true), plain(TENS[10]));
-        // By quarters, in the accent color while charging.
-        assert_eq!(at(88, State::Discharging, false), plain(QUARTERS[4]));
-        assert_eq!(at(87, State::Discharging, false), plain(QUARTERS[3]));
-        assert_eq!(at(50, State::Discharging, false), plain(QUARTERS[2]));
-        assert_eq!(at(20, State::Discharging, false), plain(QUARTERS[1]));
-        assert_eq!(at(5, State::Discharging, false), plain(QUARTERS[0]));
-        assert_eq!(
-            at(50, State::Charging, false),
-            Icon {
-                glyph: QUARTERS[2],
-                accent: true
-            }
-        );
-        assert_eq!(at(100, State::Plugged, false), plain(QUARTERS[4]));
+        let at = |percent, state| battery(&Battery { percent, state });
+        assert_eq!(at(100, State::Discharging), Symbol::Battery100);
+        assert_eq!(at(64, State::Discharging), Symbol::Battery60);
+        assert_eq!(at(65, State::Discharging), Symbol::Battery70);
+        assert_eq!(at(4, State::Discharging), Symbol::Battery0);
+        assert_eq!(at(42, State::Charging), Symbol::Charging40);
+        assert_eq!(at(100, State::Charging), Symbol::Charging100);
+        assert_eq!(at(100, State::Plugged), Symbol::Battery100);
     }
 }

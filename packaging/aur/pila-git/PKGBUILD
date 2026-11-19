@@ -9,7 +9,8 @@ pkgrel=1
 pkgdesc='A stacking Wayland compositor built on Smithay'
 arch=(x86_64 aarch64)
 url='https://github.com/igalmarino/pila'
-license=(GPL-3.0-or-later)
+# Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
+license=(GPL-3.0-or-later Apache-2.0)
 # The libraries Pila links (readelf -d), EGL (loaded at runtime through
 # libglvnd) and bash for pila-session and pila-report. Xwayland, which Pila
 # starts for X11 apps, is optional: without it, there are none.
@@ -35,7 +36,6 @@ optdepends=(
     'wl-clipboard: Mod+Shift+S, a region of the screen to the clipboard (wl-copy)'
     'swaylock: locking the session'
     'xdg-utils: opening links and files from programs such as kitty (xdg-open)'
-    'ttf-nerd-fonts-symbols: icons in pila-bar and pila-osd (or otf-font-awesome, or any Nerd Font)'
     'wireplumber: the volume and mute keys (wpctl)'
 )
 provides=(pila)

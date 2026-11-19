@@ -7,12 +7,12 @@ mod battery;
 mod clock;
 mod desktop;
 mod glyphs;
-mod icon_font;
 mod outputs;
 #[path = "../../launcher/src/pila_ipc.rs"]
 mod pila_ipc;
 #[path = "../../launcher/src/style.rs"]
 mod style;
+mod symbols;
 mod tray;
 mod ui;
 

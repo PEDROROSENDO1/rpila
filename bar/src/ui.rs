@@ -75,8 +75,6 @@ pub enum Message {
     /// item's tooltip (the hover it was asked for).
     TooltipRoom(u64, f32),
     Battery(Battery),
-    /// The icon font installed, if any.
-    IconFont(Option<glyphs::IconFont>),
     /// Pila's colors, new or changed.
     Style(Style),
     Tray(tray::Update),
@@ -107,8 +105,6 @@ struct Bar {
     tooltip: Option<Tooltip>,
     /// None with no battery, or `--no-battery`.
     battery: Option<Battery>,
-    /// An icon font (`glyphs.rs`): icons where there'd be words.
-    icon_font: Option<glyphs::IconFont>,
     /// A touchpad's scroll not yet a workspace's worth.
     scrolled: f32,
     /// Along the bottom edge: the line facing the windows goes on top.
@@ -187,13 +183,13 @@ fn module_padding(height: u32) -> f32 {
     scaled(12.0, height)
 }
 
-/// Between an icon of the icon font and its text.
+/// Between a built-in icon and its text.
 fn icon_gap(height: u32) -> f32 {
     scaled(6.0, height)
 }
 
-/// An icon of the icon font: a little bigger than the text, whose digits
-/// fill less of their line than a glyph of the icon font does.
+/// A built-in icon (`symbols.rs`): a little bigger than the text, whose
+/// digits fill less of their line than the icon does its square.
 fn glyph_size(height: u32) -> f32 {
     (text_size(height) * 1.15).round()
 }
@@ -251,7 +247,6 @@ pub fn run(args: Args) -> ExitCode {
             hovered: None,
             tooltip: None,
             battery: None,
-            icon_font: None,
             scrolled: 0.0,
             bottom,
             height,
@@ -280,9 +275,6 @@ pub fn run(args: Args) -> ExitCode {
         }
         if show_battery {
             tasks.push(Task::run(battery::updates(), Message::Battery));
-        }
-        if show_battery || !format.is_empty() {
-            tasks.push(Task::perform(glyphs::found(), Message::IconFont));
         }
         (bar, Task::batch(tasks))
     };
@@ -348,7 +340,6 @@ impl Bar {
                 }
             }
             Message::Battery(battery) => self.battery = Some(battery),
-            Message::IconFont(font) => self.icon_font = font,
             Message::Style(style) => self.style = style,
             Message::Tray(tray::Update::Tray(tray)) => self.tray = Some(tray),
             Message::Tray(tray::Update::Items(items)) => {
@@ -659,13 +650,7 @@ impl Bar {
         let height = self.height;
         let padding = module_padding(height);
         let gap = icon_gap(height);
-        // An icon of the icon font, at its size, on the text's line.
-        let glyph = |icons: glyphs::IconFont, glyph: char| {
-            text(glyph.to_string())
-                .font(icons.font)
-                .size(glyph_size(height))
-                .line_height(LINE)
-        };
+        let symbol_size = glyph_size(height);
         // As wide as the time can be: the time changing doesn't move it.
         let time = steady(
             text(&self.clock)
@@ -673,17 +658,13 @@ impl Bar {
                 .color(st.text_bright),
             text(clock_placeholder(&self.clock)).font(style::FONT_STRONG),
         );
-        // A clock before it, from the icon font, if it has one.
-        let clock_icon = self
-            .icon_font
-            .and_then(|icons| Some(glyph(icons, icons.clock?).color(st.text)));
+        // A clock before it.
         let clock = container(
-            mouse_area(match clock_icon {
-                Some(icon) => {
-                    Element::from(row![icon, time].spacing(gap).align_y(Alignment::Center))
-                }
-                None => time,
-            })
+            mouse_area(
+                row![glyphs::CLOCK.view(symbol_size, st.text), time]
+                    .spacing(gap)
+                    .align_y(Alignment::Center),
+            )
             .on_enter(Message::Hover(Hovered::Clock, true))
             .on_exit(Message::Hover(Hovered::Clock, false)),
         )
@@ -695,32 +676,16 @@ impl Bar {
         let battery = self.battery.map(|battery| {
             let low = battery.low();
             let color = if low { st.text_bright } else { st.text };
-            // With an icon font, its icon and the percentage; else the
-            // percentage, with an arrow up while charging.
-            let shown: Element<'_, Message> = match self.icon_font {
-                Some(icons) => row![
-                    {
-                        let icon = glyphs::battery(&battery, icons.tens);
-                        let icon_color = if icon.accent && !low {
-                            st.accent
-                        } else {
-                            color
-                        };
-                        glyph(icons, icon.glyph).color(icon_color)
-                    },
-                    text(format!("{}%", battery.percent))
-                        .line_height(LINE)
-                        .color(color),
-                ]
-                .spacing(gap)
-                .align_y(Alignment::Center)
-                .into(),
-                None => text(battery.text())
+            // Its icon and the percentage.
+            let shown = row![
+                glyphs::battery(&battery).view(symbol_size, color),
+                text(format!("{}%", battery.percent))
                     .wrapping(text::Wrapping::None)
                     .line_height(LINE)
-                    .color(color)
-                    .into(),
-            };
+                    .color(color),
+            ]
+            .spacing(gap)
+            .align_y(Alignment::Center);
             container(shown)
                 .padding([0.0, padding])
                 .height(Length::Fill)

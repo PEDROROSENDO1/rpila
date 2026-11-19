@@ -88,18 +88,6 @@ impl State {
     fn named(name: &str) -> Option<State> {
         STATES.iter().find(|(_, n)| *n == name).map(|(s, _)| *s)
     }
-
-    /// The word for it, without an icon font.
-    pub fn word(self) -> &'static str {
-        match self {
-            State::Playing => "Playing",
-            State::Paused => "Paused",
-            State::Stopped => "Stopped",
-            State::Next => "Next",
-            State::Previous => "Previous",
-            State::NoPlayer => "Media",
-        }
-    }
 }
 
 /// A media key's popup: what it did and to what.
