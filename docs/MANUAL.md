@@ -552,7 +552,8 @@ while charging. The clock gets a clock icon before it from the same font. Withou
 numbers alone. The tray shows the icons apps put there (fcitx5,
 network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
 does what the app does on a click, the middle button its second action, the wheel what it does
-with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it).
+with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it);
+resting the pointer on an icon shows its tooltip.
 `--no-tray` leaves it out; with no D-Bus session bus there's no tray. Apps that only have the old
 X11 tray (XEmbed) don't show there. Its layer surfaces' namespace is `pila-bar`, for a
 `[[layer-rule]]`. It has no network or volume of its own (the apps' icons in the tray do): for

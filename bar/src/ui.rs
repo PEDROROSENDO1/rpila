@@ -45,7 +45,7 @@ use crate::{
 
 /// The layer surfaces' namespace, for `[[layer-rule]]`s.
 pub const NAMESPACE: &str = "pila-bar";
-/// The clock's tooltip's.
+/// The tooltips' (the clock's and the tray items').
 pub const TOOLTIP_NAMESPACE: &str = "pila-bar-tooltip";
 
 /// The line along the edge that faces the windows.
@@ -66,11 +66,14 @@ pub enum Message {
     Clock(String),
     /// The clock's tooltip's text.
     Date(String),
-    /// The pointer entered (true) or left the clock.
-    ClockHover(bool),
-    /// The pointer has been on the clock long enough for its tooltip (the
-    /// hover it was asked for).
+    /// The pointer entered (true) or left the clock or a tray item.
+    Hover(Hovered, bool),
+    /// The pointer has been on it long enough for its tooltip (the hover
+    /// it was asked for).
     TooltipDue(u64),
+    /// The width of the bar the pointer is on, asked for to place a tray
+    /// item's tooltip (the hover it was asked for).
+    TooltipRoom(u64, f32),
     Battery(Battery),
     /// The icon font installed, if any.
     IconFont(Option<glyphs::IconFont>),
@@ -96,12 +99,12 @@ struct Bar {
     clock: String,
     /// The clock's tooltip; empty for none.
     date: String,
-    /// The pointer's latest entering or leaving the clock, counted: a
-    /// tooltip asked for during an older one is stale.
+    /// The pointer's latest entering or leaving what has a tooltip,
+    /// counted: a tooltip asked for during an older one is stale.
     hover: u64,
-    hovered: bool,
-    /// The tooltip's surface, while it shows.
-    tooltip: Option<window::Id>,
+    hovered: Option<Hovered>,
+    /// The tooltip, while it shows.
+    tooltip: Option<Tooltip>,
     /// None with no battery, or `--no-battery`.
     battery: Option<Battery>,
     /// An icon font (`glyphs.rs`): icons where there'd be words.
@@ -120,6 +123,29 @@ struct Bar {
     /// Where the pointer was last on the bar: a menu opens there.
     pointer: Option<(window::Id, f32)>,
     menu: Option<OpenMenu>,
+}
+
+/// What the pointer rests on that has a tooltip.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Hovered {
+    Clock,
+    /// A tray item, by its key.
+    Tray(String),
+}
+
+/// A tooltip that shows: its surface and its lines, as when it opened (its
+/// size is theirs).
+struct Tooltip {
+    window: window::Id,
+    lines: Vec<String>,
+}
+
+/// Where a tooltip goes along the bar: against the output's right edge
+/// (the clock's, the bar's last block), or this far from its left edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Place {
+    Right,
+    Left(i32),
 }
 
 /// A tray item's menu, open in a popup of the bar's.
@@ -222,7 +248,7 @@ pub fn run(args: Args) -> ExitCode {
             clock: String::new(),
             date: String::new(),
             hover: 0,
-            hovered: false,
+            hovered: None,
             tooltip: None,
             battery: None,
             icon_font: None,
@@ -310,31 +336,37 @@ impl Bar {
             }
             Message::Clock(clock) => self.clock = clock,
             Message::Date(date) => self.date = date,
-            Message::ClockHover(entered) => {
-                self.hover += 1;
-                self.hovered = entered;
-                if entered && self.menu.is_none() && !self.date.is_empty() {
-                    let hover = self.hover;
-                    return Task::perform(after(TOOLTIP_DELAY), move |()| {
-                        Message::TooltipDue(hover)
-                    });
-                }
-                return self.close_tooltip();
-            }
-            Message::TooltipDue(hover) => {
-                if hover == self.hover && self.hovered && self.menu.is_none() {
-                    return self.open_tooltip();
+            Message::Hover(target, entered) => return self.hover(target, entered),
+            Message::TooltipDue(hover) => return self.tooltip_due(hover),
+            Message::TooltipRoom(hover, width) => {
+                if hover == self.hover && self.menu.is_none() {
+                    let lines = self.hovered.as_ref().map(|h| self.tooltip_lines(h));
+                    let lines = lines.unwrap_or_default();
+                    let (w, _) = tooltip_size(&lines, self.height);
+                    let left = tray_tooltip_left(self.pointer_x(), w as f32, width);
+                    return self.open_tooltip(lines, Place::Left(left));
                 }
             }
             Message::Battery(battery) => self.battery = Some(battery),
             Message::IconFont(font) => self.icon_font = font,
             Message::Style(style) => self.style = style,
             Message::Tray(tray::Update::Tray(tray)) => self.tray = Some(tray),
-            Message::Tray(tray::Update::Items(items)) => self.tray_items = items,
+            Message::Tray(tray::Update::Items(items)) => {
+                self.tray_items = items;
+                // An item gone under the pointer takes its tooltip along: its
+                // block, gone, tells no leaving.
+                if let Some(Hovered::Tray(key)) = &self.hovered {
+                    if !self.tray_items.iter().any(|i| &i.key == key) {
+                        self.hover += 1;
+                        self.hovered = None;
+                        return self.close_tooltip();
+                    }
+                }
+            }
             Message::TrayClick(key, click) => return self.tray_click(key, click),
             Message::Pointer(window, x) => {
                 let popup = self.menu.as_ref().is_some_and(|m| m.window == window)
-                    || self.tooltip == Some(window);
+                    || self.tooltip.as_ref().is_some_and(|t| t.window == window);
                 if !popup {
                     self.pointer = Some((window, x));
                 }
@@ -343,7 +375,7 @@ impl Bar {
                 if self.menu.as_ref().is_some_and(|m| m.window == window) {
                     self.menu = None;
                 }
-                if self.tooltip == Some(window) {
+                if self.tooltip.as_ref().is_some_and(|t| t.window == window) {
                     self.tooltip = None;
                 }
             }
@@ -376,16 +408,73 @@ impl Bar {
         Task::none()
     }
 
-    /// A click on a tray item: its menu, if it has one read and the click
-    /// asks for it, else the item's own. A click while a menu is open
-    /// closes it (a second click on the same item does only that).
-    /// The clock's tooltip: a layer surface of its own below the bar (the
-    /// compositor keeps it clear of the bar's exclusive zone), on the
-    /// output the pointer is on, against its right edge, under the clock,
-    /// which is the bar's last block; it takes no input. Not a popup:
+    /// The pointer entered or left the clock or a tray item: a tooltip
+    /// asked for, after `TOOLTIP_DELAY`, if it has one, and any showing
+    /// closed. Leaving what isn't hovered is late news: the next one's
+    /// entering came first.
+    fn hover(&mut self, target: Hovered, entered: bool) -> Task<Message> {
+        if !entered && self.hovered.as_ref() != Some(&target) {
+            return Task::none();
+        }
+        self.hover += 1;
+        let closed = self.close_tooltip();
+        let has_one = !self.tooltip_lines(&target).is_empty();
+        self.hovered = entered.then_some(target);
+        if !(entered && has_one && self.menu.is_none()) {
+            return closed;
+        }
+        let hover = self.hover;
+        let due = Task::perform(after(TOOLTIP_DELAY), move |()| Message::TooltipDue(hover));
+        Task::batch([closed, due])
+    }
+
+    /// The tooltip asked for at the `hover`th hover, unless that's stale:
+    /// the clock's against the right edge; a tray item's under the pointer,
+    /// once the bar's width is known (`TooltipRoom`).
+    fn tooltip_due(&mut self, hover: u64) -> Task<Message> {
+        if hover != self.hover || self.menu.is_some() {
+            return Task::none();
+        }
+        match &self.hovered {
+            Some(Hovered::Clock) => {
+                let lines = self.tooltip_lines(&Hovered::Clock);
+                self.open_tooltip(lines, Place::Right)
+            }
+            Some(Hovered::Tray(_)) => match self.pointer {
+                Some((bar, _)) => {
+                    window::size(bar).map(move |size| Message::TooltipRoom(hover, size.width))
+                }
+                None => Task::none(),
+            },
+            None => Task::none(),
+        }
+    }
+
+    /// What `target`'s tooltip says, a line each; none for no tooltip.
+    fn tooltip_lines(&self, target: &Hovered) -> Vec<String> {
+        match target {
+            Hovered::Clock if self.date.is_empty() => Vec::new(),
+            Hovered::Clock => vec![self.date.clone()],
+            Hovered::Tray(key) => self
+                .tray_items
+                .iter()
+                .find(|i| &i.key == key)
+                .map(|i| i.tooltip.clone())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// The pointer's x on the bar it was last on.
+    fn pointer_x(&self) -> f32 {
+        self.pointer.map_or(0.0, |(_, x)| x)
+    }
+
+    /// A tooltip: a layer surface of its own below the bar (the compositor
+    /// keeps it clear of the bar's exclusive zone), on the output the
+    /// pointer is on, at `place`; it takes no input. Not a popup:
     /// iced_layershell asks a grab for every popup it makes, and a tooltip
     /// mustn't hold the pointer (or, denied the grab, be dismissed).
-    fn open_tooltip(&mut self) -> Task<Message> {
+    fn open_tooltip(&mut self, lines: Vec<String>, place: Place) -> Task<Message> {
         let Some((bar, _)) = self.pointer else {
             return Task::none();
         };
@@ -398,35 +487,42 @@ impl Bar {
             return Task::none();
         };
         let closed = self.close_tooltip();
-        let (width, height) = tooltip_size(&self.date, self.height);
+        let (width, height) = tooltip_size(&lines, self.height);
         let edge = if self.bottom {
             Anchor::Bottom
         } else {
             Anchor::Top
         };
+        let (side, margin) = match place {
+            Place::Right => (Anchor::Right, None),
+            Place::Left(left) => (Anchor::Left, Some((0, 0, 0, left))),
+        };
         let (window, open) = Message::layershell_open(NewLayerShellSettings {
             size: Some((width, height)),
             layer: Layer::Top,
-            anchor: edge | Anchor::Right,
+            anchor: edge | side,
             // Placed clear of the bar's exclusive zone.
             exclusive_zone: Some(0),
-            margin: None,
+            margin,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option: OutputOption::Output(output),
             events_transparent: true,
             namespace: Some(TOOLTIP_NAMESPACE.to_string()),
         });
-        self.tooltip = Some(window);
+        self.tooltip = Some(Tooltip { window, lines });
         Task::batch([closed, open])
     }
 
     fn close_tooltip(&mut self) -> Task<Message> {
         match self.tooltip.take() {
-            Some(window) => Task::done(Message::RemoveWindow(window)),
+            Some(tooltip) => Task::done(Message::RemoveWindow(tooltip.window)),
             None => Task::none(),
         }
     }
 
+    /// A click on a tray item: its menu, if it has one read and the click
+    /// asks for it, else the item's own. A click while a menu is open
+    /// closes it (a second click on the same item does only that).
     fn tray_click(&mut self, key: String, click: Click) -> Task<Message> {
         let was_open = self.menu.as_ref().map(|m| m.key.clone());
         let closed = Task::batch([self.close_menu(), self.close_tooltip()]);
@@ -544,8 +640,8 @@ impl Bar {
         if let Some((open, level)) = self.menu_level().filter(|(m, _)| m.window == window) {
             return menu_view(level, !open.submenus.is_empty(), self.style);
         }
-        if self.tooltip == Some(window) {
-            return tooltip_view(&self.date, self.style);
+        if let Some(tooltip) = self.tooltip.as_ref().filter(|t| t.window == window) {
+            return tooltip_view(&tooltip.lines, self.style);
         }
         let st = self.style;
         let workspaces = Row::with_children(
@@ -588,8 +684,8 @@ impl Bar {
                 }
                 None => time,
             })
-            .on_enter(Message::ClockHover(true))
-            .on_exit(Message::ClockHover(false)),
+            .on_enter(Message::Hover(Hovered::Clock, true))
+            .on_exit(Message::Hover(Hovered::Clock, false)),
         )
         .padding([0.0, padding])
         .height(Length::Fill)
@@ -795,7 +891,10 @@ fn tray_item<'a>(
         false => Click::Activate,
     };
     let scroll_key = key.clone();
+    let hovered = Hovered::Tray(key.clone());
     mouse_area(block)
+        .on_enter(Message::Hover(hovered.clone(), true))
+        .on_exit(Message::Hover(hovered, false))
         .on_press(Message::TrayClick(key.clone(), left))
         .on_middle_press(Message::TrayClick(key.clone(), Click::SecondaryActivate))
         .on_right_press(Message::TrayClick(key, Click::ContextMenu))
@@ -810,7 +909,8 @@ fn tray_item<'a>(
         .into()
 }
 
-/// How long the pointer stays on the clock before its tooltip shows.
+/// How long the pointer rests on the clock or a tray item before its
+/// tooltip shows.
 const TOOLTIP_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// Done after `delay`, from a thread of its own: no async runtime's timer.
@@ -830,39 +930,60 @@ fn after(delay: std::time::Duration) -> impl iced::futures::Future<Output = ()> 
     }
 }
 
-/// A tooltip's size for `text` in a bar `height` high: a row as high as
-/// the bar, about as wide as the text.
-fn tooltip_size(text: &str, height: u32) -> (u32, u32) {
-    // At least as wide as a character, for the text's size (proportional
-    // fonts' widest run near 0.7 of it): a little room to spare, the text
-    // centered, rather than a date cut short.
-    let char_width = text_size(height) * 0.7;
-    let width = text.chars().count() as f32 * char_width + 2.0 * 12.0 + 2.0 * MENU_BORDER;
-    (width.round() as u32, height + 2 * MENU_BORDER as u32)
+/// A tooltip line's height, under the first: the text's, and some.
+fn tooltip_line(height: u32) -> f32 {
+    (text_size(height) * 1.3).round()
 }
 
-/// The clock's tooltip: its text in a square box, as a menu is.
-fn tooltip_view<'a>(date: &str, st: Style) -> Element<'a, Message> {
-    container(
-        text(date.to_string())
+/// A tooltip's size for `lines` in a bar `height` high: as high as the bar
+/// for one line, a line more for each after it, about as wide as the
+/// longest.
+fn tooltip_size(lines: &[String], height: u32) -> (u32, u32) {
+    // At least as wide as a character, for the text's size (proportional
+    // fonts' widest run near 0.7 of it): a little room to spare, the text
+    // centered, rather than a line cut short.
+    let char_width = text_size(height) * 0.7;
+    let longest = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    let width = longest as f32 * char_width + 2.0 * 12.0 + 2.0 * MENU_BORDER;
+    let more = lines.len().saturating_sub(1) as f32 * tooltip_line(height);
+    let height = height as f32 + more + 2.0 * MENU_BORDER;
+    (width.round() as u32, height.round() as u32)
+}
+
+/// How far from the bar's left edge a tray item's tooltip `width` wide
+/// goes: centered under the pointer at `x`, but inside a bar `bar` wide.
+fn tray_tooltip_left(x: f32, width: f32, bar: f32) -> i32 {
+    (x - width / 2.0).min(bar - width).max(0.0).round() as i32
+}
+
+/// A tooltip: its lines in a square box, as a menu is; those after the
+/// first, a description, dimmer.
+fn tooltip_view<'a>(lines: &[String], st: Style) -> Element<'a, Message> {
+    let line_height = text::LineHeight::Relative(1.3);
+    let column = column(lines.iter().enumerate().map(|(i, line)| {
+        text(line.clone())
             .wrapping(text::Wrapping::None)
-            .color(st.text),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .padding([0, 12])
-    .align_x(Alignment::Center)
-    .align_y(Alignment::Center)
-    .style(move |_| container::Style {
-        background: Some(st.surface_dim.into()),
-        border: Border {
-            color: st.hover,
-            width: MENU_BORDER,
-            radius: 0.0.into(),
-        },
-        ..Default::default()
-    })
-    .into()
+            .line_height(line_height)
+            .color(if i == 0 { st.text } else { st.text_dim })
+            .into()
+    }))
+    .align_x(Alignment::Center);
+    container(column)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding([0, 12])
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .style(move |_| container::Style {
+            background: Some(st.surface_dim.into()),
+            border: Border {
+                color: st.hover,
+                width: MENU_BORDER,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
 }
 
 /// A popup's size for a menu with these entries: the tallest of its
@@ -1012,6 +1133,28 @@ mod tests {
         assert_eq!(wheel_steps(0.0, Lines { x: 0.0, y: 0.0 }), (0, 0.0));
         // A notch drops what a touchpad left.
         assert_eq!(wheel_steps(30.0, Lines { x: 0.0, y: -1.0 }), (1, 0.0));
+    }
+
+    #[test]
+    fn a_tooltip_grows_a_line_at_a_time() {
+        let one = tooltip_size(&["Wired".into()], 28);
+        let three = tooltip_size(&["Wired".into(), "Connected".into(), "1 Gb/s".into()], 28);
+        assert_eq!(one.1, 28 + 2);
+        assert_eq!(three.1, one.1 + 2 * tooltip_line(28) as u32);
+        // As wide as the longest line.
+        assert!(three.0 > one.0);
+        assert_eq!(three.0, tooltip_size(&["Connected".into()], 28).0);
+    }
+
+    #[test]
+    fn a_tray_tooltip_stays_on_the_bar() {
+        // Centered under the pointer.
+        assert_eq!(tray_tooltip_left(500.0, 100.0, 1920.0), 450);
+        // Against the right edge, or the left one.
+        assert_eq!(tray_tooltip_left(1900.0, 100.0, 1920.0), 1820);
+        assert_eq!(tray_tooltip_left(20.0, 100.0, 1920.0), 0);
+        // Wider than the bar: from its left edge.
+        assert_eq!(tray_tooltip_left(100.0, 3000.0, 1920.0), 0);
     }
 
     #[test]

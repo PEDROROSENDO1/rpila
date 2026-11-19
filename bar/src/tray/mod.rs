@@ -547,7 +547,22 @@ fn props(all: &HashMap<String, OwnedValue>, places: &icons::Places, size: u32) -
         attention_icon: icon("AttentionIconName", "AttentionIconPixmap"),
         menu,
         item_is_menu: matches!(all.get("ItemIsMenu").map(|v| &**v), Some(Value::Bool(true))),
+        tooltip: tooltip(all),
     }
+}
+
+/// An item's tooltip's lines: its `ToolTip` (icon name, pixmaps, title,
+/// description), else its `Title` (`model::tooltip_lines`).
+fn tooltip(all: &HashMap<String, OwnedValue>) -> Vec<String> {
+    let (title, description) = match all.get("ToolTip").map(|v| &**v) {
+        Some(Value::Structure(tip)) => {
+            let field = |i: usize| tip.fields().get(i).and_then(string).unwrap_or_default();
+            (field(2), field(3))
+        }
+        _ => Default::default(),
+    };
+    let item_title = all.get("Title").and_then(|v| string(v)).unwrap_or_default();
+    model::tooltip_lines(&title, &description, &item_title)
 }
 
 fn string(value: &Value) -> Option<String> {

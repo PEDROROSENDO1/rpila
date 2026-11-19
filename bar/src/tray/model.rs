@@ -35,6 +35,8 @@ pub struct Props<I> {
     pub menu: Option<String>,
     /// It only has a menu: a click shows it rather than activating.
     pub item_is_menu: bool,
+    /// Its tooltip's lines (`tooltip_lines`); none for no tooltip.
+    pub tooltip: Vec<String>,
 }
 
 /// An item's menu as last read.
@@ -51,6 +53,7 @@ pub struct Item<I> {
     pub needs_attention: bool,
     pub menu: Option<String>,
     pub item_is_menu: bool,
+    pub tooltip: Vec<String>,
     /// Its menu's entries, once read.
     pub layout: Option<Menu>,
 }
@@ -138,10 +141,119 @@ impl<I: Clone> Model<I> {
                     needs_attention,
                     menu: p.menu.clone(),
                     item_is_menu: p.item_is_menu,
+                    tooltip: p.tooltip.clone(),
                     layout: e.layout.clone().filter(|_| p.menu.is_some()),
                 }
             })
             .collect()
+    }
+}
+
+/// The most lines a tooltip shows, and characters a line.
+const TOOLTIP_LINES: usize = 4;
+const TOOLTIP_LINE_CHARS: usize = 80;
+
+/// An item's tooltip: its `ToolTip`'s title, then its description's lines,
+/// as plain text (`plain`); with neither, its `Title`; nothing for none. At
+/// most `TOOLTIP_LINES` lines of `TOOLTIP_LINE_CHARS` characters, an
+/// ellipsis where one is cut.
+pub fn tooltip_lines(title: &str, description: &str, item_title: &str) -> Vec<String> {
+    let text = format!("{}\n{}", plain(title), plain(description));
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.is_empty() {
+        lines = Some(item_title.trim())
+            .filter(|t| !t.is_empty())
+            .map(String::from)
+            .into_iter()
+            .collect();
+    }
+    lines.truncate(TOOLTIP_LINES);
+    for line in &mut lines {
+        if line.chars().count() > TOOLTIP_LINE_CHARS {
+            *line = line
+                .chars()
+                .take(TOOLTIP_LINE_CHARS - 1)
+                .collect::<String>()
+                + "\u{2026}";
+        }
+    }
+    lines
+}
+
+/// The text of a tooltip's markup (the subset of HTML the protocol allows):
+/// a line break for `<br>`, no other tags, entities decoded.
+pub fn plain(markup: &str) -> String {
+    let mut text = String::new();
+    let mut rest = markup;
+    while let Some(open) = rest.find('<') {
+        text.push_str(&rest[..open]);
+        // A tag starts with its name or a `/`; any other `<` is text.
+        let starts_tag = rest[open + 1..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '/');
+        let close = rest[open..].find('>').filter(|_| starts_tag);
+        let Some(close) = close else {
+            text.push('<');
+            rest = &rest[open + 1..];
+            continue;
+        };
+        let tag = rest[open + 1..open + close].trim().to_ascii_lowercase();
+        let name = tag.trim_start_matches('/').split([' ', '/']).next();
+        if matches!(name, Some("br" | "p" | "div" | "li")) {
+            text.push('\n');
+        }
+        rest = &rest[open + close + 1..];
+    }
+    text.push_str(rest);
+    decode_entities(&text)
+}
+
+fn decode_entities(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let after = &rest[amp + 1..];
+        let entity = after
+            .find(';')
+            .filter(|&end| end <= 10)
+            .and_then(|end| Some((entity(&after[..end])?, end)));
+        match entity {
+            Some((c, end)) => {
+                out.push(c);
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+fn entity(name: &str) -> Option<char> {
+    match name {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        "nbsp" => Some(' '),
+        _ => {
+            let number = name.strip_prefix('#')?;
+            let code = match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => number.parse().ok()?,
+            };
+            char::from_u32(code)
+        }
     }
 }
 
@@ -206,6 +318,7 @@ mod tests {
             attention_icon: None,
             menu: None,
             item_is_menu: false,
+            tooltip: Vec::new(),
         }
     }
 
@@ -289,5 +402,41 @@ mod tests {
         assert_eq!(pick_pixmap(&sizes, 16), Some(0));
         assert_eq!(pick_pixmap(&sizes, 100), Some(1), "none big enough");
         assert_eq!(pick_pixmap(&[], 24), None);
+    }
+
+    #[test]
+    fn a_tooltip_is_its_title_and_description_as_text() {
+        assert_eq!(
+            tooltip_lines(
+                "Wired",
+                "Connected to <b>home</b><br/>Speed:  1&nbsp;Gb/s &amp; up",
+                "nm-applet",
+            ),
+            ["Wired", "Connected to home", "Speed: 1 Gb/s & up"]
+        );
+        // A description alone, in paragraphs.
+        assert_eq!(
+            tooltip_lines("", "<p>One</p><p>Two &#8212; &#x41;</p>", "x"),
+            ["One", "Two \u{2014} A"]
+        );
+        // Neither: the item's title; nothing at all, no tooltip.
+        assert_eq!(tooltip_lines(" ", "<i></i>", "Steam"), ["Steam"]);
+        assert!(tooltip_lines("", "", "").is_empty());
+    }
+
+    #[test]
+    fn a_tooltip_is_kept_short() {
+        let long = "word ".repeat(40);
+        let lines = tooltip_lines("t", &format!("1<br>{long}<br>3<br>4<br>5"), "");
+        assert_eq!(lines, ["t", "1", &lines[2], "3"]);
+        assert_eq!(lines[2].chars().count(), TOOLTIP_LINE_CHARS);
+        assert!(lines[2].ends_with('\u{2026}'));
+    }
+
+    #[test]
+    fn markup_that_isnt_markup_stays_text() {
+        assert_eq!(plain("a < b & c > d"), "a < b & c > d");
+        assert_eq!(plain("x &bogus; y &amp"), "x &bogus; y &amp");
+        assert_eq!(plain("1 <2"), "1 <2");
     }
 }

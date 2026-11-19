@@ -77,7 +77,9 @@ removed takes its bar along with the process still running; `--bottom` puts it a
 bottom edge; `--height 40 --output HDMI-A-1` opens nothing until that output comes, then a bar
 40 high on it alone, again after it's removed and added back. Then, where fcitx5 and `busctl`
 are, the tray (`bar_tray`, a bar with `--no-battery --clock ''` so that the item is the last
-block): the bar owns `org.kde.StatusNotifierWatcher`, fcitx5's item registers with it, a right
+block): the bar owns `org.kde.StatusNotifierWatcher`, fcitx5's item registers with it, the
+pointer resting on it shows its tooltip below the bar, under the pointer (`tray-tooltip.png`),
+gone when it leaves, a right
 click on it opens its menu with a grab (`tray.png`), a click elsewhere closes it with no grab
 left, and the item leaves when fcitx5 quits. `bar.png` shows the bar. Run it after changing the bar, the layer shell or ext-workspace.
 

@@ -83,6 +83,16 @@ impl FakeItem {
     }
 
     #[zbus(property)]
+    fn tool_tip(&self) -> ToolTip {
+        (
+            String::new(),
+            Vec::new(),
+            "Fake app".into(),
+            "Running <b>well</b>".into(),
+        )
+    }
+
+    #[zbus(property)]
     fn status(&self) -> String {
         self.status.lock().unwrap().clone()
     }
@@ -100,6 +110,9 @@ impl FakeItem {
     #[zbus(signal)]
     async fn new_status(emitter: &SignalEmitter<'_>, status: &str) -> zbus::Result<()>;
 }
+
+/// A `ToolTip`: an icon's name, its pixmaps, a title and a description.
+type ToolTip = (String, Vec<(i32, i32, Vec<u8>)>, String, String);
 
 const MENU_PATH: &str = "/MenuBar";
 
@@ -233,6 +246,7 @@ fn items_come_change_take_clicks_and_go() {
     let items = wait_items(&updates, "the item shown", |items| items.len() == 1);
     assert_eq!(items[0].key, name);
     assert_eq!(items[0].title, "Fake");
+    assert_eq!(items[0].tooltip, ["Fake app", "Running well"]);
     assert!(
         matches!(items[0].icon, Some(Icon::Image(_))),
         "its pixmap: {:?}",
