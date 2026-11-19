@@ -41,6 +41,7 @@ pub mod ipc_client;
 pub mod keyboard_layout;
 pub mod layers;
 pub mod minimize;
+pub mod missing_program;
 pub mod output_management;
 pub mod output_power;
 pub mod pointer_constraints;

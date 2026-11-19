@@ -1224,7 +1224,14 @@ Key flows and invariants:
   bus alone, so a test instance leaves the login session's services alone. The export
   runs in the background (a stuck bus mustn't freeze Pila); the startup programs follow
   when it's done or after `EXPORT_TIMEOUT`. Nested, apps use the host's portals. Spawned
-  programs are kept in `Pila::children` and reaped on SIGCHLD (`reap_children`). Pila raises
+  programs are kept in `Pila::children` and reaped on SIGCHLD (`reap_children`), each of
+  `spawn`'s with its command: one that exits 127, the shell's "command not found", has the
+  programs its command line names (`missing_program::programs`: each command's first word, past
+  assignments and `exec`/`env`-like words, expanded words left out) looked up in the `PATH`
+  its programs get (`[environment]`'s, else Pila's), and each that isn't installed gets a
+  notification (`notify_missing_programs`), once a session (`Pila::missing_programs`): a key
+  bound to a missing program otherwise does nothing but write to the log. A program that exits
+  127 itself, with everything installed, names none. Pila raises
   its soft limit of open files to the hard one at startup (`state::raise_file_limit`: a
   descriptor or more per client, shm pool, dma-buf and fence), and `session_env`'s `pre_exec`
   gives what it starts the limit it was started with, since programs using `select()` break

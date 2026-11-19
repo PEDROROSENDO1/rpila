@@ -1202,3 +1202,64 @@ fn volume_brightness_and_media_keys_run_their_programs_and_pila_osd() {
     );
     let _ = std::fs::remove_dir_all(&bin);
 }
+
+/// A binding whose program isn't installed says so in a notification, once
+/// however often it's pressed; a program that exits as the shell does for one
+/// it can't find (127), with everything there, says nothing.
+#[test]
+fn a_binding_whose_program_isnt_installed_says_so_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let bin = std::env::temp_dir().join(format!("pila-missing-bin-{}", std::process::id()));
+    std::fs::create_dir_all(&bin).unwrap();
+    let notified = bin.join("notified");
+    for (name, body) in [
+        (
+            "notify-send",
+            format!("echo \"$*\" >> {}", notified.display()),
+        ),
+        ("exits-127", "exit 127".to_string()),
+    ] {
+        let script = bin.join(name);
+        std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let mut pila = TestPila::start_with(Options {
+        config: "[bindings]\n\
+                 \"Mod+F9\" = \"spawn surely-not-installed-xyz -q && true\"\n\
+                 \"Mod+F10\" = \"spawn exits-127\"\n"
+            .into(),
+        env: vec![("PATH".into(), path)],
+        ..Options::default()
+    });
+    let lines = || {
+        std::fs::read_to_string(&notified)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    pila.combo("Super+F9");
+    let started = std::time::Instant::now();
+    while lines().is_empty() {
+        assert!(started.elapsed() < common::TIMEOUT, "no notification");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let first = lines();
+    assert!(
+        first[0].contains("surely-not-installed-xyz isn't installed")
+            && first[0].contains("surely-not-installed-xyz -q && true"),
+        "{first:?}"
+    );
+    // Again, and the program that exits 127 itself: nothing more.
+    pila.combo("Super+F9");
+    pila.combo("Super+F10");
+    pila.wait("both reaped", |s| s["children"] == 0);
+    let notified_once = |_: &Value| lines().len() == 1;
+    pila.stays(
+        "one notification",
+        std::time::Duration::from_millis(300),
+        notified_once,
+    );
+    let _ = std::fs::remove_dir_all(&bin);
+}

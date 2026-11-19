@@ -117,8 +117,12 @@ pub struct Pila {
     /// The startup commands, held back until the session bus has pila's
     /// environment (`export_environment`).
     pub pending_startup: Vec<String>,
-    /// Programs pila started, reaped on SIGCHLD (`reap_children`).
-    pub children: Vec<std::process::Child>,
+    /// Programs pila started, reaped on SIGCHLD (`reap_children`), with
+    /// the shell command of those `spawn` started.
+    pub children: Vec<(std::process::Child, Option<String>)>,
+    /// Programs that commands needed and weren't installed, each told once
+    /// (`missing_program.rs`).
+    pub missing_programs: std::collections::HashSet<String>,
 
     /// Where a dragged window would snap to, shown above the windows
     /// (`snap.rs`), and the buffer it's drawn with.
@@ -548,6 +552,7 @@ impl Pila {
             xwayland: crate::xwayland::XwaylandState::new(xwayland_shell_state),
             pending_startup: Vec::new(),
             children: Vec::new(),
+            missing_programs: Default::default(),
             snap_preview: None,
             snap_preview_buffer: SolidColorBuffer::default(),
             config_path: None,
@@ -2130,7 +2135,11 @@ impl Pila {
             None => cmd.env_remove("PILA_OUTPUT"),
         };
         match cmd.spawn() {
-            Ok(child) => self.adopt_child(child),
+            Ok(child) => {
+                self.children.push((child, Some(command.to_string())));
+                // A SIGCHLD may have come before this one was listed.
+                self.reap_children();
+            }
             Err(err) => warn!(command, ?err, "failed to spawn"),
         }
     }
@@ -2138,16 +2147,31 @@ impl Pila {
     /// Keep a program pila started until it exits, so it can be reaped
     /// (`reap_children`) instead of lingering as a zombie.
     pub(crate) fn adopt_child(&mut self, child: std::process::Child) {
-        self.children.push(child);
+        self.children.push((child, None));
         // A SIGCHLD may have come before this one was listed.
         self.reap_children();
     }
 
     /// Reap the programs pila started that exited (on SIGCHLD, `main.rs`).
-    /// Only pila's own: Smithay waits for Xwayland itself.
+    /// Only pila's own: Smithay waits for Xwayland itself. A spawned command
+    /// the shell couldn't find a program of says which, once
+    /// (`notify_missing_programs`).
     pub fn reap_children(&mut self) {
+        let mut not_found = Vec::new();
         self.children
-            .retain_mut(|child| matches!(child.try_wait(), Ok(None)));
+            .retain_mut(|(child, command)| match child.try_wait() {
+                Ok(None) => true,
+                Ok(Some(status)) => {
+                    if status.code() == Some(crate::missing_program::NOT_FOUND) {
+                        not_found.extend(command.take());
+                    }
+                    false
+                }
+                Err(_) => false,
+            });
+        for command in not_found {
+            self.notify_missing_programs(&command);
+        }
     }
 }
 

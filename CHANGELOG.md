@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
+  terminal, the launcher, `autostart`) fails because a program it needs isn't installed, a
+  notification names it ("brightnessctl isn't installed") and the command, once a session per
+  program, where before only the log said so and the key did nothing.
 - **The volume, brightness and media keys work out of the box:** default bindings for the volume
   keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (brightnessctl,
   never quite off) and play, pause, next, previous and stop (playerctl), the volume and brightness

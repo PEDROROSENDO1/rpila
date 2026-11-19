@@ -858,7 +858,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | A notification says the configuration is invalid | It gives the line and the problem; fix it and save. `pila --check-config` checks it again. A key binding must be under `[bindings]`. |
 | A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
 | Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
-| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). `default-bindings = false` leaves them out. |
+| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "brightnessctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
 | `Mod+Shift+S` does nothing | Install `grim`, `slurp` and `wl-clipboard`; `pila-report` says if `wl-copy` is missing. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Install `libnotify` and run a notification daemon (mako, or your shell's). |
