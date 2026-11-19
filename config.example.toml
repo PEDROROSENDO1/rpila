@@ -34,15 +34,16 @@ launcher = "pila-launcher"
 # Commands run at startup (`pila -c` replaces them); [] for none. X11 apps
 # among them start Xwayland as they connect. No terminal starts unless it's
 # listed (Mod+Return opens one). pila-bar, installed with Pila, is a bar on
-# every monitor with the workspaces (a click or the wheel switches), the
-# focused window's title and a clock (--bottom for the bottom edge, --clock
-# FORMAT as strftime writes it). Any other bar works too, such as waybar. Only
-# one `autostart` line can be active: to use the longer example, replace this
-# one with it.
-autostart = ["pila-bar"]
+# every monitor with the workspaces (a click or the wheel switches), the tray,
+# the battery and a clock (--bottom for the bottom edge, --clock FORMAT as
+# strftime writes it). Any other bar works too, such as waybar. pila-switcher
+# shows the windows while Mod+Tab or Alt+Tab is held. Only one `autostart`
+# line can be active: to use the longer example, replace this one with it.
+autostart = ["pila-bar", "pila-switcher"]
 # autostart = [                    # e.g.
 #     "swaybg -c 333355",
 #     "pila-bar --bottom",
+#     "pila-switcher",
 #     "mako",
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",

@@ -16,7 +16,8 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **A compositor, not a desktop environment:** bar, launcher, notifications, wallpaper and lock
   screen are external clients (layer shell, ext-session-lock, ...). Even Pila's own bar and
   launcher (`pila-bar`, `pila-launcher`, written with iced) are separate programs on the same
-  standard protocols, so any other one replaces them. The floating modes of KDE
+  standard protocols, so any other one replaces them; its window switcher (`pila-switcher`) is
+  one too, shown from what Pila's IPC tells it. The floating modes of KDE
   Plasma, GNOME and COSMIC come with their own shell; labwc keeps Openbox's model and XML
   config; Wayfire is built around Compiz-style plugins. Pila has one TOML file and an IPC
   socket.

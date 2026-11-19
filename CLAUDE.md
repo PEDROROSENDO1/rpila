@@ -46,10 +46,10 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- `pila-launcher` (`launcher/`) and `pila-bar` (`bar/`) are a cargo workspace of their own,
+- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`) and `pila-switcher` (`switcher/`) are a cargo workspace of their own,
   rooted in `launcher/`, with its own `Cargo.lock` (Smithay and iced_layershell need different
   winit betas): the same commands with `--manifest-path launcher/Cargo.toml` (or run from
-  `launcher/`; `cargo fmt --all`); both binaries land in `launcher/target/`. CI, the packages
+  `launcher/`; `cargo fmt --all`); the binaries land in `launcher/target/`. CI, the packages
   and `scripts/install` build them with Pila; a release bumps their versions with Pila's.
   Pila's own UI pieces are iced clients there, never GTK or drawn inside the compositor.
 
@@ -78,7 +78,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
   `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default
-  `pila-bar`; no terminal starts by itself).
+  `pila-bar` and `pila-switcher`; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -262,8 +262,9 @@ global that exposes or controls other clients, input or outputs must get it too.
 The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
-`launcher/` is `pila-launcher` and `bar/` is `pila-bar`, iced clients of their own that reach
-Pila only through Wayland (see "Launcher" and "Bar" in `docs/ARCHITECTURE.md`).
+`launcher/` is `pila-launcher`, `bar/` is `pila-bar` and `switcher/` is `pila-switcher`, iced
+clients of their own that reach Pila only through Wayland and, for the switcher, its IPC (see
+"Launcher", "Bar" and "Switcher" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature

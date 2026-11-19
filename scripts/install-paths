@@ -28,6 +28,7 @@ install_files=(
     "target/release/pila:$BINDIR/pila:755"
     "launcher/target/release/pila-launcher:$BINDIR/pila-launcher:755"
     "launcher/target/release/pila-bar:$BINDIR/pila-bar:755"
+    "launcher/target/release/pila-switcher:$BINDIR/pila-switcher:755"
     "resources/session/pila-session:$BINDIR/pila-session:755"
     "scripts/report:$BINDIR/pila-report:755"
     "scripts/check:$BINDIR/pila-check:755"

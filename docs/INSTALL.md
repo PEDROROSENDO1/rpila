@@ -55,10 +55,10 @@ differ between releases):
 | Void | `libseat-devel libinput-devel eudev-libudev-devel libgbm-devel libxkbcommon-devel mesa xorg-server-xwayland pkg-config` |
 | Alpine | `libseat-dev libinput-dev eudev-dev mesa-dev libxkbcommon-dev xwayland pkgconf` |
 
-Then `cargo build --release`, and for the launcher and the bar (a cargo workspace of their own,
-in `launcher/`) `cargo build --release --manifest-path launcher/Cargo.toml`, which puts
-`pila-launcher` and `pila-bar` in `launcher/target/release`. `scripts/install` builds and
-installs all three.
+Then `cargo build --release`, and for the launcher, the bar and the window switcher (a cargo
+workspace of their own, in `launcher/`) `cargo build --release --manifest-path
+launcher/Cargo.toml`, which puts `pila-launcher`, `pila-bar` and `pila-switcher` in
+`launcher/target/release`. `scripts/install` builds and installs all four.
 
 ## Debian, Ubuntu and Fedora
 

@@ -2296,11 +2296,11 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher and pila-bar come from
+        // As every setting: pila-launcher, pila-bar and pila-switcher come from
         // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(config.autostart, ["pila-bar"]);
+        assert_eq!(config.autostart, ["pila-bar", "pila-switcher"]);
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {

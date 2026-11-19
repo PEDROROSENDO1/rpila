@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **A window switcher you can see, `pila-switcher`:** held a moment, Mod+Tab or Alt+Tab shows
+  the windows it goes through in the middle of the monitor, most recently used first: a preview
+  of each (a still, taken as the switch starts), with its app's icon and its title, the one it's
+  on highlighted; a click on one switches to it. A quick Mod+Tab, there and back, shows nothing. Pila still does the
+  switching (it only tells the switcher, over the IPC), so the keys work as before. It's in the
+  default `autostart`: a configuration of your own with an `autostart` line, including the one
+  Pila wrote on its first run, needs `"pila-switcher"` added to it. Installed with Pila, in
+  every package.
 - **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
   switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
   the one it's on, at each step, and null when it ends: for a program that shows it.

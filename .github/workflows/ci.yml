@@ -44,14 +44,15 @@ jobs:
       # assertions catch more.
       - run: cargo test --locked
       - run: target/release/pila --version
-      # pila-launcher (launcher/) and pila-bar (bar/): a workspace of their
-      # own, with its own lock.
+      # pila-launcher (launcher/), pila-bar (bar/) and pila-switcher
+      # (switcher/): a workspace of their own, with its own lock.
       - run: cargo fmt --all --check --manifest-path launcher/Cargo.toml
       - run: cargo clippy --all-targets --locked --manifest-path launcher/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path launcher/Cargo.toml
       - run: cargo build --release --locked --manifest-path launcher/Cargo.toml
       - run: launcher/target/release/pila-launcher --version
       - run: launcher/target/release/pila-bar --version
+      - run: launcher/target/release/pila-switcher --version
       - name: Staged install
         run: |
           DESTDIR="$RUNNER_TEMP/stage" PREFIX=/usr scripts/install --no-build
