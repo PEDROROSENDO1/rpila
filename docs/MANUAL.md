@@ -471,7 +471,21 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
 Xwayland); by default its own bar and window switcher, `pila-bar` and `pila-switcher`, and no
 terminal. `autostart = []` starts
-nothing. With systemd, a program with a user service can start with the session that way
+nothing.
+
+**Pila's own tools are defaults, never requirements.** Each is named in the default configuration
+alone, and Pila works the same with another in its place:
+
+| Tool | Where it's set | Swap it for |
+|---|---|---|
+| `pila-launcher` | `launcher` | `launcher = "fuzzel"`, or any launcher |
+| `pila-bar` | `autostart` | waybar or any other bar (a list without `pila-bar`) |
+| `pila-switcher` | `autostart` | nothing: without it Mod+Tab still switches, unseen |
+| `pila-osd` | the volume, brightness and media keys' bindings | bindings of your own (wpctl or pactl alone, brightnessctl, playerctl, ...) |
+| `pila-shot` | `Mod+Shift+S` and `Mod+Ctrl+S`; the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own (grim, slurp and wl-copy, ...); `chooser_cmd` in those settings |
+
+A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
+default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way
 instead, restarted if it crashes and stopped when Pila quits: `systemctl --user enable
 waybar.service` (in place of `waybar` in `autostart`). Everything
 they open, bars, launchers, notifications and wallpapers, is placed by Pila the way those

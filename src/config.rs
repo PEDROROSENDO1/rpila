@@ -2772,6 +2772,58 @@ mod tests {
     }
 
     #[test]
+    fn pilas_own_tools_are_defaults_a_file_can_swap() {
+        let spawned = |config: &Config| -> Vec<String> {
+            config
+                .bindings
+                .iter()
+                .filter_map(|b| match &b.action {
+                    Action::Spawn(command) => Some(command.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let pilas = |config: &Config| -> Vec<String> {
+            let mut named: Vec<String> = spawned(config);
+            named.extend(config.launcher.clone());
+            named.extend(config.autostart.clone());
+            named.retain(|command| command.contains("pila-"));
+            named
+        };
+        // By default, every one of them.
+        let defaults = Config::from_toml("", &no_env).unwrap();
+        let named = pilas(&defaults).join("\n");
+        for tool in [
+            "pila-launcher",
+            "pila-bar",
+            "pila-switcher",
+            "pila-osd",
+            "pila-shot",
+        ] {
+            assert!(named.contains(tool), "{tool} isn't a default: {named}");
+        }
+        // One key of its own: that key's tool goes, the others stay.
+        let own = Config::from_toml(
+            "[bindings]\n\"Mod+Shift+S\" = \"spawn grim -g \\\"$(slurp)\\\" - | wl-copy\"\n",
+            &no_env,
+        )
+        .unwrap();
+        let alt_shift = mods(false, true, true, false);
+        assert_eq!(
+            own.action_for(Keysym::s, &alt_shift),
+            Some(Action::Spawn("grim -g \"$(slurp)\" - | wl-copy".into()))
+        );
+        assert!(spawned(&own).iter().any(|c| c.contains("pila-osd")));
+        // All of them swapped: none is left, and the file still checks.
+        let swapped = Config::from_toml(
+            "launcher = \"fuzzel\"\nautostart = [\"waybar\"]\ndefault-bindings = false\n",
+            &no_env,
+        )
+        .unwrap();
+        assert_eq!(pilas(&swapped), Vec::<String>::new());
+    }
+
+    #[test]
     fn colors_are_premultiplied_and_keep_their_defaults() {
         let config = Config::from_toml(
             "[colors]\nbar = \"#ff0000\"\nsnap-preview = \"#ff000080\"\n",

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Pila's own tools are defaults, never requirements:** `pila-launcher`, `pila-bar`,
+  `pila-switcher`, `pila-osd` and `pila-shot` are named in the default configuration alone, and
+  the manual's "Building your desktop" says where each is set and what to put in its place; the
+  example configuration shows other tools next to the screenshot and media keys too.
 - **Screenshots with nothing else installed, `pila-shot`:** Mod+Shift+S and Mod+Ctrl+S run
   `pila-shot`, a new program installed with Pila, instead of grim, slurp and wl-copy. For a
   region the monitors hold still and dim while you drag it, shown as it is in a square frame
