@@ -214,6 +214,8 @@ pub struct Pila {
     /// State of the simpler protocols (`handlers/protocols.rs`).
     pub globals: Globals,
     pub idle_inhibitors: IdleInhibitors,
+    /// `[idle] monitors-off`'s timer (`idle.rs`).
+    pub monitors_off: crate::idle::MonitorsOff,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -587,6 +589,7 @@ impl Pila {
             session_lock: SessionLock::default(),
             globals,
             idle_inhibitors: IdleInhibitors::default(),
+            monitors_off: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -1945,6 +1948,7 @@ impl Pila {
     /// (for portals), or `EXPORT_TIMEOUT` if that hangs. The X display is
     /// reserved already (`reserve_xwayland`), so X11 apps among them work.
     pub fn start_session(&mut self, commands: Vec<String>) {
+        self.idle_config_changed();
         self.pending_startup = commands;
         if !self.export_environment() {
             self.run_pending_startup();

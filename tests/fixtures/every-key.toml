@@ -61,6 +61,9 @@ shake-magnification = 2.5
 idle-timeout = 30
 enabled = true
 
+[idle]
+monitors-off = 900
+
 [keyboard]
 layout = "us,de"
 variant = ",nodeadkeys"

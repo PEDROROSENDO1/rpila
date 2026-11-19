@@ -1339,6 +1339,15 @@ Key flows and invariants:
   session isn't locked; `update_idle_inhibit` re-checks in `after_frames` (after a frame,
   a client dispatch or input). A new input path
   must go through `process_input_event` (or set `input_activity`) to count as activity.
+  `[idle] monitors-off` is Pila's own idle action: one calloop timer (`MonitorsOff`), armed at
+  startup, by a reload of `[idle]` (`idle_config_changed`) and by the first input after it
+  fired (`notify_activity`), due `monitors-off` after the last activity; when it fires
+  (`monitors_off_due`) it moves itself to the new deadline if input came since, waits a whole
+  `monitors-off` while an inhibitor counts, and else turns the monitors off
+  (`power_off_monitors`: the next input wakes them, swallowed, `wake_monitors`) and drops
+  itself. Input does nothing but note the time, so a 1000 Hz mouse costs no timer work; an
+  inhibitor going away counts as activity, so the monitors don't go off as a video ends.
+  Nested the backend has no monitor power and nothing happens.
 - **Pointer constraints** (`pointer_constraints.rs`): a lock/confine activates only while
   the pointer is over its surface (inside its region) and that window has keyboard focus;
   `SeatHandler::focus_changed` releases it (`release_constraint_for_focus`), which makes

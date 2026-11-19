@@ -195,6 +195,9 @@ impl Pila {
         if cursor_changed || old.environment != self.config.environment {
             self.export_environment();
         }
+        if old.idle != self.config.idle {
+            self.idle_config_changed();
+        }
         // pila-bar and pila-launcher take them up.
         if old.colors != self.config.colors {
             self.send_colors_event();

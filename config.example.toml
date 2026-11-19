@@ -179,6 +179,15 @@ shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 # idle-timeout = 10                # e.g.
 enabled = true
 
+# Without input (a key, a click, a move of the pointer) for monitors-off
+# seconds, 1 to 86400, the monitors turn off; any input turns them back on, and
+# that first key or click does nothing else. Not while a window that's shown
+# asks to stay awake (a video playing); false: never. On a TTY. Read as soon as
+# the file is saved.
+[idle]
+# monitors-off = false             # e.g.: never
+monitors-off = 600                 # 10 minutes
+
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and
 # -variants, -models, -options) lists the names where systemd is installed;

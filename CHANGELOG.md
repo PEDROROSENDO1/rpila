@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The screens turn off by themselves:** after 10 minutes without input the monitors turn off,
+  and any key, click or move of the pointer turns them back on (that first key or click does
+  nothing else). `[idle] monitors-off` sets the seconds, or `false` for never; a video playing
+  in a visible window keeps them on, as it keeps the session from idling. swayidle is still the
+  way to lock the screen after a while; a setup that turns the monitors off through it keeps
+  working.
 - **Pila's own tools are defaults, never requirements:** `pila-launcher`, `pila-bar`,
   `pila-switcher`, `pila-osd` and `pila-shot` are named in the default configuration alone, and
   the manual's "Building your desktop" says where each is set and what to put in its place; the

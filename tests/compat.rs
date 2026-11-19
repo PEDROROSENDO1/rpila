@@ -94,6 +94,7 @@ fn the_config_with_every_key_has_every_key() {
         ("colors", "[colors]"),
         ("animations", "[animations]"),
         ("cursor", "[cursor]"),
+        ("idle", "[idle]"),
         ("keyboard", "[keyboard]"),
         ("input", "[input]"),
         ("input.touchpad", "[input.touchpad]"),
@@ -104,7 +105,7 @@ fn the_config_with_every_key_has_every_key() {
     ];
     for (path, header) in tables {
         let known = known_keys(path, header);
-        assert!(known.len() > 1, "[{path}]: {known:?}");
+        assert!(!known.is_empty(), "[{path}]: {known:?}");
         let written = keys_written(&config, path);
         let missing: Vec<_> = known.difference(&written).collect();
         assert!(

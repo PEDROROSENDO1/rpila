@@ -34,6 +34,9 @@ X11 apps run through Xwayland, which Pila starts when the first one connects (an
 set, stops again once none is left);
 .B [xwayland] enabled = false
 turns them off.
+The monitors turn off after 10 minutes without input, and back on at any input
+.RB ( "[idle] monitors-off" ,
+in seconds, or false).
 .PP
 Started from a login screen or a TTY, Pila drives the monitors and input devices itself.
 Started inside another desktop, it opens as a window there (nested), with Alt as its Mod key.

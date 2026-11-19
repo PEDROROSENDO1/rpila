@@ -307,7 +307,8 @@ and which monitors are on another one.
 `Mod+O` moves the pointer and the focus to the next monitor, and `Mod+Shift+O` sends the focused
 window there, keeping its place, or still filling the monitor or the same half.
 
-To turn the monitors off without unplugging them, for instance when idle, run
+Pila turns the monitors off after a while without input (`[idle] monitors-off`, in "Locking the
+screen and idling"). To turn them off at once, run
 `pila msg action power-off-monitors` (or bind the action to a key): any key, click or move of the
 pointer turns them back on, and that first key or click does nothing else. Through `pila msg` it
 works with the screen locked too, as idling usually locks first; a key binding doesn't run while
@@ -710,17 +711,28 @@ Lock screens that use ext-session-lock work: `swaylock`, or your shell's own.
 While the screen is locked, only the lock screen gets the keyboard and the mouse, and Pila's
 bindings don't run; `Ctrl+Alt+F1` to `F12` still switch virtual terminals.
 
-To lock and turn the screens off after a while without input, use `swayidle` (or your shell's
-idle settings):
+Pila turns the screens off by itself after 10 minutes without input (a key, a click, a move of
+the pointer); any input turns them back on, and that first key or click does nothing else.
+`[idle] monitors-off` sets how long, in seconds, or `false` for never:
+
+```toml
+[idle]
+monitors-off = 300                 # 5 minutes
+```
+
+A video playing in a visible window keeps the screens on, and the session from idling, if the
+player asks for it, as most do.
+
+To lock the screen after a while too, use `swayidle` (or your shell's idle settings):
 
 ```toml
 autostart = [
-    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+    "swayidle -w timeout 300 'swaylock -f' before-sleep 'swaylock -f'",
 ]
 ```
 
-A video playing in a visible window keeps the session from idling, if the player asks for it,
-as most do.
+A tool that turns the screens off itself works as before (`pila msg action power-off-monitors`
+from swayidle, a shell's idle settings); set `monitors-off = false` to leave it to that tool.
 
 If the lock screen crashes, the session stays locked, for safety. Switch to a free virtual
 terminal (`Ctrl+Alt+F3`, or another free one: F1 and F2 may be the login screen or this very

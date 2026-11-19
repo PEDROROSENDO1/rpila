@@ -1310,6 +1310,7 @@ struct ConfigFile {
     animations: AnimationsFile,
     cursor: CursorFile,
     xwayland: XwaylandFile,
+    idle: IdleFile,
     environment: BTreeMap<String, EnvFile>,
     #[serde(rename = "window-rule")]
     window_rules: Vec<crate::rules::WindowRuleFile>,
@@ -1554,6 +1555,61 @@ impl XwaylandFile {
     }
 }
 
+/// The `[idle]` `monitors-off` times Pila takes, in seconds.
+pub const MONITORS_OFF_TIMES: std::ops::RangeInclusive<u32> = 1..=86400;
+
+/// `[idle]`: what Pila does itself when there's no input (`idle.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdleConfig {
+    /// Turn the monitors off after this many seconds without input (none
+    /// while an idle inhibitor is visible); `None` never.
+    pub monitors_off: Option<u32>,
+}
+
+/// A time in seconds as written, or `false` for never.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(
+    untagged,
+    expecting = "a time in seconds (e.g. 600), or false for never"
+)]
+enum SecondsFile {
+    Never(bool),
+    Seconds(u32),
+}
+
+/// `[idle]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct IdleFile {
+    monitors_off: Option<SecondsFile>,
+}
+
+impl IdleFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(self, example, IdleFile { monitors_off })
+    }
+
+    fn validate(self) -> Result<IdleConfig, String> {
+        let monitors_off = match need(self.monitors_off, "idle.monitors-off")? {
+            SecondsFile::Never(false) => None,
+            SecondsFile::Never(true) => {
+                return Err(
+                    "idle.monitors-off = true: give the seconds (e.g. 600), or false".into(),
+                )
+            }
+            SecondsFile::Seconds(seconds) if !MONITORS_OFF_TIMES.contains(&seconds) => {
+                return Err(format!(
+                    "idle.monitors-off = {seconds}: must be {} to {} seconds, or false",
+                    MONITORS_OFF_TIMES.start(),
+                    MONITORS_OFF_TIMES.end()
+                ))
+            }
+            SecondsFile::Seconds(seconds) => Some(seconds),
+        };
+        Ok(IdleConfig { monitors_off })
+    }
+}
+
 /// The largest `[shadow]` `size` and, either way, `offset` (logical pixels).
 const MAX_SHADOW: i32 = 64;
 
@@ -1679,6 +1735,8 @@ pub struct Config {
     pub cursor: CursorConfig,
     /// `[xwayland]`: stopping it when unused.
     pub xwayland: XwaylandConfig,
+    /// `[idle]`: the monitors off after a while without input.
+    pub idle: IdleConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -1881,6 +1939,7 @@ impl Config {
         let animations = file.animations.or_example(example.animations).validate()?;
         let cursor = file.cursor.or_example(example.cursor).validate()?;
         let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
+        let idle = file.idle.or_example(example.idle).validate()?;
         let window_rules = file
             .window_rules
             .into_iter()
@@ -2030,6 +2089,7 @@ impl Config {
             animations,
             cursor,
             xwayland,
+            idle,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -2917,6 +2977,30 @@ mod tests {
             assert!(error.contains("cursor.shake-magnification"), "{error}");
         }
         assert!(Config::from_toml("[cursor]\nshake-to-find = 1", &no_env).is_err());
+    }
+
+    #[test]
+    fn monitors_go_off_after_ten_minutes_by_default_and_never_with_false() {
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.idle.monitors_off, Some(600));
+        let idle = |text: &str| Config::from_toml(&format!("[idle]\n{text}"), &no_env);
+        assert_eq!(
+            idle("monitors-off = 30").unwrap().idle.monitors_off,
+            Some(30)
+        );
+        assert_eq!(
+            idle("monitors-off = false").unwrap().idle.monitors_off,
+            None
+        );
+        for text in [
+            "monitors-off = 0",
+            "monitors-off = 86401",
+            "monitors-off = true",
+        ] {
+            let error = idle(text).unwrap_err();
+            assert!(error.contains("idle.monitors-off"), "{text}: {error}");
+        }
+        assert!(idle("monitors-off = \"soon\"").is_err());
     }
 
     #[test]
