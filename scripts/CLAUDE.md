@@ -82,8 +82,9 @@ has CJK fonts (wqy-microhei, noto-fonts-cjk): `candidates.png` shows the candida
 # scripts/demo-video
 
 `scripts/demo-video` makes a demo video on a sealed headless Pila (as `scripts/apps`: one
-1920x1080 output at scale 1.5, default looks, `waybar` (a config of its own: workspaces and a
-clock), `swaybg` on a generated gradient, `mako`, `fuzzel` as the launcher, UTC):
+1920x1080 output at scale 1.5, default looks: `swaybg`, `waybar` and `mako` started through
+Pila (the control socket's `spawn`) as its autostart starts them, so with its configuration
+for them (`tool-configs`) and its wallpaper, `fuzzel` as the launcher, UTC):
 `scripts/demo-scenes` plays captioned scenes with real input (pointer and Pila's bindings
 through the control socket, text through `wtype`), waiting on Pila's state, never on fixed
 sleeps for something to happen; `scripts/demo-record` records the output at a constant 60 fps

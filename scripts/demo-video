@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # A demo video of Pila: a sealed headless Pila (one 1920x1080 output at
-# scale 1.5, its default looks, waybar, swaybg on a generated gradient,
-# mako) where scripts/demo-scenes plays scenes with real input (windows opening,
-# moved, resized, snapped, maximized, minimized, Mod+Tab, blur, the
-# launcher, workspaces, the config applied as it's saved, shake to find,
+# scale 1.5, its default looks: waybar, mako and fuzzel with Pila's
+# configuration for them, swaybg with Pila's wallpaper) where
+# scripts/demo-scenes plays scenes with real input (windows opening, moved,
+# resized, snapped, maximized, minimized, Mod+Tab, blur, the launcher, the
+# shortcuts, workspaces, the config applied as it's saved, shake to find,
 # always on top, a notification), recorded by scripts/demo-record and
 # captioned by ffmpeg.
 #
@@ -71,65 +72,13 @@ ln -s "$bin" "$sealed/bin/pila"
 rm -rf "$out"
 mkdir -p "$out"
 
-# A quiet dark gradient, standard library only.
-python3 -I - "$out/wallpaper.png" <<'EOF'
-import math, struct, sys, zlib
-W, H = 1920, 1080
-rows = []
-for y in range(H):
-    row = bytearray([0])
-    for x in range(W):
-        t = (x / W) * 0.6 + (y / H) * 0.4
-        glow = math.exp(-(((x - W * 0.72) / (W * 0.45)) ** 2 + ((y - H * 0.3) / (H * 0.55)) ** 2))
-        row += bytes((int(18 + 22 * t + 30 * glow), int(22 + 26 * t + 34 * glow), int(34 + 40 * t + 52 * glow)))
-    rows.append(bytes(row))
-def chunk(kind, data):
-    body = kind + data
-    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
-with open(sys.argv[1], "wb") as out:
-    out.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
-              + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
-EOF
-
-# Notifications that go by themselves, in the title bars' colors.
-mkdir -p "$home/.config/mako"
-cat >"$home/.config/mako/config" <<'EOF'
-default-timeout=3500
-font=DejaVu Sans 11
-background-color=#2f3136
-text-color=#e6e6e6
-border-color=#4a4d55
-border-size=1
-margin=12
-EOF
-
-# The bar: Pila's workspaces and a clock, in the title bars' colors.
-mkdir -p "$home/.config/waybar"
-cat >"$home/.config/waybar/config.jsonc" <<'EOF'
-{
-    "layer": "top",
-    "height": 28,
-    "modules-left": ["ext/workspaces"],
-    "modules-right": ["clock"],
-    "ext/workspaces": { "format": "{name}", "on-click": "activate", "sort-by-id": true },
-    "clock": { "format": "{:%H:%M}" }
-}
-EOF
-cat >"$home/.config/waybar/style.css" <<'EOF'
-* { font-family: sans-serif; font-size: 13px; border: none; border-radius: 0; min-height: 0; }
-window#waybar { background: #2f3136; color: #e6e6e6; }
-#workspaces button { padding: 0 10px; color: #9a9da4; }
-#workspaces button.active { color: #e6e6e6; box-shadow: inset 0 -2px #4477cc; }
-#clock { padding: 0 12px; }
-EOF
-
 # Pila's config, which a scene edits in vim: what it changes comes first.
 cat >"$home/.config/pila/config.toml" <<'EOF'
 # Pila applies this file as soon as it's saved.
 mod = "super"
 terminal = "kitty"
 launcher = "fuzzel"
-corner-radius = 0
+corner-radius = 8
 
 [colors]
 bar = "#2f3136"
