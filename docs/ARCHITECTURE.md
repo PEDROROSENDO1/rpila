@@ -28,9 +28,10 @@ Key flows and invariants:
   loop; never over a file or a symlink, and a failure only logged; then, with `tool-configs`,
   `tool_configs::prepare_for_session` writes waybar's, fuzzel's, mako's and swaylock's
   configurations from `resources/tools/` into `$XDG_RUNTIME_DIR/pila-tools` (`Pila::tool_configs_dir`;
-  each file renamed into place, so a nested Pila or a tool starting never reads one half
-  written), their `@key@`s filled with `[colors]` (`tool_configs::fill`; again, on a thread, when
-  a reload changes them: `tool_configs::rewrite_in_background`, for each tool's next start),
+  each file renamed into place from a temporary file of its own, `partial_path`, so a nested Pila
+  or a tool starting never reads one half written), their `@key@`s filled with `[colors]`
+  (`tool_configs::fill`; again, on a thread, when a reload changes them, one rewrite at a time:
+  `tool_configs::rewrite_in_background`, for each tool's next start),
   text at `text::FONT_SIZE` px in sans-serif, as the title bars, waybar's with
   Font Awesome symbols where a font file under fontconfig's default directories has "awesome"
   in its path, `icon_font_installed`: nothing in the user's directories. With them goes

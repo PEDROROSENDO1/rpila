@@ -157,9 +157,18 @@ fn write_into(dir: &Path, relative: &str, contents: &[u8]) -> std::io::Result<()
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let partial = path.with_extension(format!("partial-{}", std::process::id()));
+    let partial = partial_path(&path);
     std::fs::write(&partial, contents)?;
     std::fs::rename(&partial, &path)
+}
+
+/// Where `path` is written before it's renamed into place: a file of its
+/// own for each write, even two of the same file at once (another Pila of
+/// the same user, nested, has another pid).
+fn partial_path(path: &Path) -> PathBuf {
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    path.with_extension(format!("partial-{}-{n}", std::process::id()))
 }
 
 /// `template` with each `@key@` of `[colors]` replaced by its `rrggbb`.
@@ -214,9 +223,14 @@ pub fn prepare_for_session(colors: &Colors) -> Option<PathBuf> {
 /// `prepare_for_session` again in `colors`, on a thread of its own (file I/O
 /// off the event loop), after a reload changed `[colors]`.
 pub fn rewrite_in_background(colors: Colors) {
+    // One rewrite at a time: two reloads in a row (an editor saving twice)
+    // write their files one after the other, never mixed.
+    static REWRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let spawned = std::thread::Builder::new()
         .name("pila-tool-configs".into())
         .spawn(move || {
+            use crate::sync::Locked;
+            let _one_at_a_time = REWRITING.locked();
             prepare_for_session(&colors);
         });
     if let Err(err) = spawned {
@@ -575,6 +589,16 @@ mod tests {
         // A directory the shell would split: the command as written.
         let spaced = Path::new("/run/my user/pila-tools");
         assert_eq!(with_configs("waybar", spaced, &colors(""), none), "waybar");
+    }
+
+    /// Two writes of the same file at once (two reloads that change
+    /// `[colors]`, each rewriting on a thread of its own) never write the
+    /// same temporary file: one would rename the other's half written.
+    #[test]
+    fn each_write_has_a_temporary_file_of_its_own() {
+        let path = Path::new("/run/user/1000/pila-tools/fuzzel/fuzzel.ini");
+        assert_ne!(partial_path(path), partial_path(path));
+        assert_eq!(partial_path(path).parent(), path.parent());
     }
 
     #[test]
