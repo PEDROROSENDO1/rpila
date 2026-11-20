@@ -16,7 +16,7 @@ Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headles
 
 Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
-                        config's autostart (default: pila-bar)
+                        config's autostart (default: waybar)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
                         or ~/.config/pila/config.toml, written from
                         config.example.toml the first time it's missing)
@@ -41,7 +41,7 @@ Environment (overrides the config file):
                  installed of kitty, foot, alacritty, ghostty, wezterm,
                  konsole, gnome-terminal, xterm)
   PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (default:
-                 pila-launcher)
+                 fuzzel)
   XCURSOR_THEME  Cursor theme when [cursor] sets none (default: default;
                  nested, only the one grown by shaking it)
   XCURSOR_SIZE   Cursor size when [cursor] sets none (default: 24; nested,

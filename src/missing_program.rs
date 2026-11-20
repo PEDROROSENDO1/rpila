@@ -1,5 +1,5 @@
 //! Telling the user when a command Pila ran needs a program that isn't
-//! installed: a binding's (`wpctl ... && pila-osd volume`), the
+//! installed: a binding's (`brightnessctl -q set 5%+`), the
 //! terminal, the launcher or `autostart`'s. The shell says "command not
 //! found" only to Pila's log; a key that silently does nothing is the first
 //! thing a new user meets.
@@ -246,8 +246,8 @@ mod tests {
     fn the_programs_a_command_line_runs() {
         let cases: &[(&str, &[&str])] = &[
             (
-                "brightnessctl -q set 5%+ && pila-osd brightness",
-                &["brightnessctl", "pila-osd"],
+                "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && notify-send v",
+                &["wpctl", "notify-send"],
             ),
             ("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", &["wpctl"]),
             ("foot", &["foot"]),

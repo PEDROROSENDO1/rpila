@@ -24,30 +24,24 @@
 # of foot, alacritty, ghostty, wezterm, konsole, gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
-# Mod+D and tapping Mod alone; "" for none (they then do nothing).
-# pila-launcher, installed with Pila, lists the installed apps, searched as you
-# type; apps that run in a terminal start in kitty (--terminal COMMAND for
-# another; the others as for `terminal` where kitty isn't installed). Any other
-# launcher works too, such as fuzzel.
-# launcher = "fuzzel"              # e.g.
-launcher = "pila-launcher"
+# Mod+D and tapping Mod alone; "" for none (they then do nothing). fuzzel
+# lists the installed apps, searched as you type; any other launcher works too.
+# launcher = "wofi --show drun"    # e.g.
+launcher = "fuzzel"
 
 # Commands run at startup (`pila -c` replaces them); [] for none. X11 apps
 # among them start Xwayland as they connect. No terminal starts unless it's
-# listed (Mod+Return opens one). pila-bar, installed with Pila, is a bar on
-# every monitor with the workspaces (a click or the wheel switches), the tray,
-# the battery and a clock (--bottom for the bottom edge, --clock FORMAT as
-# strftime writes it). Any other bar works too, such as waybar. Only one
-# `autostart` line can be active: to use the longer example, put it in place
-# of the active one.
+# listed (Mod+Return opens one). waybar is a bar on every monitor (its
+# workspaces module for Pila is in the manual); any other bar works too. Only
+# one `autostart` line can be active: to use the longer example, put it in
+# place of the active one.
 # autostart = [                    # e.g.
-#     "swaybg -i ~/Pictures/wallpaper.png",
-#     "pila-bar --bottom",
-#     "mako",
+#     "waybar",
+#     "mako",                      # notifications
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
-autostart = ["pila-bar"]
+autostart = ["waybar"]
 
 # How many workspaces (virtual desktops) there are, 1 to 32. They span all
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
@@ -308,36 +302,30 @@ tap = true                       # tap to click
 "Mod+H" = "show-desktop"
 "Mod+O" = "focus-output next"
 "Mod+Shift+O" = "move-to-output next"
-# Screenshots with pila-shot (installed with Pila): a region dragged on a
-# monitor to the clipboard, and the monitor under the pointer to a file in
-# the pictures folder (XDG_PICTURES_DIR, else ~/Pictures). Any other
-# screenshot tool works too, in place of these lines: grim with slurp and
-# wl-clipboard, for instance. (pila-shot also picks the screen to share: that's
-# in xdg-desktop-portal-wlr's settings, see the manual.)
-# "Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"   # e.g.
-"Mod+Shift+S" = "spawn pila-shot region"
-"Mod+Ctrl+S" = "spawn pila-shot output"
-# The volume and brightness keys, held to go on, each change shown for a
-# moment by pila-osd (installed with Pila); the volume with wpctl (PipeWire's
-# WirePlumber), up to 100%, the brightness by pila-osd itself, never quite
-# off. The media keys tell the player that's playing, through pila-osd too
-# (MPRIS). Without wpctl the volume keys do nothing. Other tools work too, in
-# place of these lines: pactl on PulseAudio, brightnessctl and playerctl, for
-# instance.
+# A region to the clipboard (needs grim, slurp and wl-clipboard), and the
+# screen under the pointer to a file (needs grim). Any other screenshot tool
+# works too, in place of these lines.
+"Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"
+"Mod+Ctrl+S" = "spawn mkdir -p ~/Pictures && grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"
+# The volume and brightness keys, held to go on: the volume with wpctl
+# (PipeWire's WirePlumber), up to 100%, the brightness with brightnessctl,
+# never quite off. The media keys control the player that's playing
+# (playerctl). Without the program a key does nothing. Other tools work too,
+# in place of these lines: pactl on PulseAudio, or swayosd to see each change
+# on screen, for instance.
 # "XF86AudioRaiseVolume" = { action = "spawn pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat = true }  # e.g.
-# "XF86MonBrightnessUp" = { action = "spawn brightnessctl set 5%+", repeat = true }  # e.g.
-# "XF86AudioPlay" = "spawn playerctl play-pause"   # e.g.
-"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && pila-osd volume", repeat = true }
-"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && pila-osd volume", repeat = true }
-"XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && pila-osd volume"
-"XF86AudioMicMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle && pila-osd mic"
-"XF86MonBrightnessUp" = { action = "spawn pila-osd brightness +5%", repeat = true }
-"XF86MonBrightnessDown" = { action = "spawn pila-osd brightness -5%", repeat = true }
-"XF86AudioPlay" = "spawn pila-osd play-pause"
-"XF86AudioPause" = "spawn pila-osd play-pause"
-"XF86AudioNext" = "spawn pila-osd next"
-"XF86AudioPrev" = "spawn pila-osd previous"
-"XF86AudioStop" = "spawn pila-osd stop"
+# "XF86AudioRaiseVolume" = { action = "spawn swayosd-client --output-volume raise", repeat = true }  # e.g.
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-", repeat = true }
+"XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+"XF86AudioMicMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
+"XF86MonBrightnessUp" = { action = "spawn brightnessctl -q set 5%+", repeat = true }
+"XF86MonBrightnessDown" = { action = "spawn brightnessctl -q -n set 5%-", repeat = true }
+"XF86AudioPlay" = "spawn playerctl play-pause"
+"XF86AudioPause" = "spawn playerctl play-pause"
+"XF86AudioNext" = "spawn playerctl next"
+"XF86AudioPrev" = "spawn playerctl previous"
+"XF86AudioStop" = "spawn playerctl stop"
 "Mod+Page_Down" = "workspace-next"
 "Mod+Page_Up" = "workspace-prev"
 "Mod+Shift+Page_Down" = "move-to-workspace-next"

@@ -57,9 +57,17 @@ overrides:
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The volume keys' default bindings (pila-osd sets the brightness and
-      # tells the media players itself).
+      # The default bar and launcher.
+      - waybar
+      - fuzzel
+      # The volume, brightness and media keys' default bindings.
       - wireplumber
+      - brightnessctl
+      - playerctl
+      # The screenshot keys' default bindings.
+      - grim
+      - slurp
+      - wl-clipboard
     # Not installed by default: a desktop shell may have its own lock
     # screen.
     suggests:
@@ -81,9 +89,17 @@ overrides:
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The volume keys' default bindings (pila-osd sets the brightness and
-      # tells the media players itself).
+      # The default bar and launcher.
+      - waybar
+      - fuzzel
+      # The volume, brightness and media keys' default bindings.
       - wireplumber
+      - brightnessctl
+      - playerctl
+      # The screenshot keys' default bindings.
+      - grim
+      - slurp
+      - wl-clipboard
     # Not installed by default: a desktop shell may have its own lock
     # screen.
     suggests:

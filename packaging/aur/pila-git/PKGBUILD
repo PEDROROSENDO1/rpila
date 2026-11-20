@@ -33,7 +33,14 @@ optdepends=(
     'xdg-desktop-portal-gtk: file chooser and other portals'
     'swaylock: locking the session'
     'xdg-utils: opening links and files from programs such as kitty (xdg-open)'
+    'waybar: the default bar'
+    'fuzzel: the default launcher'
     'wireplumber: the volume and mute keys (wpctl)'
+    'brightnessctl: the brightness keys'
+    'playerctl: the media keys'
+    'grim: the screenshot keys'
+    'slurp: the region screenshot key'
+    'wl-clipboard: screenshots to the clipboard (wl-copy)'
 )
 provides=(pila)
 conflicts=(pila)

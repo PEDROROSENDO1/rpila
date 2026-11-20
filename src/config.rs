@@ -1789,10 +1789,10 @@ pub struct Config {
     /// `None`: the first of `TERMINALS` that is installed (`terminal_command`).
     pub terminal: Option<String>,
     /// `None`: no launcher (`launcher = ""`; unset, `EXAMPLE`'s
-    /// `pila-launcher`).
+    /// `fuzzel`).
     pub launcher: Option<String>,
     /// Commands run at startup (when no `-c` is given; unset, `EXAMPLE`'s
-    /// `pila-bar`).
+    /// `waybar`).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<Binding>,
@@ -2456,11 +2456,11 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher and pila-bar come from
-        // config.example.toml, not the code.
+        // As every setting: fuzzel and waybar come from config.example.toml,
+        // not the code.
         let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(config.autostart, ["pila-bar"]);
+        assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
+        assert_eq!(config.autostart, ["waybar"]);
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -2923,16 +2923,14 @@ mod tests {
         };
         assert_eq!(
             spawned(config.action_for(Keysym::s, &alt_shift)),
-            "pila-shot region"
+            "grim -g \"$(slurp)\" - | wl-copy"
         );
-        assert_eq!(
-            spawned(config.action_for(Keysym::s, &alt_ctrl)),
-            "pila-shot output"
-        );
+        assert!(spawned(config.action_for(Keysym::s, &alt_ctrl))
+            .contains("grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-"));
     }
 
     #[test]
-    fn pilas_own_tools_are_defaults_a_file_can_swap() {
+    fn the_default_tools_are_ones_a_file_can_swap() {
         let spawned = |config: &Config| -> Vec<String> {
             config
                 .bindings
@@ -2943,38 +2941,49 @@ mod tests {
                 })
                 .collect()
         };
-        let pilas = |config: &Config| -> Vec<String> {
+        const TOOLS: [&str; 8] = [
+            "fuzzel",
+            "waybar",
+            "wpctl",
+            "brightnessctl",
+            "playerctl",
+            "grim",
+            "slurp",
+            "wl-copy",
+        ];
+        let named = |config: &Config| -> Vec<String> {
             let mut named: Vec<String> = spawned(config);
             named.extend(config.launcher.clone());
             named.extend(config.autostart.clone());
-            named.retain(|command| command.contains("pila-"));
+            named.retain(|command| TOOLS.iter().any(|tool| command.contains(tool)));
             named
         };
-        // By default, every one of them.
+        // By default, every one of them: standard tools, none of Pila's own.
         let defaults = Config::from_toml("", &no_env).unwrap();
-        let named = pilas(&defaults).join("\n");
-        for tool in ["pila-launcher", "pila-bar", "pila-osd", "pila-shot"] {
-            assert!(named.contains(tool), "{tool} isn't a default: {named}");
+        let all = named(&defaults).join("\n");
+        for tool in TOOLS {
+            assert!(all.contains(tool), "{tool} isn't a default: {all}");
         }
+        assert!(!all.contains("pila-"), "{all}");
         // One key of its own: that key's tool goes, the others stay.
         let own = Config::from_toml(
-            "[bindings]\n\"Mod+Shift+S\" = \"spawn grim -g \\\"$(slurp)\\\" - | wl-copy\"\n",
+            "[bindings]\n\"Mod+Shift+S\" = \"spawn flameshot gui\"\n",
             &no_env,
         )
         .unwrap();
         let alt_shift = mods(false, true, true, false);
         assert_eq!(
             own.action_for(Keysym::s, &alt_shift),
-            Some(Action::Spawn("grim -g \"$(slurp)\" - | wl-copy".into()))
+            Some(Action::Spawn("flameshot gui".into()))
         );
-        assert!(spawned(&own).iter().any(|c| c.contains("pila-osd")));
+        assert!(spawned(&own).iter().any(|c| c.contains("playerctl")));
         // All of them swapped: none is left, and the file still checks.
         let swapped = Config::from_toml(
-            "launcher = \"fuzzel\"\nautostart = [\"waybar\"]\ndefault-bindings = false\n",
+            "launcher = \"wofi --show drun\"\nautostart = [\"yambar\"]\ndefault-bindings = false\n",
             &no_env,
         )
         .unwrap();
-        assert_eq!(pilas(&swapped), Vec::<String>::new());
+        assert_eq!(named(&swapped), Vec::<String>::new());
     }
 
     #[test]

@@ -17,8 +17,8 @@ X11 session. Once it runs, how to use and set it up is in the [user manual](MANU
 ## Try it nested first
 
 The safest first run: build it (below) and start it from your current desktop. It opens
-as a window, and nothing else on your system changes (from a checkout the window starts empty:
-Pila's bar shows once `pila-bar` is installed):
+as a window, and nothing else on your system changes (the window starts with the default bar,
+waybar, where it's installed):
 
 ```bash
 cargo run --release
@@ -217,21 +217,23 @@ distros):
 
 - `kitty`: the default terminal (or set `terminal`; foot, alacritty and others are found
   too)
-- `xdg-desktop-portal-wlr`: screen sharing (`pila-shot`, installed with Pila, picks the screen
-  to share; screenshots need nothing else either)
+- `waybar` and `fuzzel`: the default bar and launcher (or set `autostart` and `launcher` to
+  others)
+- `xdg-desktop-portal-wlr`: screen sharing (its `slurp` picks the screen to share)
 - `xdg-desktop-portal-gtk`: the file chooser and other portals
 - `xdg-utils`: `xdg-open`, which programs such as kitty use to open links and files; without it
   a click on a link does nothing, and says nothing
 - `swaylock`: locking the session (bind it, or run it from swayidle); a shell with its own
   lock screen doesn't need it
 - `wireplumber` (PipeWire's session manager, which most distros install with PipeWire):
-  `wpctl`, which the volume and mute keys use; without it they do nothing (the brightness and
-  media keys need nothing but `pila-osd`, installed with Pila)
+  `wpctl`, which the volume and mute keys use; `brightnessctl` for the brightness keys and
+  `playerctl` for the media keys; without them the keys do nothing
+- `grim`, `slurp` and `wl-clipboard`: the screenshot keys
 
 ```bash
-sudo pacman -S kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber   # Arch
-sudo apt install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber # Debian, Ubuntu
-sudo dnf install kitty xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber  # Fedora
+sudo pacman -S kitty waybar fuzzel xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber brightnessctl playerctl grim slurp wl-clipboard   # Arch
+sudo apt install kitty waybar fuzzel xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber brightnessctl playerctl grim slurp wl-clipboard # Debian, Ubuntu
+sudo dnf install kitty waybar fuzzel xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-utils swaylock wireplumber brightnessctl playerctl grim slurp wl-clipboard  # Fedora
 ```
 
 The rest of a desktop (notifications, a lock screen, another bar or launcher)

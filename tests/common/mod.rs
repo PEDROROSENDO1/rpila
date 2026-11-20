@@ -36,7 +36,7 @@ pub struct Options {
     /// don't depend on timing; `[shadow]` to off, so pixels near a window are
     /// its own; `[cursor]` to no shake to find, so a test's moves never grow
     /// the cursor; `[keyboard]` to the US layout; `autostart` to nothing, so
-    /// the example's `pila-bar` is never one of the children a test counts.
+    /// the example's `waybar` is never one of the children a test counts.
     pub config: String,
     /// `--headless-outputs`.
     pub outputs: Option<String>,
