@@ -11,7 +11,7 @@ use cosmic_text::{
     Attrs, Buffer, Color, Ellipsize, EllipsizeHeightLimit, Family, FontSystem, Metrics, Shaping,
     SwashCache, Wrap,
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Title font size, in logical pixels.
 pub const FONT_SIZE: f32 = 14.0;
@@ -30,14 +30,20 @@ pub fn init(ready: impl FnOnce() + Send + 'static) {
         .name("pila-fonts".into())
         .spawn(move || {
             let start = std::time::Instant::now();
-            let system = FontSystem::new();
+            let mut system = FontSystem::new();
+            let family = follow_fontconfig(&mut system);
             let loaded = start.elapsed();
             let Some(fonts) = prepare(system) else {
                 warn!("no fonts found; title bars will have no text");
                 return;
             };
             let _ = FONTS.set(Mutex::new(fonts));
-            info!(elapsed = ?loaded, warm_up = ?(start.elapsed() - loaded), "fonts loaded");
+            info!(
+                elapsed = ?loaded,
+                warm_up = ?(start.elapsed() - loaded),
+                family,
+                "fonts loaded"
+            );
             ready();
         });
     if let Err(err) = spawned {
@@ -46,6 +52,44 @@ pub fn init(ready: impl FnOnce() + Send + 'static) {
             "failed to start font loading; title bars will have no text"
         );
     }
+}
+
+/// Make `system`'s sans-serif the family fontconfig gives (`fc-match`, the
+/// one the tools Pila starts draw their text in: waybar, fuzzel, mako,
+/// swaylock), not cosmic-text's own ("Open Sans", whether installed or not);
+/// the family it then has. Without `fc-match` (package fontconfig), or with a
+/// family the database lacks, it stays cosmic-text's. On the fonts' thread.
+fn follow_fontconfig(system: &mut FontSystem) -> String {
+    let matched = std::process::Command::new("fc-match")
+        .args(["--format=%{family[0]}", "sans-serif"])
+        .stderr(std::process::Stdio::null())
+        .output();
+    match matched {
+        Ok(out) if out.status.success() => {
+            let family = String::from_utf8_lossy(&out.stdout);
+            if !use_sans_serif(system, family.trim()) {
+                debug!(family = %family.trim(), "fontconfig's sans-serif isn't in the font database");
+            }
+        }
+        Ok(out) => debug!(status = %out.status, "fc-match failed; cosmic-text's sans-serif"),
+        Err(err) => debug!(%err, "no fc-match (package fontconfig); cosmic-text's sans-serif"),
+    }
+    system.db().family_name(&Family::SansSerif).to_string()
+}
+
+/// Make `family` `system`'s sans-serif if the database has it; whether it
+/// did.
+fn use_sans_serif(system: &mut FontSystem, family: &str) -> bool {
+    let known = !family.is_empty()
+        && system.db().faces().any(|face| {
+            face.families
+                .iter()
+                .any(|(name, _)| name.eq_ignore_ascii_case(family))
+        });
+    if known {
+        system.db_mut().set_sans_serif_family(family);
+    }
+    known
 }
 
 /// The fonts, warmed up: the usual characters shaped and rasterized once
@@ -197,6 +241,40 @@ mod tests {
             cosmic_text::fontdb::Database::new(),
         );
         assert!(prepare(empty).is_none());
+    }
+
+    /// Title bars draw in the sans-serif family the tools Pila starts do:
+    /// fontconfig's, not cosmic-text's "Open Sans".
+    #[test]
+    fn the_title_font_is_fontconfigs_sans_serif() {
+        let Ok(out) = std::process::Command::new("fc-match")
+            .args(["--format=%{family[0]}", "sans-serif"])
+            .output()
+        else {
+            eprintln!("no fc-match: skipped");
+            return;
+        };
+        let expected = String::from_utf8(out.stdout).unwrap();
+        let mut system = FontSystem::new();
+        if system.db().is_empty() {
+            eprintln!("no fonts: skipped");
+            return;
+        }
+        assert_eq!(follow_fontconfig(&mut system), expected.trim());
+        assert_eq!(system.db().family_name(&Family::SansSerif), expected.trim());
+    }
+
+    /// A family the database doesn't have leaves the one it had.
+    #[test]
+    fn a_family_not_installed_is_not_used() {
+        let mut system = FontSystem::new_with_locale_and_db(
+            "en-US".into(),
+            cosmic_text::fontdb::Database::new(),
+        );
+        let before = system.db().family_name(&Family::SansSerif).to_string();
+        assert!(!use_sans_serif(&mut system, "No Such Family"));
+        assert!(!use_sans_serif(&mut system, ""));
+        assert_eq!(system.db().family_name(&Family::SansSerif), before);
     }
 
     /// A title as wide as `i32::MAX` px (scaled, it overflows) or with no

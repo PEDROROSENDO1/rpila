@@ -1397,7 +1397,9 @@ Key flows and invariants:
   (`TitleTexture::shows`): a resize changes the room every frame, and it would be shaped and
   uploaded again each time. Titles come from `text.rs` (cosmic-text), in the system's sans-serif
   at `text::FONT_SIZE`: fonts load on a
-  background thread at startup, and until then `render_title` returns `None` and bars draw
+  background thread at startup, which makes sans-serif the family `fc-match sans-serif` names
+  (`text::follow_fontconfig`; cosmic-text's own is Open Sans, installed or not), the one the
+  tools and GTK draw in, and until then `render_title` returns `None` and bars draw
   without text; once loaded (and warmed up: common characters shaped and rasterized on that
   thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
   the window, and `render_with` returns `None` on sizes that overflow.

@@ -43,6 +43,9 @@
   monitor's scale, as Pila is, so it's the same size on a laptop's panel and a monitor beside it.
   `tool-configs = false` turns it off. mako, the notification daemon, joins waybar in the
   default `autostart`.
+- **Title bars in the system's font:** title bars and the window switcher draw in fontconfig's
+  sans-serif (`fc-match sans-serif`), as GTK apps and the tools do; before, they asked for Open
+  Sans, and got whichever font came first where it isn't installed.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
   after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
