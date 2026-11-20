@@ -1427,7 +1427,10 @@ Key flows and invariants:
   (`text::follow_fontconfig`; cosmic-text's own is Open Sans, installed or not), the one the
   tools and GTK draw in, and until then `render_title` returns `None` and bars draw
   without text; once loaded (and warmed up: common characters shaped and rasterized on that
-  thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
+  thread, `text::init`) a ping asks for a redraw (`main.rs`). With no fonts at all (CI's system,
+  or `PILA_HEADLESS_NO_FONTS=1` for the tests) `text::unavailable` is set and the ping asks for
+  nothing but to hide a shortcuts panel shown meanwhile, which isn't shown then: it's all text.
+  The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
   the window, and `render_with` returns `None` on sizes that overflow.
 - **Rounded corners** (`rounded.rs`, `corner-radius`, default 8, and `rounded-corners`, `"top"`
   by default as GTK rounds its own windows, or `"all"`: `rounded::Corners`, whose `radii` gives

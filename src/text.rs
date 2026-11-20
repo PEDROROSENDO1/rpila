@@ -23,18 +23,34 @@ struct Fonts {
 
 static FONTS: OnceLock<Mutex<Fonts>> = OnceLock::new();
 
+/// Set once loading the fonts found none (or couldn't start): no text will
+/// ever be drawn, so what's only text (the shortcuts panel) isn't shown.
+static UNAVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Start loading the system fonts in the background. Call once at startup.
-/// `ready` runs on that thread once they're in place (to redraw title bars).
+/// `ready` runs on that thread once they're in place (to redraw title bars),
+/// or once it's known there are none (`unavailable`).
 pub fn init(ready: impl FnOnce() + Send + 'static) {
     let spawned = std::thread::Builder::new()
         .name("pila-fonts".into())
         .spawn(move || {
             let start = std::time::Instant::now();
+            let none = || {
+                UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
+                warn!("no fonts found; title bars will have no text");
+            };
+            // The tests' way to a system with no fonts (CI's has none).
+            if std::env::var_os("PILA_HEADLESS_NO_FONTS").is_some_and(|v| v == "1") {
+                none();
+                ready();
+                return;
+            }
             let mut system = FontSystem::new();
             let family = follow_fontconfig(&mut system);
             let loaded = start.elapsed();
             let Some(fonts) = prepare(system) else {
-                warn!("no fonts found; title bars will have no text");
+                none();
+                ready();
                 return;
             };
             let _ = FONTS.set(Mutex::new(fonts));
@@ -47,6 +63,7 @@ pub fn init(ready: impl FnOnce() + Send + 'static) {
             ready();
         });
     if let Err(err) = spawned {
+        UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
         warn!(
             ?err,
             "failed to start font loading; title bars will have no text"
@@ -140,6 +157,11 @@ pub struct Title {
 /// Whether the fonts have loaded: until then nothing draws text.
 pub fn loaded() -> bool {
     FONTS.get().is_some()
+}
+
+/// Whether it's known there are no fonts: no text will ever be drawn.
+pub fn unavailable() -> bool {
+    UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// `title` in `color` as one line at most `max_width` wide (ending in "…" if

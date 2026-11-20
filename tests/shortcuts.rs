@@ -270,3 +270,35 @@ fn a_reload_reshapes_the_panel_shown() {
         p == [0x3f, 0x42, 0x49, 255]
     });
 }
+
+/// With no fonts (CI's system has none) there's no text to show: the welcome
+/// isn't left open with nothing drawn, taking keys and clicks, and Mod+?
+/// shows nothing; keys reach the window.
+#[test]
+fn without_fonts_no_panel_takes_the_keys() {
+    let mut pila = TestPila::start_with(Options {
+        default_config_path: true,
+        env: vec![("PILA_HEADLESS_NO_FONTS".into(), "1".into())],
+        ..Options::default()
+    });
+    pila.wait_log("created the config from the example");
+    pila.wait("no panel", |s| !shown(s));
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+Shift+slash");
+    pila.stays("no panel", std::time::Duration::from_millis(300), |s| {
+        !shown(s)
+    });
+    pila.settle();
+    client.roundtrip();
+    pila.key("a");
+    client.wait("the key", |s| {
+        s.events.iter().any(|e| {
+            *e == common::client::Ev::Key {
+                key: KEY_A,
+                pressed: false,
+            }
+        })
+    });
+}

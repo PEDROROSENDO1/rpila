@@ -781,6 +781,12 @@ impl Pila {
         if self.is_locked() {
             return;
         }
+        // It's all text: with no fonts it would be an empty panel taking the
+        // keys and clicks.
+        if crate::text::unavailable() {
+            tracing::info!("no fonts: the shortcuts aren't shown");
+            return;
+        }
         self.redraw_shortcuts_view();
         let output = self
             .space

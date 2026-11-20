@@ -266,6 +266,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop
         .handle()
         .insert_source(fonts_source, |_, _, state: &mut Pila| {
+            // None at all: nothing new to draw, but a shortcuts panel shown
+            // meanwhile would stay open with nothing on it.
+            if text::unavailable() {
+                state.hide_shortcuts();
+                return;
+            }
             // Every output: title bars, the window menu and notices on screen
             // may all show text. Logged for tests that count redraws.
             tracing::debug!("fonts in place: redrawing every output");
