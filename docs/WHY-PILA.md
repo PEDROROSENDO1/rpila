@@ -1,8 +1,8 @@
 # What sets Pila apart
 
 Pila is a stacking Wayland compositor in Rust, on Smithay's main branch, made to host
-layer-shell desktops: its own bar and launcher (on by default), a bar, launcher and
-notifications from separate tools, or a full desktop shell. This page
+layer-shell desktops: standard tools for the bar, launcher and notifications (waybar,
+fuzzel and mako by default), or a full desktop shell. This page
 covers its design choices and how it differs from other compositors. Features are in the
 [README](../README.md#features), usage in the [manual](MANUAL.md), and each flow and invariant
 in [ARCHITECTURE.md](ARCHITECTURE.md).
