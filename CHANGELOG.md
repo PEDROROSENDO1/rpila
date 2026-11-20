@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-11-20)
 
 - **Rounded corners as GTK's:** windows Pila decorates now have their top corners rounded by
   8 logical pixels, as GTK apps round their own windows, so a terminal next to a GTK app looks
