@@ -510,10 +510,12 @@ works the same with another in its place:
 
 **A look that matches Pila's.** The tools of the default configuration start with a
 configuration of Pila's where you have none of your own: your `[colors]`, the title bars' font
-(fontconfig's sans-serif, the one `fc-match sans-serif` names) at their size, and square
-corners; swaybg gets Pila's wallpaper. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
-left and the tray, the volume (a click mutes), the battery and the clock on the right, with
-symbols where Font Awesome is installed (package otf-font-awesome, fonts-font-awesome or
+(fontconfig's sans-serif, the one `fc-match sans-serif` names) at their size, and the windows'
+8 px corners on what floats over them (mako's notifications, fuzzel, waybar's tooltips; the bar
+itself stays square along the screen's edge); swaybg gets Pila's wallpaper. Its waybar has
+Pila's workspaces and windows (with the apps' own icons) on the left and the tray, the volume
+(a click mutes), the battery and the clock on the right, with symbols where Font Awesome is
+installed (package otf-font-awesome, fonts-font-awesome or
 fontawesome-6-free-fonts; `pila-desktop` brings it), words where it isn't. Pila writes nothing
 where the tools look for yours: the files are in `$XDG_RUNTIME_DIR/pila-tools` (written at each
 start, gone at logout), and the defaults' commands name them as they start (`waybar -c ... -s

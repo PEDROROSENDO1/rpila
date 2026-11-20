@@ -1,6 +1,7 @@
-/* Written by Pila (`tool-configs`): Pila's [colors] and text size, square
-   corners. Pila writes it at every start and when [colors] changes: to change
-   it, copy it to ~/.config/waybar, which waybar then reads instead. */
+/* Written by Pila (`tool-configs`): Pila's [colors] and text size, a square
+   bar and the windows' 8 px corners on its tooltips. Pila writes it at every
+   start and when [colors] changes: to change it, copy it to ~/.config/waybar,
+   which waybar then reads instead. */
 
 * {
     font-family: sans-serif;
@@ -60,7 +61,7 @@ window#waybar {
 tooltip {
     background: #@bar@;
     border: 1px solid #@hover@;
-    border-radius: 0;
+    border-radius: 8px;
 }
 
 tooltip label {

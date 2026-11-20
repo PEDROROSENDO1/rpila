@@ -3,7 +3,8 @@
 //! swaybg, which gets Pila's wallpaper: `wallpaper.rs`),
 //! so that a session looks like one desktop: the user's `[colors]` (the
 //! templates in `resources/tools/` name them `@key@`, `fill`), the title
-//! bars' sans-serif at their size (`text::FONT_SIZE`), square corners. waybar
+//! bars' sans-serif at their size (`text::FONT_SIZE`), the windows' 8 px
+//! corners on what floats over them (the bar itself stays square). waybar
 //! shows the apps' own icons, and symbols for the volume, battery and clock
 //! where Font Awesome is installed (text where it isn't: a missing glyph
 //! would show as a box). Written at startup and again, on a thread, when a
@@ -589,6 +590,37 @@ mod tests {
         // A directory the shell would split: the command as written.
         let spaced = Path::new("/run/my user/pila-tools");
         assert_eq!(with_configs("waybar", spaced, &colors(""), none), "waybar");
+    }
+
+    /// What floats over the windows (mako's notifications, fuzzel's window,
+    /// waybar's tooltips) has the windows' corners, the example's
+    /// `corner-radius`; the bar, along the screen's edge, and fuzzel's
+    /// selection stay square.
+    #[test]
+    fn floating_tools_have_the_windows_corners() {
+        let radius = crate::config::Config::from_toml("", &|_| None)
+            .unwrap()
+            .corner_radius;
+        let file = |path: &str| {
+            TOOLS
+                .iter()
+                .flat_map(|tool| tool.files)
+                .find(|(p, _)| *p == path)
+                .map(|(_, text)| *text)
+                .unwrap()
+        };
+        assert!(file("mako/config").contains(&format!("\nborder-radius={radius}\n")));
+        let fuzzel = file("fuzzel/fuzzel.ini");
+        assert!(fuzzel.contains(&format!("\nradius={radius}\n")));
+        assert!(fuzzel.contains("\nselection-radius=0\n"));
+        let style = file("waybar/style.css");
+        let tooltip = &style[style.find("tooltip {").unwrap()..];
+        let tooltip = &tooltip[..tooltip.find('}').unwrap()];
+        assert!(
+            tooltip.contains(&format!("border-radius: {radius}px;")),
+            "{tooltip}"
+        );
+        assert!(style.starts_with("/*") && style.contains("border-radius: 0;"));
     }
 
     /// Two writes of the same file at once (two reloads that change
