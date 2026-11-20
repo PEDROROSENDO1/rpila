@@ -34,8 +34,8 @@
   wl-copy, and screen sharing keeps picking the monitor with slurp.
 - **One look for the tools:** the default configuration's tools (waybar, mako, fuzzel, and
   swaylock from the swayidle line) start with a configuration of Pila's where you have none of
-  your own, so a first session looks like one desktop: Pila's default colors and square
-  corners. waybar shows the apps' own icons in its window list, and symbols for the volume,
+  your own, so a session looks like one desktop: your `[colors]` (a change reaches each tool at
+  its next start), the title bars' font at their size, and square corners. waybar shows the apps' own icons in its window list, and symbols for the volume,
   battery and clock where Font Awesome is installed (`pila-desktop` brings it), words where it
   isn't. Pila writes nothing in `~/.config`: the files are in `$XDG_RUNTIME_DIR/pila-tools`
   and the default commands name them as they start (`waybar -c ...`), so the same tools in

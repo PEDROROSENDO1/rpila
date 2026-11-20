@@ -198,6 +198,10 @@ impl Pila {
         // Clients that look like Pila take them up (`pila msg subscribe colors`).
         if old.colors != self.config.colors {
             self.send_colors_event();
+            // The tools' too, for their next start (`tool_configs.rs`).
+            if self.config.tool_configs && matches!(self.tool_configs_dir.get(), Some(Some(_))) {
+                crate::tool_configs::rewrite_in_background(self.config.colors);
+            }
         }
         self.queue_redraw();
     }

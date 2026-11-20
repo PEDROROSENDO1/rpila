@@ -58,9 +58,10 @@ autostart = [
 
 # The tools of the defaults above, as written (waybar, mako, fuzzel, and
 # swaylock in the swayidle line), start with a configuration of Pila's, in
-# these colors, where you have none of your own: by their command line, from
-# $XDG_RUNTIME_DIR/pila-tools, so nothing is written in ~/.config and other
-# sessions' tools look as before. Copy one to ~/.config to change it. false:
+# [colors] and the title bars' font, where you have none of your own: by
+# their command line, from $XDG_RUNTIME_DIR/pila-tools, so nothing is written
+# in ~/.config and other sessions' tools look as before (a change to [colors]
+# reaches each at its next start). Copy one to ~/.config to change it. false:
 # they keep their own looks.
 tool-configs = true
 

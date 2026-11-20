@@ -1,31 +1,31 @@
-# Written by Pila (`tool-configs`): Pila's default colors.
-# Pila writes it at every start: to change it, copy it to ~/.config, which
+# Written by Pila (`tool-configs`): Pila's [colors]. Pila writes it at every
+# start and when [colors] changes: to change it, copy it to ~/.config, which
 # the tool then reads instead.
 
-color=1f2126
+color=@background@
 indicator-radius=60
 indicator-thickness=8
 font=sans-serif
 
-inside-color=26272bff
-inside-clear-color=26272bff
-inside-ver-color=26272bff
-inside-wrong-color=26272bff
-ring-color=3f4249ff
-ring-clear-color=80838aff
-ring-ver-color=4477ccff
-ring-wrong-color=c42b1cff
-key-hl-color=4477ccff
-bs-hl-color=80838aff
+inside-color=@bar-inactive@ff
+inside-clear-color=@bar-inactive@ff
+inside-ver-color=@bar-inactive@ff
+inside-wrong-color=@bar-inactive@ff
+ring-color=@hover@ff
+ring-clear-color=@icon-inactive@ff
+ring-ver-color=@snap-preview@ff
+ring-wrong-color=@close-hover@ff
+key-hl-color=@snap-preview@ff
+bs-hl-color=@icon-inactive@ff
 line-color=00000000
 line-clear-color=00000000
 line-ver-color=00000000
 line-wrong-color=00000000
 separator-color=00000000
-text-color=dfe1e5ff
-text-clear-color=dfe1e5ff
-text-ver-color=dfe1e5ff
-text-wrong-color=dfe1e5ff
-layout-text-color=dfe1e5ff
-layout-bg-color=26272bff
-layout-border-color=3f4249ff
+text-color=@icon@ff
+text-clear-color=@icon@ff
+text-ver-color=@icon@ff
+text-wrong-color=@icon@ff
+layout-text-color=@icon@ff
+layout-bg-color=@bar-inactive@ff
+layout-border-color=@hover@ff

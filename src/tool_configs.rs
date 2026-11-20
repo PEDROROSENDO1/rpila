@@ -1,9 +1,13 @@
 //! A configuration of Pila's own for the standard tools its defaults start
 //! (waybar, mako, the launcher fuzzel, and swaylock from the swayidle line),
-//! so that a first session looks like one desktop: Pila's default
-//! `[colors]`, square corners. waybar shows the apps' own icons, and symbols
-//! for the volume, battery and clock where Font Awesome is installed (text
-//! where it isn't: a missing glyph would show as a box).
+//! so that a session looks like one desktop: the user's `[colors]` (the
+//! templates in `resources/tools/` name them `@key@`, `fill`), the title
+//! bars' sans-serif at their size (`text::FONT_SIZE`), square corners. waybar
+//! shows the apps' own icons, and symbols for the volume, battery and clock
+//! where Font Awesome is installed (text where it isn't: a missing glyph
+//! would show as a box). Written at startup and again, on a thread, when a
+//! reload changes `[colors]` (`rewrite_in_background`): each tool takes them
+//! at its next start.
 //!
 //! Nothing is written where the tools look for the user's configuration, so
 //! it never reaches them outside Pila (another session's waybar) and nothing
@@ -19,6 +23,8 @@
 use std::path::{Path, PathBuf};
 
 use tracing::{info, warn};
+
+use crate::config::Colors;
 
 /// A tool Pila has a configuration for.
 pub struct Tool {
@@ -100,10 +106,48 @@ pub fn dir_in(runtime: &Path) -> PathBuf {
     runtime.join("pila-tools")
 }
 
-/// Write every tool's files into `dir`, waybar's with symbols if `icon_font`.
-/// Each is written to a file of its own and renamed into place, so another
-/// Pila of the same user (nested) never reads one half written.
-pub fn prepare(dir: &Path, icon_font: bool) -> std::io::Result<()> {
+/// Each `[colors]` key, as the templates name it (`@key@`), and its color.
+fn palette(colors: &Colors) -> [(&'static str, [f32; 4]); 11] {
+    let rgb = |[r, g, b]: [f32; 3]| [r, g, b, 1.0];
+    [
+        ("bar", colors.bar),
+        ("bar-inactive", colors.bar_inactive),
+        ("bar-urgent", colors.bar_urgent),
+        ("icon", rgb(colors.icon)),
+        ("icon-inactive", rgb(colors.icon_inactive)),
+        ("hover", rgb(colors.hover)),
+        ("hover-icon", rgb(colors.hover_icon)),
+        ("close-hover", rgb(colors.close_hover)),
+        ("close-hover-icon", rgb(colors.close_hover_icon)),
+        ("background", colors.background),
+        ("snap-preview", colors.snap_preview),
+    ]
+}
+
+/// A premultiplied color's `rrggbb`, its alpha left out (the tools draw
+/// these opaque: `snap-preview` is the accent).
+fn rgb_hex([r, g, b, a]: [f32; 4]) -> String {
+    let channel = |c: f32| {
+        let c = if a > 0.0 { c / a } else { c };
+        (c.clamp(0.0, 1.0) * 255.0).round() as u8
+    };
+    format!("{:02x}{:02x}{:02x}", channel(r), channel(g), channel(b))
+}
+
+/// `template` with each `@key@` of `[colors]` replaced by its `rrggbb`.
+pub fn fill(template: &str, colors: &Colors) -> String {
+    let mut text = template.to_string();
+    for (key, color) in palette(colors) {
+        text = text.replace(&format!("@{key}@"), &rgb_hex(color));
+    }
+    text
+}
+
+/// Write every tool's files into `dir` in `colors`, waybar's with symbols if
+/// `icon_font`. Each is written to a file of its own and renamed into place,
+/// so a tool starting meanwhile, or another Pila of the same user (nested),
+/// never reads one half written.
+pub fn prepare(dir: &Path, icon_font: bool, colors: &Colors) -> std::io::Result<()> {
     for tool in TOOLS {
         let files = if icon_font && !tool.with_icons.is_empty() {
             tool.with_icons
@@ -116,7 +160,7 @@ pub fn prepare(dir: &Path, icon_font: bool) -> std::io::Result<()> {
                 std::fs::create_dir_all(parent)?;
             }
             let partial = path.with_extension(format!("partial-{}", std::process::id()));
-            std::fs::write(&partial, contents)?;
+            std::fs::write(&partial, fill(contents, colors))?;
             std::fs::rename(&partial, &path)?;
         }
     }
@@ -126,13 +170,13 @@ pub fn prepare(dir: &Path, icon_font: bool) -> std::io::Result<()> {
 /// `prepare` in `$XDG_RUNTIME_DIR` (a session's own, gone at logout), with
 /// symbols for waybar where Font Awesome is installed; the directory, or
 /// `None` (logged) if there's none or it can't be written. At startup, before
-/// the event loop runs: it reads the font directories.
-pub fn prepare_for_session() -> Option<PathBuf> {
+/// the event loop runs, or on a thread: it reads the font directories.
+pub fn prepare_for_session(colors: &Colors) -> Option<PathBuf> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
     let dir = dir_in(Path::new(&runtime));
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let icon_font = icon_font_installed(&font_dirs(home.as_deref()));
-    match prepare(&dir, icon_font) {
+    match prepare(&dir, icon_font, colors) {
         Ok(()) => {
             info!(dir = %dir.display(), icon_font, "tool configs ready");
             Some(dir)
@@ -141,6 +185,19 @@ pub fn prepare_for_session() -> Option<PathBuf> {
             warn!(dir = %dir.display(), %err, "can't write the tool configs");
             None
         }
+    }
+}
+
+/// `prepare_for_session` again in `colors`, on a thread of its own (file I/O
+/// off the event loop), after a reload changed `[colors]`.
+pub fn rewrite_in_background(colors: Colors) {
+    let spawned = std::thread::Builder::new()
+        .name("pila-tool-configs".into())
+        .spawn(move || {
+            prepare_for_session(&colors);
+        });
+    if let Err(err) = spawned {
+        warn!(%err, "can't rewrite the tool configs in the new colors");
     }
 }
 
@@ -253,14 +310,36 @@ pub(crate) fn icon_font_installed(dirs: &[PathBuf]) -> bool {
 mod tests {
     use super::*;
 
-    /// The colors of `[colors]`' defaults in `config.example.toml`.
-    fn palette() -> Vec<String> {
+    /// `[colors]`' defaults as `config.example.toml` writes them: key and
+    /// `rrggbb`.
+    fn example_hex() -> Vec<(String, String)> {
         let example: toml::Table = toml::from_str(crate::config::EXAMPLE).unwrap();
         example["colors"]
             .as_table()
             .unwrap()
-            .values()
-            .map(|v| v.as_str().unwrap()[1..7].to_lowercase())
+            .iter()
+            .map(|(k, v)| (k.clone(), v.as_str().unwrap()[1..7].to_lowercase()))
+            .collect()
+    }
+
+    fn colors(toml: &str) -> Colors {
+        crate::config::Config::from_toml(toml, &|_| None)
+            .unwrap()
+            .colors
+    }
+
+    fn templates() -> impl Iterator<Item = &'static (&'static str, &'static str)> {
+        TOOLS
+            .iter()
+            .flat_map(|t| t.files.iter().chain(t.with_icons))
+    }
+
+    /// Every `@key@` in `text` (lowercase: `@DEFAULT_AUDIO_SINK@` is wpctl's).
+    fn keys_in(text: &str) -> Vec<&str> {
+        text.split('@')
+            .skip(1)
+            .step_by(2)
+            .filter(|k| !k.is_empty() && k.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
             .collect()
     }
 
@@ -279,25 +358,69 @@ mod tests {
         found
     }
 
+    /// The tools' colors are `[colors]`' (the user's, `fill`), not written
+    /// into the templates: a user's `[colors]` changes the tools too.
     #[test]
-    fn every_color_is_one_of_pilas() {
-        let palette = palette();
-        for tool in TOOLS {
-            for (path, text) in tool.files.iter().chain(tool.with_icons) {
-                let colors = colors_in(text);
-                assert!(
-                    !colors.is_empty() || path.ends_with(".jsonc"),
-                    "{path} has no colors"
-                );
-                for color in colors {
-                    // Transparent and black, for what swaylock must not draw.
-                    let none = color == "000000";
-                    assert!(
-                        none || palette.contains(&color),
-                        "{path}: {color} isn't a [colors] default ({palette:?})"
-                    );
-                }
+    fn every_color_is_a_colors_key() {
+        let keys: Vec<String> = example_hex().into_iter().map(|(k, _)| k).collect();
+        assert_eq!(keys.len(), palette(&colors("")).len());
+        for (path, text) in templates() {
+            let used = keys_in(text);
+            assert!(
+                !used.is_empty() || path.ends_with(".jsonc"),
+                "{path} has no colors"
+            );
+            for key in used {
+                assert!(keys.iter().any(|k| k == key), "{path}: @{key}@");
             }
+            for color in colors_in(text) {
+                // Transparent, for what swaylock must not draw.
+                assert_eq!(color, "000000", "{path}: a color not from [colors]");
+            }
+        }
+    }
+
+    /// Filled in the defaults, the templates have the example's colors
+    /// (premultiplied `snap-preview` back to its `rrggbb` too).
+    #[test]
+    fn the_defaults_fill_in_as_the_example_writes_them() {
+        let defaults = colors("");
+        for (key, hex) in example_hex() {
+            assert_eq!(fill(&format!("@{key}@"), &defaults), hex, "{key}");
+        }
+        for (path, text) in templates() {
+            let filled = fill(text, &defaults);
+            assert!(keys_in(&filled).is_empty(), "{path}: {filled}");
+        }
+    }
+
+    #[test]
+    fn the_users_colors_fill_the_templates() {
+        let mine = colors("[colors]\nbar-inactive = \"#123456\"\nsnap-preview = \"#ff000080\"\n");
+        let fuzzel = fill(include_str!("../resources/tools/fuzzel/fuzzel.ini"), &mine);
+        assert!(fuzzel.contains("\nbackground=123456ff\n"), "{fuzzel}");
+        assert!(fuzzel.contains("\nselection=ff0000ff\n"), "{fuzzel}");
+        let waybar = fill(WAYBAR_STYLE.1, &mine);
+        assert!(waybar.contains("background: #123456;"), "{waybar}");
+    }
+
+    /// The tools' text is the title bars' size (`text::FONT_SIZE`), in
+    /// pixels: fuzzel's and mako's points would be a third bigger.
+    #[test]
+    fn the_tools_text_is_the_title_bars_size() {
+        let px = crate::text::FONT_SIZE as u32;
+        for (text, size) in [
+            (WAYBAR_STYLE.1, format!("font-size: {px}px;")),
+            (
+                include_str!("../resources/tools/fuzzel/fuzzel.ini"),
+                format!("font=sans-serif:pixelsize={px}\n"),
+            ),
+            (
+                include_str!("../resources/tools/mako/config"),
+                format!("font=sans-serif {px}px\n"),
+            ),
+        ] {
+            assert!(text.contains(&size), "no {size:?} in {text}");
         }
     }
 
@@ -415,7 +538,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pila-tool-files-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         for icon_font in [false, true] {
-            prepare(&dir, icon_font).unwrap();
+            prepare(&dir, icon_font, &colors("")).unwrap();
             for tool in TOOLS {
                 let args = tool.args.replace("{dir}", &dir.display().to_string());
                 for word in args.split([' ', '=']).filter(|w| w.starts_with('/')) {

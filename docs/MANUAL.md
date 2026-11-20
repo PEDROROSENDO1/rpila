@@ -500,8 +500,9 @@ works the same with another in its place:
 | `grim`, `slurp`, `wl-copy` | `Mod+Shift+S` and `Mod+Ctrl+S`; `slurp` picks the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own; `chooser_cmd` in those settings |
 
 **A look that matches Pila's.** The tools of the default configuration start with a
-configuration of Pila's where you have none of your own: Pila's default colors (`[colors]`) and
-square corners. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
+configuration of Pila's where you have none of your own: your `[colors]`, the title bars' font
+(fontconfig's sans-serif, the one `fc-match sans-serif` names) at their size, and square
+corners. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
 left and the tray, the volume (a click mutes), the battery and the clock on the right, with
 symbols where Font Awesome is installed (package otf-font-awesome, fonts-font-awesome or
 fontawesome-6-free-fonts; `pila-desktop` brings it), words where it isn't. Pila writes nothing
@@ -514,8 +515,9 @@ This is only for the default commands as written (`waybar`, not `waybar -l debug
 for a tool with no configuration of yours anywhere it reads one (`~/.config/waybar/config` or
 `config.jsonc`, `~/.mako/config`, ...), checked each time it starts. To change one, copy it
 from `$XDG_RUNTIME_DIR/pila-tools` (e.g. `cp -r $XDG_RUNTIME_DIR/pila-tools/waybar ~/.config/`)
-and edit it there: from then on the tool reads yours. The files follow the default colors, not
-a `[colors]` of yours. `tool-configs = false` starts the tools with their own looks.
+and edit it there: from then on the tool reads yours. A change to `[colors]` writes the files
+again: each tool takes it the next time it starts (fuzzel at once, waybar and mako when you
+log in again or restart them). `tool-configs = false` starts the tools with their own looks.
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way

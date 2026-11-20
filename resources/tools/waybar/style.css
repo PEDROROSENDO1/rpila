@@ -1,44 +1,44 @@
-/* Written by Pila (`tool-configs`): Pila's default colors, square corners.
-   Pila writes it at every start: to change it, copy it to ~/.config/waybar,
-   which waybar then reads instead. */
+/* Written by Pila (`tool-configs`): Pila's [colors] and text size, square
+   corners. Pila writes it at every start and when [colors] changes: to change
+   it, copy it to ~/.config/waybar, which waybar then reads instead. */
 
 * {
     font-family: sans-serif;
-    font-size: 13px;
+    font-size: 14px;
     border: none;
     border-radius: 0;
     min-height: 0;
 }
 
 window#waybar {
-    background: #26272b;
-    color: #dfe1e5;
+    background: #@bar-inactive@;
+    color: #@icon@;
 }
 
 #workspaces button,
 #taskbar button {
     padding: 0 10px;
-    color: #80838a;
+    color: #@icon-inactive@;
     background: transparent;
     box-shadow: none;
 }
 
 #workspaces button:hover,
 #taskbar button:hover {
-    background: #3f4249;
-    color: #dfe1e5;
+    background: #@hover@;
+    color: #@icon@;
 }
 
 #workspaces button.active,
 #taskbar button.active {
-    color: #dfe1e5;
-    box-shadow: inset 0 -2px #4477cc;
+    color: #@icon@;
+    box-shadow: inset 0 -2px #@snap-preview@;
 }
 
 #workspaces button.urgent,
 #taskbar button.urgent {
-    background: #8a5712;
-    color: #dfe1e5;
+    background: #@bar-urgent@;
+    color: #@icon@;
 }
 
 #tray,
@@ -49,19 +49,20 @@ window#waybar {
 }
 
 #wireplumber.muted {
-    color: #80838a;
+    color: #@icon-inactive@;
 }
 
 #battery.warning:not(.charging) {
-    color: #8a5712;
+    background: #@bar-urgent@;
+    color: #@icon@;
 }
 
 tooltip {
-    background: #2f3136;
-    border: 1px solid #3f4249;
+    background: #@bar@;
+    border: 1px solid #@hover@;
     border-radius: 0;
 }
 
 tooltip label {
-    color: #dfe1e5;
+    color: #@icon@;
 }

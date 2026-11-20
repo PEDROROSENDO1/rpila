@@ -2214,9 +2214,10 @@ impl Pila {
         if !self.config.tool_configs || !crate::config::is_example_command(command) {
             return command.to_string();
         }
+        let colors = self.config.colors;
         let dir = self
             .tool_configs_dir
-            .get_or_init(crate::tool_configs::prepare_for_session);
+            .get_or_init(|| crate::tool_configs::prepare_for_session(&colors));
         let Some(dir) = dir else {
             return command.to_string();
         };

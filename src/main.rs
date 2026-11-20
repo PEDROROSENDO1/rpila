@@ -332,7 +332,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if state.config.tool_configs {
         let _ = state
             .tool_configs_dir
-            .set(tool_configs::prepare_for_session());
+            .set(tool_configs::prepare_for_session(&state.config.colors));
     }
     state.config_path = config_path;
     state.watch_config();

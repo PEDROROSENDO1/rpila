@@ -1,19 +1,19 @@
-# Written by Pila (`tool-configs`): Pila's default colors, square corners.
-# Pila writes it at every start: to change it, copy it to ~/.config, which
-# the tool then reads instead.
+# Written by Pila (`tool-configs`): Pila's [colors] and text size, square
+# corners. Pila writes it at every start and when [colors] changes: to change
+# it, copy it to ~/.config, which the tool then reads instead.
 
-font=sans-serif 11
-background-color=#26272b
-text-color=#dfe1e5
-border-color=#3f4249
+font=sans-serif 14px
+background-color=#@bar-inactive@
+text-color=#@icon@
+border-color=#@hover@
 border-size=1
 border-radius=0
-progress-color=over #4477cc
+progress-color=over #@snap-preview@
 width=360
 padding=10
 margin=12
 default-timeout=5000
 
 [urgency=high]
-border-color=#c42b1c
+border-color=#@close-hover@
 default-timeout=0

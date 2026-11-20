@@ -2,7 +2,8 @@
 //! the example's own commands (waybar, mako, the swayidle line's swaylock, the
 //! launcher fuzzel) get it by their command line, from files in the runtime
 //! directory, where the user has no configuration of their own for the tool.
-//! Nothing is written where the tools look for the user's.
+//! Nothing is written where the tools look for the user's. Their colors are
+//! the user's `[colors]`, written again when a reload changes them.
 
 mod common;
 
@@ -41,6 +42,14 @@ fn sandbox(name: &str) -> PathBuf {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     dir
+}
+
+/// `template` in `[colors]`' defaults, as Pila writes it.
+fn filled(template: &str) -> String {
+    let colors = pila::config::Config::from_toml("", &|_| None)
+        .unwrap()
+        .colors;
+    pila::tool_configs::fill(template, &colors)
 }
 
 /// The example's `autostart`, as a line of TOML.
@@ -123,10 +132,10 @@ fn the_defaults_get_pilas_configuration_by_their_command_line() {
     );
     let read = |relative: &str| std::fs::read_to_string(tools.join(relative)).unwrap();
     assert_eq!(read("waybar/config.jsonc"), WAYBAR);
-    assert_eq!(read("waybar/style.css"), WAYBAR_STYLE);
-    assert_eq!(read("fuzzel/fuzzel.ini"), FUZZEL);
-    assert_eq!(read("mako/config"), MAKO);
-    assert_eq!(read("swaylock/config"), SWAYLOCK);
+    assert_eq!(read("waybar/style.css"), filled(WAYBAR_STYLE));
+    assert_eq!(read("fuzzel/fuzzel.ini"), filled(FUZZEL));
+    assert_eq!(read("mako/config"), filled(MAKO));
+    assert_eq!(read("swaylock/config"), filled(SWAYLOCK));
     // Nothing where the tools look for the user's.
     for tool in ["waybar", "fuzzel", "mako", "swaylock"] {
         assert!(!dir.join("config").join(tool).exists(), "{tool}");
@@ -210,7 +219,45 @@ fn waybar_gets_symbols_where_font_awesome_is_installed() {
     );
     assert_eq!(
         std::fs::read_to_string(tools.join("waybar/style.css")).unwrap(),
-        WAYBAR_STYLE
+        filled(WAYBAR_STYLE)
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The tools take the user's `[colors]`, and a reload that changes them
+/// writes the files again (for each tool's next start: fuzzel's at the next
+/// Mod+D).
+#[test]
+fn the_tools_follow_the_users_colors() {
+    let dir = sandbox("colors");
+    let mut pila = start(
+        &dir,
+        &format!(
+            "{}[colors]\nbar-inactive = \"#123456\"\n",
+            example_autostart()
+        ),
+    );
+    ran(&pila, 3);
+    let fuzzel = pila.dir.join("pila-tools/fuzzel/fuzzel.ini");
+    let mako = pila.dir.join("pila-tools/mako/config");
+    let read = |path: &Path| std::fs::read_to_string(path).unwrap();
+    assert!(read(&fuzzel).contains("\nbackground=123456ff\n"));
+    assert!(read(&mako).contains("\nbackground-color=#123456\n"));
+
+    pila.write_config(&format!(
+        "{}[colors]\nbar-inactive = \"#654321\"\n",
+        example_autostart()
+    ));
+    pila.wait_log("config reloaded");
+    let started = Instant::now();
+    while !read(&fuzzel).contains("\nbackground=654321ff\n") {
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "not rewritten:\n{}",
+            read(&fuzzel)
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(read(&mako).contains("\nbackground-color=#654321\n"));
     let _ = std::fs::remove_dir_all(&dir);
 }
