@@ -49,9 +49,10 @@ This manual says how to use Pila and set it up. Every configuration option is de
 
 At startup Pila runs the programs in `autostart`, by default the bar `waybar`; no terminal
 opens by itself: Mod+Return opens one. The first time, when it writes your configuration file
-(below), Pila welcomes you with a cheatsheet of the common shortcuts, as they're bound; any key or
-click hides it (a binding still runs: Mod+Return hides it and opens the terminal), and
-**Mod+Shift+/** (Mod+?) shows it again.
+(below), Pila welcomes you with the few keys to get going (a terminal, the launcher, switching and
+closing windows, quitting), as they're bound; any key or click hides it (a binding still runs:
+Mod+Return hides it and opens the terminal). **Mod+Shift+/** (Mod+?) shows all the shortcuts at
+any time, in sections (windows, workspaces, the mouse, Pila), with your own keys.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
 `graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
@@ -109,7 +110,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, `XF86AudioPrev`, `XF86AudioStop` | Play or pause, next, previous, stop, in the player that's playing (needs playerctl) |
 | `Mod+Shift+Q` | Close the window |
 | `Mod+Shift+E` | Quit Pila |
-| `Mod+Shift+slash` | Mod+?: show the cheatsheet of these shortcuts (as you've bound them); any key or click hides it |
+| `Mod+Shift+slash` | Mod+?: show the cheatsheet of these shortcuts, in sections (as you've bound them); any key or click hides it |
 | `Mod` + left drag | Move a window from anywhere in it |
 | `Mod` + right drag | Resize a window from its nearest corner |
 | `Ctrl+Alt+F1` to `F12` | Switch to another virtual terminal (not nested) |

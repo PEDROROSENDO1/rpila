@@ -106,7 +106,15 @@ fn prepare(system: FontSystem) -> Option<Fonts> {
         cache: SwashCache::new(),
     };
     for scale in [1, 2] {
-        let _ = render_with(&mut fonts, WARM_UP_TEXT, [1.0; 3], 4000, 28, scale);
+        let _ = render_with(
+            &mut fonts,
+            WARM_UP_TEXT,
+            [1.0; 3],
+            4000,
+            28,
+            scale,
+            Style::default(),
+        );
     }
     Some(fonts)
 }
@@ -140,12 +148,41 @@ pub fn render_title(
     height: i32,
     scale: i32,
 ) -> Option<Title> {
-    let fonts = FONTS.get()?;
-    let mut fonts = fonts.lock().ok()?;
-    render_with(&mut fonts, title, color, max_width, height, scale)
+    render_text(title, color, max_width, height, scale, Style::default())
 }
 
-/// `render_title` with these fonts.
+/// How `render_text` draws: the font's size in logical pixels and whether
+/// bold. The default is the title bars'.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Style {
+    pub size: f32,
+    pub bold: bool,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            size: FONT_SIZE,
+            bold: false,
+        }
+    }
+}
+
+/// `render_title` in `style`.
+pub fn render_text(
+    text: &str,
+    color: [f32; 3],
+    max_width: i32,
+    height: i32,
+    scale: i32,
+    style: Style,
+) -> Option<Title> {
+    let fonts = FONTS.get()?;
+    let mut fonts = fonts.lock().ok()?;
+    render_with(&mut fonts, text, color, max_width, height, scale, style)
+}
+
+/// `render_text` with these fonts.
 fn render_with(
     fonts: &mut Fonts,
     title: &str,
@@ -153,6 +190,7 @@ fn render_with(
     max_width: i32,
     height: i32,
     scale: i32,
+    style: Style,
 ) -> Option<Title> {
     // Sizes from a client's window: nothing to draw rather than an overflow.
     let width = max_width.checked_mul(scale).filter(|w| *w > 0)?;
@@ -165,7 +203,7 @@ fn render_with(
     // A line as tall as the bar: cosmic-text centers the glyphs within it.
     let mut buffer = Buffer::new(
         system,
-        Metrics::new(FONT_SIZE * scale as f32, height as f32),
+        Metrics::new(style.size * scale as f32, height as f32),
     );
     let mut buffer = buffer.borrow_with(system);
     buffer.set_wrap(Wrap::None);
@@ -178,7 +216,13 @@ fn render_with(
         .collect();
     buffer.set_text(
         &title,
-        &Attrs::new().family(Family::SansSerif),
+        &Attrs::new()
+            .family(Family::SansSerif)
+            .weight(if style.bold {
+                cosmic_text::Weight::BOLD
+            } else {
+                cosmic_text::Weight::NORMAL
+            }),
         Shaping::Advanced,
         None,
     );
@@ -290,7 +334,7 @@ mod tests {
             cache: SwashCache::new(),
         };
         let white = [1.0; 3];
-        assert!(render_with(&mut fonts, "a", white, i32::MAX, 30, 2).is_none());
-        assert!(render_with(&mut fonts, "a", white, 0, 30, 1).is_none());
+        assert!(render_with(&mut fonts, "a", white, i32::MAX, 30, 2, Style::default()).is_none());
+        assert!(render_with(&mut fonts, "a", white, 0, 30, 1, Style::default()).is_none());
     }
 }

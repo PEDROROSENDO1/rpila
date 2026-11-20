@@ -49,10 +49,7 @@ fn the_first_run_welcomes_with_the_shortcuts() {
         "{view}"
     );
     assert!(
-        rows.contains(&serde_json::json!([
-            "Super+Shift+/",
-            "Show these shortcuts"
-        ])),
+        rows.contains(&serde_json::json!(["Super+Shift+/", "All the shortcuts"])),
         "{view}"
     );
     assert!(
@@ -60,21 +57,26 @@ fn the_first_run_welcomes_with_the_shortcuts() {
         "{view}"
     );
 
-    // Drawn, with its text: the heading's band isn't the desktop, and the
-    // heading's line has more than the band's color in it.
+    // Drawn, with its content: the panel isn't the desktop, the title's
+    // line, centered, has text in it, and the first row's keys are keycaps
+    // in the title bars' color ([colors] bar).
     let desktop = pila.pixel(5.0, 5.0);
-    let band_y = (y + 16 + 12) as f64;
-    pila.wait_pixel_is((x + w - 5) as f64, band_y, "the heading's band", |p| {
-        p != desktop
-    });
-    let band = pila.pixel((x + w - 5) as f64, band_y);
-    let text = (x + 16..x + 160).any(|tx| pila.pixel(tx as f64, band_y) != band);
-    assert!(text, "no heading text drawn");
+    let panel_y = (y + 20) as f64;
+    pila.wait_pixel_is((x + w - 5) as f64, panel_y, "the panel", |p| p != desktop);
+    let panel = pila.pixel((x + w - 5) as f64, panel_y);
+    let title_y = (y + 54) as f64;
+    let middle = x + w / 2;
+    let text = (middle - 110..middle + 110).any(|tx| pila.pixel(tx as f64, title_y) != panel);
+    assert!(text, "no title drawn");
+    assert_eq!(
+        pila.pixel((x + 93) as f64, (y + 131) as f64),
+        [0x2f, 0x31, 0x36, 255]
+    );
 
     // Escape hides it, and what was under it shows again.
     pila.key("Escape");
     pila.wait("hidden", |s| !shown(s));
-    pila.wait_pixel((x + w - 5) as f64, band_y, desktop);
+    pila.wait_pixel((x + w - 5) as f64, panel_y, desktop);
 }
 
 #[test]
@@ -145,13 +147,14 @@ fn the_rows_follow_the_bindings() {
     let state = pila.state();
     let rows = state["shortcuts_view"]["rows"].as_array().unwrap().clone();
     assert!(!rows.iter().any(|r| r[1] == "Open a terminal"), "{rows:?}");
-    // Named keys (F12) before letters (E).
+    // Named keys (F12) before letters (E): the one named.
     assert!(
-        rows.contains(&serde_json::json!([
-            "Super+Shift+F12, Super+Shift+E",
-            "Quit Pila"
-        ])),
+        rows.contains(&serde_json::json!(["Super+Shift+F12", "Quit"])),
         "{rows:?}"
+    );
+    assert_eq!(
+        state["shortcuts_view"]["sections"],
+        serde_json::json!(["Windows", "Workspaces", "Mouse", "Pila"])
     );
 }
 
@@ -208,7 +211,7 @@ fn the_panel_has_the_windows_corners() {
         let state = pila.wait("shown", shown);
         let (x, y, w, h) = rect(&state["shortcuts_view"]["rect"]);
         let desktop = pila.pixel(5.0, 5.0);
-        // The band under the heading line, drawn: the text came.
+        // The panel, drawn: its content came.
         pila.wait_pixel_is((x + w - 5) as f64, (y + 28) as f64, "drawn", |p| {
             p != desktop
         });

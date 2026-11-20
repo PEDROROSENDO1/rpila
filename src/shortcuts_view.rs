@@ -36,24 +36,43 @@ use crate::{
     Pila,
 };
 
-/// Around the content, and between the heading, the rows and the notes.
-const PADDING: i32 = 16;
-const SECTION_GAP: i32 = 8;
-/// A line of text.
-const ROW: i32 = 24;
-/// The keys' column, the gap after it, and what they do.
-const KEYS: i32 = 200;
-const COLUMN_GAP: i32 = 16;
-const WHAT: i32 = 280;
 /// The panel's border.
 const BORDER: i32 = 1;
+/// A keycap's height, its rounding and its padding around the label.
+const CAP_HEIGHT: i32 = 22;
+const CAP_RADIUS: i32 = 4;
+const CAP_PADDING: i32 = 7;
+/// Between keycaps, where a "+" goes.
+const CAP_GAP: i32 = 18;
+
+/// The welcome: its width, where its rows start, each row's height, where
+/// the keys and what they do go, and the room under the rows.
+const WELCOME_WIDTH: i32 = 560;
+const WELCOME_ROWS_AT: i32 = 120;
+const WELCOME_ROW: i32 = 38;
+const WELCOME_KEYS_AT: i32 = 90;
+const WELCOME_WHAT_AT: i32 = 300;
+const WELCOME_BOTTOM: i32 = 50;
+
+/// The full cheatsheet: its width, its columns, where its sections start,
+/// a section's heading and row heights, where what a row does goes (from
+/// its column) and the room under the columns.
+const SHORTCUTS_WIDTH: i32 = 860;
+const COLUMNS_AT: [i32; 2] = [28, 448];
+const SECTIONS_AT: i32 = 72;
+const SECTION_HEADING: i32 = 22;
+const SECTION_ROW: i32 = 32;
+const SECTION_GAP: i32 = 14;
+const SECTION_WHAT_AT: i32 = 200;
+const SHORTCUTS_BOTTOM: i32 = 16;
 
 /// What the panel is shown as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Heading {
-    /// The first run: Pila just wrote the config from the example.
+    /// The first run: Pila just wrote the config from the example. A few
+    /// keys to get going.
     Welcome,
-    /// Asked for with `show-shortcuts`.
+    /// Asked for with `show-shortcuts`: all of them, in sections.
     Shortcuts,
 }
 
@@ -72,7 +91,7 @@ pub struct ShortcutsView {
     shown: Option<Shown>,
     /// Where the panel was last drawn, redrawn when it goes.
     drawn: Option<Rectangle<i32, Logical>>,
-    /// The texts being drawn on a thread (`Pila::draw_shortcuts_text`).
+    /// The content being drawn on a thread (`Pila::draw_shortcuts_text`).
     pending: Option<TextKey>,
     buffers: Rc<RefCell<Buffers>>,
 }
@@ -89,32 +108,72 @@ struct Shown {
 struct Buffers {
     background: Option<SolidColorBuffer>,
     border: Option<SolidColorBuffer>,
-    heading: Option<SolidColorBuffer>,
-    /// Every text of the panel, in one image the size of the panel: one
-    /// texture, made on a thread (`Pila::draw_shortcuts_text`).
+    /// Everything on the panel, its text and keycaps, in one image the size
+    /// of the panel: one texture, made on a thread
+    /// (`Pila::draw_shortcuts_text`).
     text: Option<TextImage>,
 }
 
-/// A line of the panel's text: where it goes in the panel (logical, from
-/// its top-left), how wide it may be, and its color (as bits, to compare).
+/// One of a row's keys: what its keycap says ("Super", "Q", "1…4").
+pub type Cap = String;
+
+/// A row: the keycaps of its keys, as bound now, and what they do.
 #[derive(Debug, Clone, PartialEq)]
-struct Line {
-    text: String,
-    at: (i32, i32),
-    width: i32,
-    color: [u32; 3],
+pub struct Row {
+    pub keys: Vec<Cap>,
+    pub what: &'static str,
 }
 
-/// What a text image shows: its lines, the panel's size and the buffer
-/// scale it's drawn at.
+/// A section of the full cheatsheet.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Section {
+    pub title: &'static str,
+    pub rows: Vec<Row>,
+}
+
+/// How a text sits in its box.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+/// Something drawn on the panel, at a place from its top-left (logical).
+#[derive(Debug, Clone, PartialEq)]
+enum Item {
+    /// A line of text in a box `w` by `h`, at `size` px, bold or not.
+    Text {
+        text: String,
+        at: (i32, i32),
+        w: i32,
+        h: i32,
+        size: u8,
+        bold: bool,
+        align: Align,
+        color: [u32; 3],
+    },
+    /// Keycaps from left to right, a "+" between them, within `w`.
+    Keys {
+        caps: Vec<Cap>,
+        at: (i32, i32),
+        w: i32,
+        size: u8,
+    },
+}
+
+/// What a content image shows: its items in the panel's palette, the
+/// panel's size and the buffer scale it's drawn at.
 #[derive(Debug, Clone, PartialEq)]
 struct TextKey {
-    lines: Vec<Line>,
+    items: Vec<Item>,
+    /// A keycap's label, its fill, its edge and the "+" between them.
+    caps: [[u32; 3]; 4],
     size: (i32, i32),
     scale: i32,
 }
 
-/// The panel's texts drawn into one premultiplied ARGB8888 image.
+/// The panel's content drawn into one premultiplied ARGB8888 image.
 struct TextImage {
     key: TextKey,
     pixels: Vec<u8>,
@@ -122,70 +181,282 @@ struct TextImage {
     buffer: Option<MemoryRenderBuffer>,
 }
 
-/// The lines of a panel of `size` with `heading`, `rows` and `notes`, in
-/// `colors`.
-fn lines(
-    heading: Heading,
-    rows: &[(String, &'static str)],
-    notes: &[String],
-    colors: &Colors,
-) -> Vec<Line> {
-    let bits = |color: [f32; 3]| color.map(f32::to_bits);
-    let inner = KEYS + COLUMN_GAP + WHAT;
-    let mut lines = vec![Line {
-        text: heading.text().into(),
-        at: (PADDING, PADDING),
-        width: inner,
-        color: bits(colors.hover_icon),
-    }];
-    let mut y = PADDING + ROW + SECTION_GAP;
-    for (keys, what) in rows {
-        lines.push(Line {
-            text: keys.clone(),
-            at: (PADDING, y),
-            width: KEYS,
-            color: bits(colors.hover_icon),
-        });
-        lines.push(Line {
-            text: (*what).into(),
-            at: (PADDING + KEYS + COLUMN_GAP, y),
-            width: WHAT,
-            color: bits(colors.icon),
-        });
-        y += ROW;
-    }
-    y += SECTION_GAP;
-    for note in notes {
-        lines.push(Line {
-            text: note.clone(),
-            at: (PADDING, y),
-            width: inner,
-            color: bits(colors.icon_inactive),
-        });
-        y += ROW;
-    }
-    lines
+/// An opaque color as the content image's key keeps it.
+fn bits(color: [f32; 3]) -> [u32; 3] {
+    color.map(f32::to_bits)
 }
 
-/// `key`'s lines drawn into one image (`None` until the fonts have
-/// loaded). On a thread: shaping and rasterizing them all takes a few
-/// milliseconds.
+/// The panel's palette: text, dimmed text and the accent.
+fn text_colors(colors: &Colors) -> ([u32; 3], [u32; 3], [u32; 3]) {
+    let [r, g, b, _] = crate::switcher_view::opaque(colors.snap_preview);
+    (
+        bits(colors.icon),
+        bits(colors.icon_inactive),
+        bits([r, g, b]),
+    )
+}
+
+/// The welcome's items: the title, a line under it, its rows centered, and
+/// `notes` at the bottom, for a panel `height` high.
+fn welcome_items(rows: &[Row], notes: &[String], height: i32, colors: &Colors) -> Vec<Item> {
+    let (text, dim, _) = text_colors(colors);
+    let center = |text: String, y, h, size, bold, color| Item::Text {
+        text,
+        at: (0, y),
+        w: WELCOME_WIDTH,
+        h,
+        size,
+        bold,
+        align: Align::Center,
+        color,
+    };
+    let mut items = vec![
+        center(Heading::Welcome.text().into(), 34, 40, 26, true, text),
+        center("A few keys to get going".into(), 74, 20, 14, false, dim),
+    ];
+    for (i, row) in rows.iter().enumerate() {
+        let y = WELCOME_ROWS_AT + i as i32 * WELCOME_ROW;
+        items.push(Item::Keys {
+            caps: row.keys.clone(),
+            at: (WELCOME_KEYS_AT, y),
+            w: WELCOME_WHAT_AT - WELCOME_KEYS_AT - 10,
+            size: 14,
+        });
+        items.push(Item::Text {
+            text: row.what.into(),
+            at: (WELCOME_WHAT_AT, y),
+            w: WELCOME_WIDTH - WELCOME_WHAT_AT - 20,
+            h: CAP_HEIGHT,
+            size: 15,
+            bold: false,
+            align: Align::Left,
+            color: text,
+        });
+    }
+    // With room at the sides: a long settings path ends in "…" before them.
+    items.push(Item::Text {
+        text: notes.join("  ·  "),
+        at: (20, height - 36),
+        w: WELCOME_WIDTH - 40,
+        h: 20,
+        size: 12,
+        bold: false,
+        align: Align::Center,
+        color: dim,
+    });
+    items
+}
+
+/// The full cheatsheet's items: the title and `notes` across the top, then
+/// its sections in two columns.
+fn shortcuts_items(columns: &[Vec<Section>; 2], notes: &[String], colors: &Colors) -> Vec<Item> {
+    let (text, dim, accent) = text_colors(colors);
+    let x = COLUMNS_AT[0];
+    let mut items = vec![
+        Item::Text {
+            text: Heading::Shortcuts.text().into(),
+            at: (x, 20),
+            w: 300,
+            h: 34,
+            size: 22,
+            bold: true,
+            align: Align::Left,
+            color: text,
+        },
+        Item::Text {
+            text: notes.join("  ·  "),
+            at: (SHORTCUTS_WIDTH / 2, 27),
+            w: SHORTCUTS_WIDTH / 2 - x,
+            h: 20,
+            size: 12,
+            bold: false,
+            align: Align::Right,
+            color: dim,
+        },
+    ];
+    for (column, sections) in COLUMNS_AT.iter().zip(columns) {
+        let mut y = SECTIONS_AT;
+        for section in sections {
+            items.push(Item::Text {
+                text: section.title.to_uppercase(),
+                at: (*column, y),
+                w: 380,
+                h: 16,
+                size: 11,
+                bold: true,
+                align: Align::Left,
+                color: accent,
+            });
+            y += SECTION_HEADING;
+            for row in &section.rows {
+                items.push(Item::Keys {
+                    caps: row.keys.clone(),
+                    at: (*column, y),
+                    w: SECTION_WHAT_AT - 10,
+                    size: 13,
+                });
+                items.push(Item::Text {
+                    text: row.what.into(),
+                    at: (column + SECTION_WHAT_AT, y),
+                    w: 380 - SECTION_WHAT_AT,
+                    h: CAP_HEIGHT,
+                    size: 14,
+                    bold: false,
+                    align: Align::Left,
+                    color: dim,
+                });
+                y += SECTION_ROW;
+            }
+            y += SECTION_GAP;
+        }
+    }
+    items
+}
+
+/// A column's height: its sections' headings and rows, a gap between them.
+fn column_height(sections: &[Section]) -> i32 {
+    let rows: usize = sections.iter().map(|s| s.rows.len()).sum();
+    sections.len() as i32 * (SECTION_HEADING + SECTION_GAP) - SECTION_GAP
+        + rows as i32 * SECTION_ROW
+}
+
+/// Draw `src` (premultiplied, its alpha `alpha`) over the pixel at `i` of
+/// premultiplied BGRA `pixels`.
+fn blend(pixels: &mut [u8], i: usize, bgr: [f32; 3], alpha: f32) {
+    if alpha <= 0.0 {
+        return;
+    }
+    let keep = 1.0 - alpha;
+    for (c, value) in bgr.iter().enumerate() {
+        let dst = f32::from(pixels[i + c]) / 255.0;
+        pixels[i + c] = ((value * alpha + dst * keep) * 255.0).round() as u8;
+    }
+    let dst = f32::from(pixels[i + 3]) / 255.0;
+    pixels[i + 3] = ((alpha + dst * keep) * 255.0).round() as u8;
+}
+
+/// A rounded rect (physical pixels) filled with `color`, anti-aliased, over
+/// the image `width` wide.
+fn fill_rounded(
+    pixels: &mut [u8],
+    width: i32,
+    rect: (f32, f32, f32, f32),
+    radius: f32,
+    color: [f32; 3],
+) {
+    let (x, y, w, h) = rect;
+    let height = pixels.len() as i32 / 4 / width.max(1);
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    let bgr = [color[2], color[1], color[0]];
+    for py in (y.floor() as i32).max(0)..((y + h).ceil() as i32).min(height) {
+        for px in (x.floor() as i32).max(0)..((x + w).ceil() as i32).min(width) {
+            // Distance from the pixel's center to the rounded rect.
+            let qx = (px as f32 + 0.5 - cx).abs() - w / 2.0 + radius;
+            let qy = (py as f32 + 0.5 - cy).abs() - h / 2.0 + radius;
+            let outside = (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt();
+            let d = outside + qx.max(qy).min(0.0) - radius;
+            let coverage = (0.5 - d).clamp(0.0, 1.0);
+            blend(pixels, ((py * width + px) * 4) as usize, bgr, coverage);
+        }
+    }
+}
+
+/// A rendered line of text over the image at (`x`, `y`) (physical pixels).
+fn blit_text(pixels: &mut [u8], width: i32, text: &crate::text::Title, x: i32, y: i32) {
+    let height = pixels.len() as i32 / 4 / width.max(1);
+    let rows = text.pixels.len() as i32 / 4 / text.width.max(1);
+    for row in 0..rows {
+        let py = y + row;
+        if py < 0 || py >= height {
+            continue;
+        }
+        for col in 0..text.width {
+            let px = x + col;
+            if px < 0 || px >= width {
+                continue;
+            }
+            let from = ((row * text.width + col) * 4) as usize;
+            let a = f32::from(text.pixels[from + 3]) / 255.0;
+            if a <= 0.0 {
+                continue;
+            }
+            // Premultiplied already: un-premultiply to blend.
+            let bgr = [0, 1, 2].map(|c| f32::from(text.pixels[from + c]) / 255.0 / a);
+            blend(pixels, ((py * width + px) * 4) as usize, bgr, a);
+        }
+    }
+}
+
+/// `key`'s items drawn into one image (`None` until the fonts have loaded).
+/// On a thread: shaping and rasterizing them all takes a few milliseconds.
 fn draw_text(key: &TextKey) -> Option<Vec<u8>> {
+    use crate::text::{render_text, Style};
     let scale = key.scale;
+    let s = scale as f32;
     let (width, height) = (key.size.0 * scale, key.size.1 * scale);
-    let stride = width as usize * 4;
-    let mut pixels = vec![0u8; stride * height as usize];
-    for line in &key.lines {
-        let color = line.color.map(f32::from_bits);
-        let text = crate::text::render_title(&line.text, color, line.width, ROW, scale)?;
-        let text_stride = text.width as usize * 4;
-        let (x, y) = (line.at.0 * scale, line.at.1 * scale);
-        // Clipped to the image: a line never reaches past it as laid out.
-        let columns = (text.width).min(width - x).max(0) as usize * 4;
-        for row in 0..(ROW * scale).min(height - y).max(0) {
-            let from = row as usize * text_stride;
-            let to = (y + row) as usize * stride + x as usize * 4;
-            pixels[to..to + columns].copy_from_slice(&text.pixels[from..from + columns]);
+    let mut pixels = vec![0u8; width as usize * height as usize * 4];
+    let [label, fill, edge, plus] = key.caps.map(|c| c.map(f32::from_bits));
+    for item in &key.items {
+        match item {
+            Item::Text {
+                text,
+                at,
+                w,
+                h,
+                size,
+                bold,
+                align,
+                color,
+            } => {
+                let style = Style {
+                    size: f32::from(*size),
+                    bold: *bold,
+                };
+                let line = render_text(text, color.map(f32::from_bits), *w, *h, scale, style)?;
+                let room = w * scale - line.width;
+                let x = at.0 * scale
+                    + match align {
+                        Align::Left => 0,
+                        Align::Center => room / 2,
+                        Align::Right => room,
+                    };
+                blit_text(&mut pixels, width, &line, x, at.1 * scale);
+            }
+            Item::Keys { caps, at, w, size } => {
+                let style = Style {
+                    size: f32::from(*size),
+                    bold: false,
+                };
+                let end = (at.0 + w) * scale;
+                let mut x = at.0 * scale;
+                let y = at.1 * scale;
+                for (i, cap) in caps.iter().enumerate() {
+                    if i > 0 {
+                        let sign = render_text("+", plus, CAP_GAP, CAP_HEIGHT, scale, style)?;
+                        let room = CAP_GAP * scale - sign.width;
+                        blit_text(&mut pixels, width, &sign, x + room / 2, y);
+                        x += CAP_GAP * scale;
+                    }
+                    let text = render_text(cap, label, 200, CAP_HEIGHT, scale, style)?;
+                    let cap_w = (text.width + 2 * CAP_PADDING * scale).max(CAP_HEIGHT * scale);
+                    // Keys that don't fit their room stop at its edge.
+                    if x + cap_w > end {
+                        break;
+                    }
+                    let rect = (
+                        x as f32,
+                        y as f32,
+                        cap_w as f32,
+                        (CAP_HEIGHT * scale) as f32,
+                    );
+                    let radius = CAP_RADIUS as f32 * s;
+                    fill_rounded(&mut pixels, width, rect, radius, edge);
+                    let inner = (rect.0 + s, rect.1 + s, rect.2 - 2.0 * s, rect.3 - 2.0 * s);
+                    fill_rounded(&mut pixels, width, inner, radius - s, fill);
+                    blit_text(&mut pixels, width, &text, x + (cap_w - text.width) / 2, y);
+                    x += cap_w;
+                }
+            }
         }
     }
     Some(pixels)
@@ -198,9 +469,10 @@ pub struct SceneShortcuts {
     pub output: String,
     pub rect: Rectangle<i32, Logical>,
     pub heading: Heading,
-    /// Each row's keys and what they do.
-    pub rows: Vec<(String, &'static str)>,
-    /// The lines under the rows.
+    /// Its sections: the welcome's one, untitled; the full cheatsheet's in
+    /// two columns, the first section the first column.
+    pub sections: Vec<Section>,
+    /// The lines that go with them: where the settings are, how to close it.
     pub notes: Vec<String>,
     /// Its corners, the windows' (`corner-radius`, `rounded-corners`);
     /// `None`: square.
@@ -208,35 +480,63 @@ pub struct SceneShortcuts {
     buffers: Rc<RefCell<Buffers>>,
 }
 
+impl SceneShortcuts {
+    /// Every row, section after section.
+    pub fn rows(&self) -> impl Iterator<Item = &Row> {
+        self.sections.iter().flat_map(|section| &section.rows)
+    }
+}
+
 /// Whether a binding's action counts as a row's.
 type Matches = fn(&Action) -> bool;
 
-/// The rows the cheatsheet can show, in its order: what they do, and the
-/// bindings that count as it. A row whose action has no binding is left out.
-const ROWS: &[(&str, Matches)] = &[
+/// The welcome's rows: what they do, and the bindings that count as it. A
+/// row whose action has no binding is left out.
+const WELCOME: &[(&str, Matches)] = &[
     ("Open a terminal", |a| *a == Action::Terminal),
     ("Open the launcher", |a| *a == Action::Launcher),
     ("Switch windows", |a| *a == Action::CycleFocus),
-    ("Close the window", |a| *a == Action::CloseFocused),
-    ("Maximize", |a| *a == Action::ToggleMaximize),
-    ("Fullscreen", |a| *a == Action::ToggleFullscreen),
-    ("Minimize", |a| *a == Action::Minimize),
-    ("Snap to halves and quarters", |a| {
-        matches!(a, Action::SnapToward(_))
-    }),
-    ("Go to a workspace", |a| {
-        matches!(a, Action::Workspace(WorkspaceTarget::Index(_)))
-    }),
-    ("Move the window there", |a| {
-        matches!(a, Action::MoveToWorkspace(WorkspaceTarget::Index(_)))
-    }),
-    ("Show the desktop", |a| *a == Action::ShowDesktop),
-    ("Show these shortcuts", |a| *a == Action::ShowShortcuts),
+    ("Close a window", |a| *a == Action::CloseFocused),
     ("Quit Pila", |a| *a == Action::Quit),
+    ("All the shortcuts", |a| *a == Action::ShowShortcuts),
 ];
 
-/// The two most a row names: one key and another way, at most.
-const KEYS_PER_ROW: usize = 2;
+/// The full cheatsheet's sections, the first in the left column, the others
+/// in the right one. "Mouse" has Mod's drags, which aren't bindings.
+const SECTIONS: &[(&str, &[(&str, Matches)])] = &[
+    (
+        "Windows",
+        &[
+            ("Terminal", |a| *a == Action::Terminal),
+            ("Launcher", |a| *a == Action::Launcher),
+            ("Switch windows", |a| *a == Action::CycleFocus),
+            ("Close", |a| *a == Action::CloseFocused),
+            ("Maximize", |a| *a == Action::ToggleMaximize),
+            ("Fullscreen", |a| *a == Action::ToggleFullscreen),
+            ("Minimize", |a| *a == Action::Minimize),
+            ("Snap to halves", |a| matches!(a, Action::SnapToward(_))),
+        ],
+    ),
+    (
+        "Workspaces",
+        &[
+            ("Go to one", |a| {
+                matches!(a, Action::Workspace(WorkspaceTarget::Index(_)))
+            }),
+            ("Move the window there", |a| {
+                matches!(a, Action::MoveToWorkspace(WorkspaceTarget::Index(_)))
+            }),
+        ],
+    ),
+    ("Mouse", &[]),
+    (
+        "Pila",
+        &[
+            ("Show the desktop", |a| *a == Action::ShowDesktop),
+            ("Quit", |a| *a == Action::Quit),
+        ],
+    ),
+];
 
 /// The modifier `mod_key` is, as the cheatsheet names it.
 fn mod_name(mod_key: ModKey) -> &'static str {
@@ -265,9 +565,9 @@ fn key_name(sym: Keysym) -> String {
     }
 }
 
-/// `combo` as the cheatsheet shows it: "Super+Shift+Q", "Super+/", a tap of
-/// a modifier as "Super (tap)", a wheel's notch as "Super+wheel ↓".
-pub fn combo_label(combo: &KeyCombo) -> String {
+/// `combo`'s keycaps: its modifiers, then its key; a tap of a modifier is
+/// "Super (tap)", a wheel's notch "wheel ↓".
+pub fn combo_caps(combo: &KeyCombo) -> Vec<Cap> {
     let mods = combo.mods;
     if let Trigger::Key(sym) = combo.trigger {
         if crate::config::tap_sym(sym).is_some() {
@@ -278,21 +578,20 @@ pub fn combo_label(combo: &KeyCombo) -> String {
             } else {
                 "Ctrl"
             };
-            return format!("{name} (tap)");
+            return vec![format!("{name} (tap)")];
         }
     }
-    let mut parts: Vec<String> = Vec::new();
-    for (on, name) in [
+    let mut caps: Vec<Cap> = [
         (mods.logo, "Super"),
         (mods.ctrl, "Ctrl"),
         (mods.alt, "Alt"),
         (mods.shift, "Shift"),
-    ] {
-        if on {
-            parts.push(name.into());
-        }
-    }
-    parts.push(match combo.trigger {
+    ]
+    .into_iter()
+    .filter(|(on, _)| *on)
+    .map(|(_, name)| name.to_string())
+    .collect();
+    caps.push(match combo.trigger {
         Trigger::Key(sym) => key_name(sym),
         Trigger::Wheel(direction) => {
             use crate::config::WheelDirection;
@@ -305,96 +604,134 @@ pub fn combo_label(combo: &KeyCombo) -> String {
             .into()
         }
     });
-    parts.join("+")
+    caps
 }
 
-/// Keys of a row bound to a run of numbered targets ("Super+1", "Super+2"
-/// ...) as one: "Super+1…9".
-fn numbered(labels: &[String]) -> Option<String> {
-    let first = labels.first()?;
-    let last = labels.last()?;
-    let prefix = first.strip_suffix('1')?;
-    let end = last.strip_prefix(prefix)?;
-    let all_numbered = labels.iter().enumerate().all(|(i, label)| {
-        label
-            .strip_prefix(prefix)
-            .is_some_and(|n| n == (i + 1).to_string())
-    });
-    (all_numbered && labels.len() > 1).then(|| format!("{prefix}1…{end}"))
+/// `combo` as text: its keycaps joined, "Super+Shift+Q".
+pub fn combo_label(combo: &KeyCombo) -> String {
+    combo_caps(combo).join("+")
 }
 
-/// Keys of a row that differ only by their arrow ("Super+←", "Super+→"
-/// ...) as one: "Super+←→".
-fn arrows(labels: &[String]) -> Option<String> {
-    const ORDER: [char; 4] = ['←', '→', '↑', '↓'];
-    let split = |label: &str| -> Option<(String, char)> {
-        let arrow = label.chars().last().filter(|c| ORDER.contains(c))?;
-        Some((label[..label.len() - arrow.len_utf8()].to_string(), arrow))
+/// Combinations that differ only in their last key, a run of numbers from 1
+/// ("Super 1", "Super 2" ...) or arrows, as one: "Super 1…9", "Super ← →".
+fn merged(all: &[Vec<Cap>]) -> Option<Vec<Cap>> {
+    const ARROWS: [&str; 4] = ["←", "→", "↑", "↓"];
+    let (first, rest) = all.split_first()?;
+    let (_, prefix) = first.split_last()?;
+    let lasts: Option<Vec<&str>> = all
+        .iter()
+        .map(|caps| {
+            let (last, others) = caps.split_last()?;
+            (others == prefix).then_some(last.as_str())
+        })
+        .collect();
+    let lasts = lasts.filter(|_| !rest.is_empty())?;
+    let numbered = lasts
+        .iter()
+        .enumerate()
+        .all(|(i, last)| *last == (i + 1).to_string());
+    let last = if numbered {
+        format!("1…{}", lasts.len())
+    } else if lasts.iter().all(|last| ARROWS.contains(last)) {
+        let mut arrows: Vec<&str> = lasts;
+        arrows.sort_by_key(|a| ARROWS.iter().position(|b| b == a));
+        arrows.dedup();
+        arrows.join(" ")
+    } else {
+        return None;
     };
-    let (prefix, _) = split(labels.first()?)?;
-    let mut arrows = Vec::new();
-    for label in labels {
-        let (other, arrow) = split(label)?;
-        if other != prefix {
-            return None;
-        }
-        arrows.push(arrow);
-    }
-    arrows.sort_by_key(|arrow| ORDER.iter().position(|a| a == arrow));
-    let arrows: String = arrows.into_iter().collect();
-    (labels.len() > 1).then(|| format!("{prefix}{arrows}"))
+    let mut caps = prefix.to_vec();
+    caps.push(last);
+    Some(caps)
 }
 
-/// The cheatsheet's rows from `config`: each row's keys, as bound now, and
-/// what they do. Mod+drag isn't a binding: it's `mod_key`'s.
-pub fn rows(config: &Config) -> Vec<(String, &'static str)> {
-    let mut rows = Vec::new();
-    for (what, matches) in ROWS {
-        let mut bound: Vec<&KeyCombo> = config
-            .bindings
-            .iter()
-            .filter(|b| matches(&b.action))
-            .map(|b| &b.combo)
-            .collect();
-        // The ones to name first: keys before a tap of a modifier, named
-        // keys (Tab) before letters (J), Mod's before other modifiers'.
-        bound.sort_by_key(|combo| {
-            let (tap, letter) = match combo.trigger {
-                Trigger::Key(sym) => (
-                    crate::config::tap_sym(sym).is_some(),
-                    sym.key_char().is_some_and(char::is_alphabetic),
-                ),
-                Trigger::Wheel(_) => (false, false),
-            };
-            let with_mod = match config.mod_key {
-                ModKey::Alt => combo.mods.alt,
-                ModKey::Super => combo.mods.logo,
-                ModKey::Ctrl => combo.mods.ctrl,
-            };
-            (tap, letter, !with_mod)
-        });
-        let labels: Vec<String> = bound.iter().map(|c| combo_label(c)).collect();
-        if labels.is_empty() {
-            continue;
-        }
-        let keys = numbered(&labels)
-            .or_else(|| arrows(&labels))
-            .unwrap_or_else(|| {
-                let shown: Vec<&str> = labels
-                    .iter()
-                    .take(KEYS_PER_ROW)
-                    .map(String::as_str)
-                    .collect();
-                shown.join(", ")
-            });
-        rows.push((keys, *what));
-        if *what == "Snap to halves and quarters" {
-            let mod_name = mod_name(config.mod_key);
-            rows.push((format!("{mod_name}+drag"), "Move a window"));
-            rows.push((format!("{mod_name}+right drag"), "Resize it"));
-        }
+/// The keycaps of what `matches` binds in `config`: the combination to name
+/// first (keys before a tap of a modifier, named keys like Tab before
+/// letters like J, Mod's before other modifiers'), or a run of them as one
+/// (`merged`). `None` when nothing binds it.
+fn keys_for(config: &Config, matches: Matches) -> Option<Vec<Cap>> {
+    let mut bound: Vec<&KeyCombo> = config
+        .bindings
+        .iter()
+        .filter(|b| matches(&b.action))
+        .map(|b| &b.combo)
+        .collect();
+    bound.sort_by_key(|combo| {
+        let (tap, letter) = match combo.trigger {
+            Trigger::Key(sym) => (
+                crate::config::tap_sym(sym).is_some(),
+                sym.key_char().is_some_and(char::is_alphabetic),
+            ),
+            Trigger::Wheel(_) => (false, false),
+        };
+        let with_mod = match config.mod_key {
+            ModKey::Alt => combo.mods.alt,
+            ModKey::Super => combo.mods.logo,
+            ModKey::Ctrl => combo.mods.ctrl,
+        };
+        (tap, letter, !with_mod)
+    });
+    let all: Vec<Vec<Cap>> = bound.iter().map(|c| combo_caps(c)).collect();
+    // A run in the order bound (Mod+1, Mod+2 ...), before the ranking.
+    let mut in_order: Vec<Vec<Cap>> = all.clone();
+    in_order.sort_by_key(|caps| caps.last().and_then(|k| k.parse::<u32>().ok()));
+    merged(&in_order).or_else(|| all.into_iter().next())
+}
+
+/// The welcome's rows from `config`: the few keys to get going, as bound
+/// now.
+pub fn welcome_rows(config: &Config) -> Vec<Row> {
+    WELCOME
+        .iter()
+        .filter_map(|(what, matches)| {
+            Some(Row {
+                keys: keys_for(config, *matches)?,
+                what,
+            })
+        })
+        .collect()
+}
+
+/// The full cheatsheet's sections from `config`, as bound now; a section
+/// with nothing bound is left out.
+pub fn sections(config: &Config) -> Vec<Section> {
+    let mod_name = mod_name(config.mod_key);
+    SECTIONS
+        .iter()
+        .map(|(title, rows)| {
+            let mut rows: Vec<Row> = rows
+                .iter()
+                .filter_map(|(what, matches)| {
+                    Some(Row {
+                        keys: keys_for(config, *matches)?,
+                        what,
+                    })
+                })
+                .collect();
+            if *title == "Mouse" {
+                rows = vec![
+                    Row {
+                        keys: vec![mod_name.into(), "drag".into()],
+                        what: "Move a window",
+                    },
+                    Row {
+                        keys: vec![mod_name.into(), "right drag".into()],
+                        what: "Resize it",
+                    },
+                ];
+            }
+            Section { title, rows }
+        })
+        .filter(|section| !section.rows.is_empty())
+        .collect()
+}
+
+/// The full cheatsheet's columns: its first section, then the others.
+fn columns(sections: &[Section]) -> [Vec<Section>; 2] {
+    match sections.split_first() {
+        Some((first, rest)) => [vec![first.clone()], rest.to_vec()],
+        None => [Vec::new(), Vec::new()],
     }
-    rows
 }
 
 /// `path` with the home directory as "~".
@@ -406,12 +743,21 @@ fn home_relative(path: &std::path::Path) -> String {
     }
 }
 
-/// The panel's size for `rows` rows and `notes` lines under them.
-fn panel_size(rows: usize, notes: usize) -> Size<i32, Logical> {
-    let width = 2 * PADDING + KEYS + COLUMN_GAP + WHAT;
-    let height =
-        2 * PADDING + ROW + SECTION_GAP + rows as i32 * ROW + SECTION_GAP + notes as i32 * ROW;
-    (width, height).into()
+/// The panel's size as `heading` with `sections`.
+fn panel_size(heading: Heading, sections: &[Section]) -> Size<i32, Logical> {
+    match heading {
+        Heading::Welcome => {
+            let rows: usize = sections.iter().map(|s| s.rows.len()).sum();
+            let height = WELCOME_ROWS_AT + rows as i32 * WELCOME_ROW + WELCOME_BOTTOM;
+            (WELCOME_WIDTH, height).into()
+        }
+        Heading::Shortcuts => {
+            let [left, right] = columns(sections);
+            let height =
+                SECTIONS_AT + column_height(&left).max(column_height(&right)) + SHORTCUTS_BOTTOM;
+            (SHORTCUTS_WIDTH, height).into()
+        }
+    }
 }
 
 impl Pila {
@@ -449,8 +795,25 @@ impl Pila {
             .find(|o| o.name() == view.output)
             .map(|o| crate::scale::buffer_scale(Scale::from(o.current_scale().fractional_scale())))
             .unwrap_or(1);
+        let colors = &self.config.colors;
+        let items = match view.heading {
+            Heading::Welcome => {
+                let rows: Vec<Row> = view.rows().cloned().collect();
+                welcome_items(&rows, &view.notes, view.rect.size.h, colors)
+            }
+            Heading::Shortcuts => shortcuts_items(&columns(&view.sections), &view.notes, colors),
+        };
         let key = TextKey {
-            lines: lines(view.heading, &view.rows, &view.notes, &self.config.colors),
+            items,
+            caps: [
+                bits(colors.icon),
+                {
+                    let [r, g, b, _] = crate::switcher_view::opaque(colors.bar);
+                    bits([r, g, b])
+                },
+                bits(colors.hover),
+                bits(colors.icon_inactive),
+            ],
             size: (view.rect.size.w, view.rect.size.h),
             scale,
         };
@@ -533,16 +896,11 @@ impl Pila {
         }
     }
 
-    /// The panel, its rows, notes and output, while it's shown.
+    /// The panel, its sections, notes and output, while it's shown.
     #[allow(clippy::type_complexity)]
     fn shortcuts_layout(
         &self,
-    ) -> Option<(
-        Rectangle<i32, Logical>,
-        Vec<(String, &'static str)>,
-        Vec<String>,
-        String,
-    )> {
+    ) -> Option<(Rectangle<i32, Logical>, Vec<Section>, Vec<String>, String)> {
         let shown = self.shortcuts_view.shown.as_ref()?;
         let output = shown
             .output
@@ -551,7 +909,13 @@ impl Pila {
             .or_else(|| self.space.outputs().next())?
             .clone();
         let area = self.space.output_geometry(&output)?;
-        let rows = rows(&self.config);
+        let sections = match shown.heading {
+            Heading::Welcome => vec![Section {
+                title: "",
+                rows: welcome_rows(&self.config),
+            }],
+            Heading::Shortcuts => sections(&self.config),
+        };
         let mut notes = Vec::new();
         if shown.heading == Heading::Welcome {
             if let Some(path) = &self.config_path {
@@ -559,20 +923,20 @@ impl Pila {
             }
         }
         notes.push("Any key or click closes this".into());
-        let size = panel_size(rows.len(), notes.len());
+        let size = panel_size(shown.heading, &sections);
         let loc = area.loc + Point::from(((area.size.w - size.w) / 2, (area.size.h - size.h) / 2));
-        Some((Rectangle::new(loc, size), rows, notes, output.name()))
+        Some((Rectangle::new(loc, size), sections, notes, output.name()))
     }
 
     /// The cheatsheet for `Pila::scene`, while it's shown.
     pub(crate) fn scene_shortcuts(&self) -> Option<SceneShortcuts> {
         let heading = self.shortcuts_view.shown.as_ref()?.heading;
-        let (rect, rows, notes, output) = self.shortcuts_layout()?;
+        let (rect, sections, notes, output) = self.shortcuts_layout()?;
         Some(SceneShortcuts {
             output,
             rect,
             heading,
-            rows,
+            sections,
             notes,
             rounding: (self.config.corner_radius > 0).then_some((
                 f64::from(self.config.corner_radius),
@@ -600,7 +964,8 @@ impl Pila {
                     "heading": view.heading.text(),
                     "output": view.output,
                     "rect": { "x": r.loc.x, "y": r.loc.y, "w": r.size.w, "h": r.size.h },
-                    "rows": view.rows.iter().map(|(keys, what)| serde_json::json!([keys, what])).collect::<Vec<_>>(),
+                    "rows": view.rows().map(|row| serde_json::json!([row.keys.join("+"), row.what])).collect::<Vec<_>>(),
+                    "sections": view.sections.iter().map(|s| s.title).collect::<Vec<_>>(),
                     "notes": view.notes,
                 })
             }
@@ -652,11 +1017,6 @@ pub fn elements(
     ) {
         elements.push(PilaRenderElement::Memory(element));
     }
-    let heading_rect = Rectangle::new(
-        Point::from((view.rect.loc.x, view.rect.loc.y + PADDING)),
-        Size::from((view.rect.size.w, ROW)),
-    );
-
     // The windows' corners, if their shaders compiled; else square.
     let shaders = view
         .rounding
@@ -681,13 +1041,6 @@ pub fn elements(
             _ => PilaRenderElement::Solid(element),
         });
     };
-    // Away from the corners: square.
-    solid(
-        &mut buffers.heading,
-        heading_rect,
-        crate::switcher_view::opaque(colors.snap_preview),
-        None,
-    );
     solid(
         &mut buffers.background,
         view.rect,
@@ -749,51 +1102,138 @@ mod tests {
         assert_eq!(label("XF86AudioMute", ModKey::Super), "XF86AudioMute");
     }
 
+    fn find<'a>(rows: impl IntoIterator<Item = &'a Row>, what: &str) -> Option<String> {
+        rows.into_iter()
+            .find(|row| row.what == what)
+            .map(|row| row.keys.join("+"))
+    }
+
+    #[test]
+    fn the_welcome_has_the_keys_to_get_going() {
+        let rows = welcome_rows(&config("", ModKey::Super));
+        let whats: Vec<&str> = rows.iter().map(|row| row.what).collect();
+        assert_eq!(
+            whats,
+            [
+                "Open a terminal",
+                "Open the launcher",
+                "Switch windows",
+                "Close a window",
+                "Quit Pila",
+                "All the shortcuts"
+            ]
+        );
+        // The combination to name first: Super+D over a tap of Super,
+        // Super+Tab over Alt+Tab and Super+J.
+        assert_eq!(find(&rows, "Open the launcher").as_deref(), Some("Super+D"));
+        assert_eq!(find(&rows, "Switch windows").as_deref(), Some("Super+Tab"));
+        assert_eq!(
+            find(&rows, "All the shortcuts").as_deref(),
+            Some("Super+Shift+/")
+        );
+    }
+
     #[test]
     fn the_defaults_make_the_cheatsheet() {
-        let rows = rows(&config("", ModKey::Super));
-        let find = |what: &str| {
-            rows.iter()
-                .find(|(_, w)| *w == what)
-                .map(|(keys, _)| keys.as_str())
-        };
-        assert_eq!(find("Open a terminal"), Some("Super+Return"));
-        assert_eq!(find("Switch windows"), Some("Super+Tab, Alt+Tab"));
-        assert_eq!(find("Open the launcher"), Some("Super+D, Super (tap)"));
-        assert_eq!(find("Snap to halves and quarters"), Some("Super+←→↑↓"));
-        assert_eq!(find("Move a window"), Some("Super+drag"));
-        assert_eq!(find("Go to a workspace"), Some("Super+1…4"));
-        assert_eq!(find("Move the window there"), Some("Super+Shift+1…4"));
-        assert_eq!(find("Show these shortcuts"), Some("Super+Shift+/"));
-        assert_eq!(find("Quit Pila"), Some("Super+Shift+E"));
+        let sections = sections(&config("", ModKey::Super));
+        let titles: Vec<&str> = sections.iter().map(|s| s.title).collect();
+        assert_eq!(titles, ["Windows", "Workspaces", "Mouse", "Pila"]);
+        let rows = sections.iter().flat_map(|s| &s.rows);
+        let all: Vec<&Row> = rows.collect();
+        let find = |what| find(all.iter().copied(), what);
+        assert_eq!(find("Terminal").as_deref(), Some("Super+Return"));
+        assert_eq!(find("Snap to halves").as_deref(), Some("Super+← → ↑ ↓"));
+        assert_eq!(find("Go to one").as_deref(), Some("Super+1…4"));
+        assert_eq!(
+            find("Move the window there").as_deref(),
+            Some("Super+Shift+1…4")
+        );
+        assert_eq!(find("Move a window").as_deref(), Some("Super+drag"));
+        assert_eq!(find("Quit").as_deref(), Some("Super+Shift+E"));
     }
 
     #[test]
     fn the_cheatsheet_follows_the_bindings() {
-        let rows = rows(&config(
+        let config = config(
             "[bindings]\n\"Mod+Return\" = \"none\"\n\"Mod+Shift+F12\" = \"quit\"\n\"Mod+Shift+E\" = \"none\"\n",
             ModKey::Alt,
-        ));
-        assert!(rows.iter().all(|(_, what)| *what != "Open a terminal"));
-        assert!(rows.contains(&("Alt+Shift+F12".into(), "Quit Pila")));
-    }
-
-    #[test]
-    fn a_run_of_numbers_is_one_range() {
-        let labels = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(
-            numbered(&labels(&["Super+1", "Super+2", "Super+3"])).as_deref(),
-            Some("Super+1…3")
         );
-        assert_eq!(numbered(&labels(&["Super+1"])), None);
-        assert_eq!(numbered(&labels(&["Super+1", "Super+3"])), None);
-        assert_eq!(numbered(&labels(&["Super+D"])), None);
+        let rows = welcome_rows(&config);
+        assert!(rows.iter().all(|row| row.what != "Open a terminal"));
+        assert_eq!(find(&rows, "Quit Pila").as_deref(), Some("Alt+Shift+F12"));
+        // Alt as Mod: the mouse's too.
+        let sections = sections(&config);
+        let mouse = sections.iter().find(|s| s.title == "Mouse").unwrap();
+        assert_eq!(mouse.rows[0].keys, ["Alt", "drag"]);
     }
 
     #[test]
-    fn the_panel_fits_its_rows() {
-        let size = panel_size(10, 2);
-        assert_eq!(size.w, 2 * PADDING + KEYS + COLUMN_GAP + WHAT);
-        assert_eq!(size.h, 2 * PADDING + ROW + 2 * SECTION_GAP + 12 * ROW);
+    fn a_run_of_numbers_or_arrows_is_one_key() {
+        let caps = |v: &[&[&str]]| -> Vec<Vec<Cap>> {
+            v.iter()
+                .map(|c| c.iter().map(|s| s.to_string()).collect())
+                .collect()
+        };
+        assert_eq!(
+            merged(&caps(&[&["Super", "1"], &["Super", "2"], &["Super", "3"]])),
+            Some(vec!["Super".into(), "1…3".into()])
+        );
+        assert_eq!(
+            merged(&caps(&[&["Super", "↓"], &["Super", "←"]])),
+            Some(vec!["Super".into(), "← ↓".into()])
+        );
+        assert_eq!(merged(&caps(&[&["Super", "1"]])), None);
+        assert_eq!(merged(&caps(&[&["Super", "1"], &["Super", "3"]])), None);
+        assert_eq!(merged(&caps(&[&["Super", "1"], &["Alt", "2"]])), None);
+    }
+
+    #[test]
+    fn the_panels_fit_their_rows() {
+        let row = |what| Row {
+            keys: vec!["Super".into(), "D".into()],
+            what,
+        };
+        let welcome = [Section {
+            title: "",
+            rows: vec![row("a"), row("b")],
+        }];
+        assert_eq!(
+            panel_size(Heading::Welcome, &welcome),
+            (
+                WELCOME_WIDTH,
+                WELCOME_ROWS_AT + 2 * WELCOME_ROW + WELCOME_BOTTOM
+            )
+                .into()
+        );
+        // The taller column: three rows on the left, two sections of one on
+        // the right.
+        let section = |title, n| Section {
+            title,
+            rows: (0..n).map(|_| row("x")).collect(),
+        };
+        let sheet = [section("A", 3), section("B", 1), section("C", 1)];
+        let left = SECTION_HEADING + 3 * SECTION_ROW;
+        let right = 2 * SECTION_HEADING + SECTION_GAP + 2 * SECTION_ROW;
+        assert_eq!(
+            panel_size(Heading::Shortcuts, &sheet).h,
+            SECTIONS_AT + left.max(right) + SHORTCUTS_BOTTOM
+        );
+    }
+
+    /// A keycap is drawn over what's under it, its label over the cap.
+    #[test]
+    fn text_blends_over_what_is_under_it() {
+        let mut pixels = vec![0u8; 4 * 4];
+        fill_rounded(&mut pixels, 2, (0.0, 0.0, 2.0, 2.0), 0.0, [1.0, 0.0, 0.0]);
+        // Opaque red, as BGRA.
+        assert_eq!(&pixels[..4], &[0, 0, 255, 255]);
+        let half_green = crate::text::Title {
+            pixels: vec![0, 128, 0, 128],
+            width: 1,
+            whole: true,
+        };
+        blit_text(&mut pixels, 2, &half_green, 1, 1);
+        let i = (2 + 1) * 4;
+        assert_eq!(&pixels[i..i + 4], &[0, 128, 127, 255]);
     }
 }

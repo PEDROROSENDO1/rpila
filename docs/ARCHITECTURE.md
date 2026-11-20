@@ -766,26 +766,32 @@ Key flows and invariants:
   that window, which ends the switch on it, and the press and its release go nowhere else. The
   state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
   real apps on a headless Pila.
-- **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws listing the common
-  bindings as they're bound (`rows`: a fixed list of actions looked up in `config.bindings`, an
-  unbound one left out; `combo_label` names the keys with Mod resolved; Mod+drag comes from
-  `mod_key`). `main.rs` shows it as the welcome screen when `config::create_default_file` has
-  just written the config (the first run); `show-shortcuts` (Mod+? by default) toggles it. Its
-  output is the one under the pointer when it was shown (the first before there's one), and it's
-  centered there (`shortcuts_layout`, computed for each scene, so a changed binding shows at
-  once). The keyboard filter hides it on any press but a modifier's: a binding still runs (it's
-  hidden after the filter, unless the binding is `show-shortcuts`, which hides it itself), any
-  other key is suppressed; a Mod tap's action hides it too. A press hides it, and on the panel is
+- **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws with the bindings as
+  they're bound: a fixed list of actions looked up in `config.bindings` (`keys_for`: the
+  combination to name first, or a run of numbers or arrows as one key, `merged`), an unbound one
+  left out; `combo_caps` names the keys with Mod resolved, one keycap each; Mod's drags come
+  from `mod_key`. Two layouts (`Heading`): the welcome, the few keys to get going
+  (`welcome_rows`), centered under a large title, shown by `main.rs` when
+  `config::create_default_file` has just written the config (the first run); and the full
+  cheatsheet, `show-shortcuts` (Mod+? by default), in titled sections over two columns
+  (`sections`, `columns`), which toggles it. Its output is the one under the pointer when it was
+  shown (the first before there's one), and it's centered there (`shortcuts_layout`, computed
+  for each scene, so a changed binding shows at once; `panel_size` from the rows alone). The
+  keyboard filter hides it on any press but a modifier's: a binding still runs (it's hidden
+  after the filter, unless the binding is `show-shortcuts`, which hides it itself), any other
+  key is suppressed; a Mod tap's action hides it too. A press hides it, and on the panel is
   suppressed (`pointer_button`); `Pila::under` hits nothing over it. The lock hides it, and it's
   never shown while locked. `Scene::shortcuts` is drawn by `render::output_elements` in front of
-  the switcher, behind the window menu, and keeps a frame from tearing. Its texts are one image the
-  size of the panel, drawn on a thread (`Pila::draw_shortcuts_text`: ~30 lines shaped and
-  uploaded one by one cost a 7 ms frame; as one image drawn off the loop, 2 ms), asked for again
-  from `after_frames` while it's shown whenever what it says changes (an output, the fonts, a
-  reloaded config); the panel is drawn only once its text is there, never empty. Its background and border
-  have the windows' corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the border's a
-  pixel wider). The image and the solid buffers are kept in `Buffers` while it's shown. The state dump has it
-  (`shortcuts_view_json`).
+  the switcher, behind the window menu, and keeps a frame from tearing. Its content (text in
+  sizes and weights, `text::render_text`, and keycaps, anti-aliased rounded rects with the text
+  blended over them) is one image the size of the panel, drawn on a thread
+  (`Pila::draw_shortcuts_text`: ~30 lines shaped and uploaded one by one cost a 7 ms frame; as
+  one image drawn off the loop, 2 ms), asked for again from `after_frames` while it's shown
+  whenever what it says changes (an output, the fonts, a reloaded config); the panel is drawn
+  only once its content is there, never empty. Its background and border have the windows'
+  corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the border's a pixel wider). The
+  image and the solid buffers are kept in `Buffers` while it's shown. The state dump has it
+  (`shortcuts_view_json`: its rows, keys joined by "+", and sections).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its
