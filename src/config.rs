@@ -1305,6 +1305,7 @@ struct ConfigFile {
     input: InputFile,
     workspaces: Option<usize>,
     corner_radius: Option<u32>,
+    rounded_corners: Option<String>,
     other_gpus: Option<bool>,
     direct_scanout: Option<bool>,
     tearing: Option<bool>,
@@ -1728,6 +1729,9 @@ pub struct Config {
     pub workspaces: usize,
     /// Window corner radius in logical pixels; 0 is square (`rounded.rs`).
     pub corner_radius: u32,
+    /// Which of a window's corners it rounds: the top ones (as GTK's own
+    /// windows) or all four.
+    pub rounded_corners: crate::rounded::Corners,
     /// Whether monitors on the seat's other GPUs are used, drawn on the
     /// primary and copied over (`udev/secondary.rs`). Off in `EXAMPLE`:
     /// untried on real hardware.
@@ -1980,6 +1984,20 @@ impl Config {
                 ))
             }
         };
+        let rounded_corners = match need(
+            file.rounded_corners.or(example.rounded_corners),
+            "rounded-corners",
+        )?
+        .as_str()
+        {
+            "top" => crate::rounded::Corners::Top,
+            "all" => crate::rounded::Corners::All,
+            other => {
+                return Err(format!(
+                    "rounded-corners = {other:?}: must be \"top\" or \"all\""
+                ))
+            }
+        };
         let flag = |user: Option<bool>, example: Option<bool>, key| need(user.or(example), key);
         let other_gpus = flag(file.other_gpus, example.other_gpus, "other-gpus")?;
         let direct_scanout = flag(
@@ -2141,6 +2159,7 @@ impl Config {
             input,
             workspaces,
             corner_radius,
+            rounded_corners,
             other_gpus,
             direct_scanout,
             tearing,
@@ -3154,10 +3173,23 @@ mod tests {
     }
 
     #[test]
-    fn corner_radius_defaults_to_square_and_is_bounded() {
-        assert_eq!(Config::from_toml("", &no_env).unwrap().corner_radius, 0);
+    fn corners_default_to_gtks_and_are_bounded() {
+        // GTK's own windows: 8 px, the top corners only.
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.corner_radius, 8);
+        assert_eq!(config.rounded_corners, crate::rounded::Corners::Top);
         let config = Config::from_toml("corner-radius = 12", &no_env).unwrap();
         assert_eq!(config.corner_radius, 12);
+        let config = Config::from_toml("rounded-corners = \"all\"", &no_env).unwrap();
+        assert_eq!(config.rounded_corners, crate::rounded::Corners::All);
+        let err = Config::from_toml("rounded-corners = \"bottom\"", &no_env).unwrap_err();
+        assert!(err.contains("\"top\" or \"all\""), "{err}");
+        assert!(
+            Config::from_toml("corner-radius = 0", &no_env)
+                .unwrap()
+                .corner_radius
+                == 0
+        );
         assert!(Config::from_toml("corner-radius = 65", &no_env).is_err());
         assert!(Config::from_toml("corner-radius = -1", &no_env).is_err());
     }

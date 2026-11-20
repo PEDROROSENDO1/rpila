@@ -235,11 +235,14 @@ isn't installed), `[colors] background` shows. A configuration with `[wallpaper]
 development builds read for a while, still loads, with a warning that gives the swaybg line
 doing the same.
 
-**Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
-64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
-height (28). Maximized and fullscreen windows stay square, and so do apps that draw their own
-shadow (GTK apps): they draw their own corners too, and rounding them as well would leave a
-double corner. A window rule sets it per app, those included.
+**Rounded corners.** Windows have rounded top corners, as GTK apps round their own: 8 logical
+pixels on the top two, the bottom ones square. `corner-radius` sets the radius, 0 (square) to
+64, at most half the window's shorter side and, with Pila's title bar, the bar's height (28);
+`rounded-corners = "all"` rounds all four instead of only the top ones (`"top"`). Maximized and
+fullscreen windows stay square, and Pila leaves apps that draw their own shadow (GTK apps) to
+round themselves: rounding them as well would leave a double corner. A window rule sets the
+radius per app, those included. The shadow, a blur behind the window, the bell's flash and the
+snap preview take the same corners.
 
 **Shadows.** Each window casts a shadow, darker under the focused one. Maximized and fullscreen
 windows have none, and neither do those whose app draws its own (GTK apps do). `[shadow]` sets

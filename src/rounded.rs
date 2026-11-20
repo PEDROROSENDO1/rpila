@@ -1,8 +1,9 @@
 //! Rounded window corners (`corner-radius` in the config).
 //!
 //! A window's shape is its geometry, together with its title bar when pila
-//! draws one (`Rounding`), and is decided in `Pila::scene`. Maximized and
-//! fullscreen windows stay square. Drawing it:
+//! draws one (`Rounding`), and is decided in `Pila::scene`: its top corners,
+//! as GTK rounds its own windows, or all four (`rounded-corners`). Maximized
+//! and fullscreen windows stay square. Drawing it:
 //!
 //! - Surface elements of the window's own tree (not its popups) that reach
 //!   into a corner are wrapped in `RoundedSurface`, which draws them with a
@@ -55,17 +56,21 @@ pub struct Rounding {
     /// The window geometry, with the title bar on top if it has one.
     pub rect: Rectangle<i32, Logical>,
     pub radius: f64,
+    /// Which corners `radius` rounds.
+    pub corners: Corners,
     /// Whether the top of `rect` is pila's title bar.
     pub title_bar: bool,
 }
 
 impl Rounding {
     /// The shape for a window whose geometry is `geometry` (and title bar
-    /// `bar`), with `radius` from the config; `None` when it's square.
+    /// `bar`), with `radius` and `corners` from the config; `None` when it's
+    /// square.
     pub fn new(
         geometry: Rectangle<i32, Logical>,
         bar: Option<Rectangle<i32, Logical>>,
         radius: u32,
+        corners: Corners,
         filled: bool,
     ) -> Option<Self> {
         if radius == 0 || filled {
@@ -81,17 +86,18 @@ impl Rounding {
         (radius >= 1.0).then_some(Self {
             rect,
             radius,
+            corners,
             title_bar: bar.is_some(),
         })
     }
 
     /// `rect` relative to an output at `origin`, in physical pixels, and the
-    /// radius scaled to match.
+    /// corners' radii scaled to match.
     pub(crate) fn physical(&self, origin: Point<i32, Logical>, scale: Scale<f64>) -> PhysicalShape {
         PhysicalShape {
             rect: Rectangle::new(self.rect.loc - origin, self.rect.size)
                 .to_physical_precise_round(scale),
-            radius: (self.radius * scale.x) as f32,
+            radii: self.corners.radii((self.radius * scale.x) as f32),
         }
     }
 }
@@ -100,7 +106,8 @@ impl Rounding {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PhysicalShape {
     pub rect: Rectangle<i32, Physical>,
-    pub radius: f32,
+    /// Top-left, top-right, bottom-right, bottom-left (0: square).
+    pub radii: [f32; 4],
 }
 
 /// The squares at the corners of `rect` that a rounding cuts into: top-left,
@@ -129,7 +136,7 @@ fn corner_squares(
 /// Whether an element at `element` (physical) reaches into a corner of
 /// `shape` that's rounded off, and so must be clipped.
 fn needs_clip(element: Rectangle<i32, Physical>, shape: &PhysicalShape) -> bool {
-    corner_squares(shape.rect, [shape.radius; 4])
+    corner_squares(shape.rect, shape.radii)
         .iter()
         .any(|square| square.overlaps(element))
 }
@@ -241,13 +248,17 @@ uniform vec4 color;
 uniform vec2 frame_center;
 uniform vec2 frame_half;
 uniform vec2 offset;
-uniform float radius;
+uniform vec4 radii;
 uniform float extent;
 
-// Distance from p to the frame's rounded rect: negative inside.
+// Distance from p to the frame's rounded rect: negative inside. Each quarter
+// takes its own corner's radius (top-left, top-right, bottom-right,
+// bottom-left).
 float distance_to_frame(vec2 p) {
-    vec2 q = abs(p - frame_center) - frame_half + radius;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+    vec2 d = p - frame_center;
+    float r = d.x < 0.0 ? (d.y < 0.0 ? radii.x : radii.w) : (d.y < 0.0 ? radii.y : radii.z);
+    vec2 q = abs(d) - frame_half + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
 void main() {
@@ -304,7 +315,7 @@ impl Shaders {
                 UniformName::new("frame_center", UniformType::_2f),
                 UniformName::new("frame_half", UniformType::_2f),
                 UniformName::new("offset", UniformType::_2f),
-                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("radii", UniformType::_4f),
                 UniformName::new("extent", UniformType::_1f),
             ],
         );
@@ -425,7 +436,7 @@ impl Element for RoundedSurface {
             self.inner.opaque_regions(scale),
             self.geometry(scale).loc,
             self.shape.rect,
-            [self.shape.radius; 4],
+            self.shape.radii,
         )
     }
 
@@ -480,7 +491,7 @@ impl RenderElement<GlesRenderer> for RoundedSurface {
             self.program.clone(),
             vec![
                 Uniform::new("geo_size", (size.w as f32, size.h as f32)),
-                Uniform::new("radii", [self.shape.radius; 4]),
+                Uniform::new("radii", self.shape.radii),
                 Uniform::new(
                     "input_to_geo",
                     UniformValue::Matrix3x3 {
@@ -513,11 +524,23 @@ pub struct RoundedSolid {
     radii: [f32; 4],
 }
 
-/// Which corners of a solid are rounded.
-#[derive(Debug, Clone, Copy)]
+/// Which corners of a shape are rounded: a window's (`rounded-corners`),
+/// or a solid's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Corners {
     All,
     Top,
+}
+
+impl Corners {
+    /// Each corner's radius (top-left, top-right, bottom-right, bottom-left)
+    /// when these are rounded by `radius`.
+    pub fn radii<T: Copy + Default>(self, radius: T) -> [T; 4] {
+        match self {
+            Corners::All => [radius; 4],
+            Corners::Top => [radius, radius, T::default(), T::default()],
+        }
+    }
 }
 
 impl RoundedSolid {
@@ -529,11 +552,7 @@ impl RoundedSolid {
         corners: Corners,
         scale: Scale<f64>,
     ) -> Self {
-        let radius = (radius * scale.x) as f32;
-        let radii = match corners {
-            Corners::All => [radius; 4],
-            Corners::Top => [radius, radius, 0.0, 0.0],
-        };
+        let radii = corners.radii((radius * scale.x) as f32);
         Self {
             inner,
             program: shaders.solid.clone(),
@@ -623,8 +642,9 @@ impl RenderElement<GlesRenderer> for RoundedSolid {
 pub struct Shadow {
     /// The window geometry, with the title bar on top if it has one.
     pub frame: Rectangle<i32, Logical>,
-    /// Of the frame's corners.
-    pub radius: f64,
+    /// Of the frame's corners: top-left, top-right, bottom-right,
+    /// bottom-left (as the window's `Rounding`).
+    pub radii: [f64; 4],
     /// How far it reaches past the frame.
     pub size: i32,
     pub offset: Point<i32, Logical>,
@@ -663,7 +683,7 @@ pub struct ShadowElement {
     frame_center: [f32; 2],
     frame_half: [f32; 2],
     offset: [f32; 2],
-    radius: f32,
+    radii: [f32; 4],
     extent: f32,
     alpha: f32,
 }
@@ -713,7 +733,7 @@ impl ShadowElement {
             ],
             frame_half: half,
             offset: [offset.x as f32, offset.y as f32],
-            radius: (shadow.radius * scale.x) as f32,
+            radii: shadow.radii.map(|r| (r * scale.x) as f32),
             extent: ((f64::from(shadow.size) * scale.x) as f32).max(1.0),
             alpha,
         }
@@ -782,7 +802,7 @@ impl RenderElement<GlesRenderer> for ShadowElement {
                 Uniform::new("frame_center", self.frame_center),
                 Uniform::new("frame_half", self.frame_half),
                 Uniform::new("offset", self.offset),
-                Uniform::new("radius", self.radius),
+                Uniform::new("radii", self.radii),
                 Uniform::new("extent", self.extent),
             ],
         )
@@ -797,7 +817,7 @@ impl RenderElement<GlesRenderer> for ShadowElement {
 struct ShapeState {
     id: Id,
     commit: CommitCounter,
-    last: Option<(Size<i32, Logical>, f64, bool)>,
+    last: Option<(Size<i32, Logical>, f64, Corners, bool)>,
 }
 
 /// An element that draws nothing and damages a rounded window's whole shape
@@ -827,7 +847,12 @@ impl ShapeDamage {
                 })
             })
             .borrow_mut();
-        let shape = Some((rounding.rect.size, rounding.radius, rounding.title_bar));
+        let shape = Some((
+            rounding.rect.size,
+            rounding.radius,
+            rounding.corners,
+            rounding.title_bar,
+        ));
         if state.last != shape {
             state.last = shape;
             state.commit.increment();
@@ -1019,19 +1044,24 @@ mod tests {
     #[test]
     fn square_when_off_filled_or_tiny() {
         let geo = Rectangle::new((10, 40).into(), (400, 300).into());
-        assert_eq!(Rounding::new(geo, None, 0, false), None);
-        assert_eq!(Rounding::new(geo, None, 12, true), None);
+        assert_eq!(Rounding::new(geo, None, 0, Corners::All, false), None);
+        assert_eq!(Rounding::new(geo, None, 12, Corners::All, true), None);
         let tiny = Rectangle::new((0, 0).into(), (1, 1).into());
-        assert_eq!(Rounding::new(tiny, None, 12, false), None);
+        assert_eq!(Rounding::new(tiny, None, 12, Corners::All, false), None);
     }
 
     #[test]
     fn radius_is_limited_by_size_and_title_bar() {
         let geo = Rectangle::new((10, 40).into(), (400, 30).into());
-        assert_eq!(Rounding::new(geo, None, 64, false).unwrap().radius, 15.0);
+        assert_eq!(
+            Rounding::new(geo, None, 64, Corners::All, false)
+                .unwrap()
+                .radius,
+            15.0
+        );
         let geo = Rectangle::new((10, 40).into(), (400, 300).into());
         let bar = Rectangle::new((10, 12).into(), (400, TITLE_BAR_HEIGHT).into());
-        let rounding = Rounding::new(geo, Some(bar), 64, false).unwrap();
+        let rounding = Rounding::new(geo, Some(bar), 64, Corners::Top, false).unwrap();
         assert_eq!(rounding.radius, f64::from(TITLE_BAR_HEIGHT));
         // The shape is the bar and the window together.
         assert_eq!(
@@ -1044,7 +1074,7 @@ mod tests {
     fn only_elements_in_a_corner_are_clipped() {
         let shape = PhysicalShape {
             rect: Rectangle::new((100, 100).into(), (400, 300).into()),
-            radius: 10.0,
+            radii: [10.0; 4],
         };
         // The whole window, and a subsurface at its top-left corner.
         assert!(needs_clip(shape.rect, &shape));
@@ -1060,6 +1090,18 @@ mod tests {
         assert!(!needs_clip(
             Rectangle::new((150, 100).into(), (300, 20).into()),
             &shape
+        ));
+        // Only the top corners rounded: one at the bottom-left is left as is.
+        let top = PhysicalShape {
+            radii: Corners::Top.radii(10.0),
+            ..shape
+        };
+        let bottom_left = Rectangle::new((95, 385).into(), (20, 20).into());
+        assert!(needs_clip(bottom_left, &shape));
+        assert!(!needs_clip(bottom_left, &top));
+        assert!(needs_clip(
+            Rectangle::new((95, 95).into(), (20, 20).into()),
+            &top
         ));
     }
 

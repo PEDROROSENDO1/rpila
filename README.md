@@ -92,7 +92,7 @@ A short report helps even if everything works:
   attention marked with an amber title bar; volume, brightness, media and screenshot keys bound
   by default (wpctl, brightnessctl, playerctl, grim and slurp); the screen locked and the
   monitors off after a while without input, by default (swayidle and swaylock); a shadow under each window (`[shadow]`); optional
-  rounded corners (`corner-radius`); your own colors (`[colors]`).
+  rounded corners (`corner-radius`, `rounded-corners`: GTK's by default); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.
 - **Window and layer rules** by app id, title or namespace: animations, workspace, size,

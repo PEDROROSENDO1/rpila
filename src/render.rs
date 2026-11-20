@@ -191,6 +191,8 @@ pub struct Scene {
     pub hidden_windows: Vec<WlSurface>,
     /// `corner-radius` from the config, for the snap preview.
     pub corner_radius: u32,
+    /// `rounded-corners`, for the snap preview.
+    pub rounded_corners: rounded::Corners,
     /// The window switcher, in front of everything but the cursor
     /// (`switcher_view.rs`).
     pub switcher: Option<crate::switcher_view::SceneSwitcher>,
@@ -217,6 +219,7 @@ impl Scene {
             window_menu: None,
             hidden_windows: Vec::new(),
             corner_radius: 0,
+            rounded_corners: rounded::Corners::All,
             switcher: None,
             shortcuts: None,
             colors,
@@ -521,8 +524,15 @@ fn scene_elements_from(
                 ));
             }
             if let Some((buffer, rect)) = &scene.snap_preview {
-                let radius =
-                    Rounding::new(*rect, None, scene.corner_radius, false).map(|r| r.radius);
+                // Shaped as the window dropped there would be.
+                let radius = Rounding::new(
+                    *rect,
+                    None,
+                    scene.corner_radius,
+                    scene.rounded_corners,
+                    false,
+                )
+                .map(|r| (r.radius, r.corners));
                 elements.push(solid_element(
                     renderer,
                     buffer,
@@ -818,7 +828,7 @@ fn single_window_elements(
             renderer,
             buffer,
             rect.loc - output_location,
-            rounding.map(|r| r.radius),
+            rounding.map(|r| (r.radius, r.corners)),
             entry.alpha,
             scale,
         ));
@@ -1082,7 +1092,7 @@ pub fn warm_up(renderer: &mut GlesRenderer) {
             renderer,
             &buffer,
             origin,
-            Some(8.0),
+            Some((8.0, Corners::All)),
             0.5,
             scale,
         ));
@@ -1568,20 +1578,16 @@ fn solid_element(
     renderer: &mut GlesRenderer,
     buffer: &SolidColorBuffer,
     loc: Point<i32, Logical>,
-    radius: Option<f64>,
+    rounding: Option<(f64, Corners)>,
     alpha: f32,
     scale: Scale<f64>,
 ) -> PilaRenderElement {
     let loc: Point<i32, Physical> = loc.to_physical_precise_round(scale);
     let element =
         SolidColorRenderElement::from_buffer(buffer, loc, scale, alpha, Kind::Unspecified);
-    match radius.zip(radius.and_then(|_| rounded::Shaders::get(renderer))) {
-        Some((radius, shaders)) => PilaRenderElement::RoundedSolid(RoundedSolid::new(
-            element,
-            &shaders,
-            radius,
-            Corners::All,
-            scale,
+    match rounding.zip(rounding.and_then(|_| rounded::Shaders::get(renderer))) {
+        Some(((radius, corners), shaders)) => PilaRenderElement::RoundedSolid(RoundedSolid::new(
+            element, &shaders, radius, corners, scale,
         )),
         None => PilaRenderElement::Solid(element),
     }

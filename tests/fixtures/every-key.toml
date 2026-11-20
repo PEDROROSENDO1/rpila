@@ -11,6 +11,7 @@ launcher = "fuzzel"
 autostart = ["swaybg -c '#202020'", "waybar"]
 workspaces = 4
 corner-radius = 8
+rounded-corners = "top"
 other-gpus = false
 direct-scanout = true
 tearing = true

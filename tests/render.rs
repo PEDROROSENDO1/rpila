@@ -80,9 +80,37 @@ fn hovering_the_close_button_highlights_it() {
     );
 }
 
+/// The defaults: GTK's own windows' corners, 8 px at the top, square at the
+/// bottom; the bar's top corners are the window's.
+#[test]
+fn by_default_only_the_top_corners_are_rounded_as_gtks() {
+    let example = pila::config::Config::from_toml("", &|_| None).unwrap();
+    assert_eq!(example.corner_radius, 8);
+    // The harness squares corners unless the test sets a radius: the
+    // example's, so `rounded-corners` is the example's too.
+    let mut pila = TestPila::with_config("corner-radius = 8\n");
+    let client = pila.client();
+    client.window("a").size(400, 300).color(RED).create();
+    pila.wait_focus("a");
+    let (x, y, w, h) = rect(&pila.window("a")["geometry"]);
+    pila.settle();
+    assert_eq!(pila.pixel((x + 1) as f64, (y - BAR + 1) as f64), BACKGROUND);
+    assert_eq!(
+        pila.pixel((x + w - 2) as f64, (y - BAR + 1) as f64),
+        BACKGROUND
+    );
+    for (cx, cy) in [(x + 1, y + h - 2), (x + w - 2, y + h - 2)] {
+        assert_eq!(
+            pila.pixel(cx as f64, cy as f64),
+            [255, 0, 0, 255],
+            "bottom corner at {cx},{cy}"
+        );
+    }
+}
+
 #[test]
 fn rounded_corners_include_the_bar_and_go_square_when_maximized() {
-    let mut pila = TestPila::with_config("corner-radius = 12\n");
+    let mut pila = TestPila::with_config("corner-radius = 12\nrounded-corners = \"all\"\n");
     let client = pila.client();
     client.window("a").size(400, 300).color(RED).create();
     pila.wait_focus("a");
@@ -558,7 +586,10 @@ fn a_resized_windows_backdrop_keeps_its_rounded_corners() {
     // The window's left edge is just left of the red/green edge: its left
     // corners are cut over red, and stay where they are as it grows.
     let radius = "corner-radius = 20\nblur = true";
-    let mut pila = TestPila::with_config(&glass_window_rule(638, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(638, 300, radius)
+    ));
     let client = pila.client();
     let window = halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 639.0, 400.0);
@@ -994,7 +1025,10 @@ fn a_windows_backdrop_has_its_rounded_corners() {
     // The edge between the halves runs through the corners: of its left side,
     // over red, with the window almost all right of the edge...
     let radius = "corner-radius = 20\nblur = true";
-    let mut pila = TestPila::with_config(&glass_window_rule(638, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(638, 300, radius)
+    ));
     let client = pila.client();
     halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 639.0, 400.0);
@@ -1004,7 +1038,10 @@ fn a_windows_backdrop_has_its_rounded_corners() {
     assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
     drop(pila);
     // ... and of its right side, with the window just right of it, over green.
-    let mut pila = TestPila::with_config(&glass_window_rule(442, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(442, 300, radius)
+    ));
     let client = pila.client();
     halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 641.0, 400.0);
@@ -1292,7 +1329,7 @@ fn corner_radius_leaves_an_app_that_draws_its_own_shadow_to_it() {
 #[test]
 fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
     let config = format!(
-        "corner-radius = 20\n{}",
+        "corner-radius = 20\nrounded-corners = \"all\"\n{}",
         glass_window_rule(638, 300, "blur = true")
     );
     let mut pila = TestPila::with_config(&config);

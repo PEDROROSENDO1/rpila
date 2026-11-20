@@ -6,9 +6,9 @@ parsing, including `example_config_is_valid` for `config.example.toml`).
 Integration tests (`tests/*.rs`, harness in `tests/common/`) run a headless Pila per test
 (`--backend headless`, see "Backends" in `docs/ARCHITECTURE.md`), in parallel:
 
-- `TestPila` starts it with a config (animations, shadows and shake to find off, the US
-  layout and no `autostart` unless the test sets `[animations]`, `[shadow]`, `[cursor]`,
-  `[keyboard]` or `autostart`: the example's `waybar` would count among the `children`), without
+- `TestPila` starts it with a config (animations, shadows and shake to find off, square
+  corners, the US layout and no `autostart` unless the test sets `[animations]`, `[shadow]`,
+  `[cursor]`, a top-level `corner-radius`, `[keyboard]` or `autostart`: the example's `waybar` would count among the `children`), without
   the session's display, keymap, cursor theme (named cursors are the built-in arrow), `PILA_*`
   or D-Bus variables, in a private runtime, config and state directory, and returns once the
   fonts are loaded (they end with a redraw of every output, which a count must not see); it injects

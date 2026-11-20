@@ -816,6 +816,7 @@ impl Pila {
                 .filter_map(|window| Some(window.wl_surface()?.into_owned()))
                 .collect(),
             corner_radius: self.config.corner_radius,
+            rounded_corners: self.config.rounded_corners,
             switcher: self.scene_switcher(),
             shortcuts: self.scene_shortcuts(),
             ..Scene::blank(self.config.colors)
@@ -882,6 +883,7 @@ impl Pila {
                 Rectangle::new(loc, window.geometry().size),
                 bar_rect,
                 radius,
+                self.config.rounded_corners,
                 maximized || fullscreen,
             )
         };
@@ -914,7 +916,7 @@ impl Pila {
             && !crate::workspaces::is_override_redirect(window))
         .then(|| crate::rounded::Shadow {
             frame,
-            radius: rounding.map_or(0.0, |r| r.radius),
+            radii: rounding.map_or([0.0; 4], |r| r.corners.radii(r.radius)),
             size: config.size,
             offset: config.offset.into(),
             color: if focused == Some(window) {

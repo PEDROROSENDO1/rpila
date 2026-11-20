@@ -1413,7 +1413,9 @@ Key flows and invariants:
   without text; once loaded (and warmed up: common characters shaped and rasterized on that
   thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
   the window, and `render_with` returns `None` on sizes that overflow.
-- **Rounded corners** (`rounded.rs`, `corner-radius`, default 0): `Pila::scene` gives each
+- **Rounded corners** (`rounded.rs`, `corner-radius`, default 8, and `rounded-corners`, `"top"`
+  by default as GTK rounds its own windows, or `"all"`: `rounded::Corners`, whose `radii` gives
+  each corner's radius, top-left first, to every shader through a vec4): `Pila::scene` gives each
   window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; the global
   radius not for a client that draws its own shadow, `bbox` past its geometry, as for shadows,
   since it draws its own corners: a rule's radius still applies; a blur behind it still gets
@@ -1428,7 +1430,8 @@ Key flows and invariants:
   keep it in step with Smithay). Elements away from the corners stay plain (direct
   scanout). Content outside the geometry (CSD shadows) is not clipped. Opaque regions
   lose the corner squares. The bar background, bell flash and snap preview are
-  `RoundedSolid` (pixel shader over a `SolidColorBuffer`'s element); the close button is
+  `RoundedSolid` (pixel shader over a `SolidColorBuffer`'s element; the bar always its top
+  corners, the flash and the preview the window's); the close button is
   rasterized with its corner cut. `ShapeDamage` (draws nothing, in front of the window)
   damages a window whose shape changed without a commit (e.g. a reload). Shaders are
   compiled once per EGL context; on failure corners stay square.

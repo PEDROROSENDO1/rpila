@@ -290,7 +290,7 @@ const SHAPE_UNIFORMS: &str = "\
 uniform vec2 target_size;
 uniform vec2 shape_loc;
 uniform vec2 shape_size;
-uniform float radius;
+uniform vec4 radii;
 ";
 
 const DOWN_FRAG: &str = "\
@@ -360,7 +360,7 @@ impl Shaders {
                 UP_FRAG.replace(
                     "(sum / 12.0) * alpha",
                     "(sum / 12.0) * alpha * rounding_alpha(\
-                     v_coords * target_size - shape_loc, shape_size, vec4(radius))",
+                     v_coords * target_size - shape_loc, shape_size, radii)",
                 ),
             ),
             &[
@@ -370,7 +370,7 @@ impl Shaders {
                 UniformName::new("target_size", UniformType::_2f),
                 UniformName::new("shape_loc", UniformType::_2f),
                 UniformName::new("shape_size", UniformType::_2f),
-                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("radii", UniformType::_4f),
             ],
         );
         match (down, up, up_rounded) {
@@ -392,7 +392,8 @@ impl Shaders {
 struct Shape {
     loc: Point<i32, Physical>,
     size: Size<i32, Physical>,
-    radius: f32,
+    /// Top-left, top-right, bottom-right, bottom-left.
+    radii: [f32; 4],
 }
 
 /// The blurred backdrop of one surface on one output.
@@ -570,7 +571,7 @@ fn pass(
             Uniform::new("target_size", target_size),
             Uniform::new("shape_loc", (shape.loc.x as f32, shape.loc.y as f32)),
             Uniform::new("shape_size", (shape.size.w as f32, shape.size.h as f32)),
-            Uniform::new("radius", shape.radius),
+            Uniform::new("radii", shape.radii),
         ]);
     }
     let mut target = renderer.bind(dst)?;
@@ -742,7 +743,7 @@ impl BlurCache {
             Shape {
                 loc: shape.rect.loc,
                 size: shape.rect.size,
-                radius: shape.radius,
+                radii: shape.radii,
             }
         });
         if let Err(err) = self.prepare_entry(target, behind, &key, rect, size, rects, shape) {

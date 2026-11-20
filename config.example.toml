@@ -73,12 +73,16 @@ tool-configs = true
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
 workspaces = 4
 
-# Rounded window corners: the radius in logical pixels, 0 (square) to 64.
+# Rounded window corners: the radius in logical pixels, 0 (square) to 64, and
+# which corners: "top" (as GTK apps round their own windows) or "all".
 # Maximized and fullscreen windows stay square, and so do apps that draw their
 # own shadow and corners (GTK apps; a window rule's corner-radius rounds them).
 # The radius is at most half the window's shorter side, and with a title bar at
 # most the bar's height (28).
-corner-radius = 0
+# corner-radius = 0                # square, e.g.
+# rounded-corners = "all"          # e.g.
+corner-radius = 8
+rounded-corners = "top"
 
 # Monitors on the seat's other GPUs (a laptop's HDMI or DisplayPort wired to
 # its dedicated GPU, a dock with a GPU of its own): drawn with the main GPU
