@@ -137,6 +137,11 @@ pub struct Title {
     pub whole: bool,
 }
 
+/// Whether the fonts have loaded: until then nothing draws text.
+pub fn loaded() -> bool {
+    FONTS.get().is_some()
+}
+
 /// `title` in `color` as one line at most `max_width` wide (ending in "…" if
 /// it doesn't fit), vertically centered in `height` (both logical), drawn
 /// at `scale` physical pixels per logical one. `None` until the fonts have

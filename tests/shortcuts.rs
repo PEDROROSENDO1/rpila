@@ -226,3 +226,47 @@ fn the_panel_has_the_windows_corners() {
         );
     }
 }
+
+/// On a monitor smaller than the panel (1280x800 at scale 2: 640x400
+/// logical), the cheatsheet fits inside it, shrunk as a whole (the welcome
+/// shrinks the same way: `src/shortcuts_view.rs`' `fit` test).
+#[test]
+fn the_panels_fit_a_small_monitor() {
+    let mut pila = TestPila::with_config("[[output]]\nname = \"HEADLESS-1\"\nscale = 2\n");
+    pila.combo("Super+Shift+slash");
+    let state = pila.wait("shown", shown);
+    let (x, y, w, h) = rect(&state["shortcuts_view"]["rect"]);
+    assert!(
+        x >= 0 && y >= 0 && x + w <= 640 && y + h <= 400,
+        "the cheatsheet at {x},{y} {w}x{h} on 640x400"
+    );
+    // Shrunk as a whole, not cropped: the right column's first keycap
+    // (laid out at 448 + 3, 72 + 22 + 11 in its 860 wide layout) is where
+    // the shrinking puts it, in the keycaps' fill ([colors] bar).
+    let f = w as f64 / 860.0;
+    let (cx, cy) = (x as f64 + 451.0 * f, y as f64 + 105.0 * f);
+    pila.wait_pixel_is(cx, cy, "the right column's keycap", |p| {
+        p == [0x2f, 0x31, 0x36, 255]
+    });
+    pila.key("Escape");
+    pila.wait("hidden", |s| !shown(s));
+}
+
+/// A reload that changes the corners while the panel is shown reshapes it at
+/// once.
+#[test]
+fn a_reload_reshapes_the_panel_shown() {
+    let mut pila = TestPila::with_config("corner-radius = 8\n");
+    pila.combo("Super+Shift+slash");
+    let state = pila.wait("shown", shown);
+    let (x, y, ..) = rect(&state["shortcuts_view"]["rect"]);
+    let desktop = pila.pixel(5.0, 5.0);
+    let corner = ((x - 1) as f64, (y - 1) as f64);
+    pila.wait_pixel(corner.0, corner.1, desktop);
+    // Square now: the border is at the very corner.
+    pila.write_config("corner-radius = 0\n");
+    pila.wait_log("config reloaded");
+    pila.wait_pixel_is(corner.0, corner.1, "the square corner's border", |p| {
+        p == [0x3f, 0x42, 0x49, 255]
+    });
+}

@@ -777,7 +777,10 @@ Key flows and invariants:
   cheatsheet, `show-shortcuts` (Mod+? by default), in titled sections over two columns
   (`sections`, `columns`), which toggles it. Its output is the one under the pointer when it was
   shown (the first before there's one), and it's centered there (`shortcuts_layout`, computed
-  for each scene, so a changed binding shows at once; `panel_size` from the rows alone). The
+  for each scene, so a changed binding shows at once; `panel_size` from the rows alone), shrunk
+  as a whole where it's bigger than its monitor with `FIT_MARGIN` around it (`fit`: its content
+  is drawn at its layout size, `SceneShortcuts::layout_size`, and shown at the panel's, its
+  corners shrunk with it). The
   keyboard filter hides it on any press but a modifier's: a binding still runs (it's hidden
   after the filter, unless the binding is `show-shortcuts`, which hides it itself), any other
   key is suppressed; a Mod tap's action hides it too. A press hides it, and on the panel is
@@ -787,11 +790,15 @@ Key flows and invariants:
   sizes and weights, `text::render_text`, and keycaps, anti-aliased rounded rects with the text
   blended over them) is one image the size of the panel, drawn on a thread
   (`Pila::draw_shortcuts_text`: ~30 lines shaped and uploaded one by one cost a 7 ms frame; as
-  one image drawn off the loop, 2 ms), asked for again from `after_frames` while it's shown
-  whenever what it says changes (an output, the fonts, a reloaded config); the panel is drawn
-  only once its content is there, never empty. Its background and border have the windows'
-  corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the border's a pixel wider). The
-  image and the solid buffers are kept in `Buffers` while it's shown. The state dump has it
+  one image drawn off the loop, 2 ms), asked for from `after_frames` only while it has none and
+  could (`shortcuts_need_content`: an output or the fonts coming after it's shown; rebuilding
+  the key on every turn of the loop cost 18 µs a turn) and by a reload
+  (`shortcuts_config_changed`, which makes its background and border anew so that a change of
+  corners alone is drawn); one that fails with the fonts loaded isn't asked again until it
+  changes. The panel is drawn only once its content is there, never empty. Its background and
+  border have the windows' corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the
+  border's a pixel wider). The image and the solid buffers are kept in `Buffers` while it's
+  shown. The state dump has it
   (`shortcuts_view_json`: its rows, keys joined by "+", and sections).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler

@@ -1789,9 +1789,9 @@ impl Pila {
         self.send_keyboard_events();
         // So can the window switch end (its window was already in front).
         self.send_switch_events();
-        // The cheatsheet's text, while it's shown, for what it says now: an
-        // output, the fonts or a reloaded config can come after it.
-        if self.shortcuts_shown() {
+        // The cheatsheet's content, once it can be drawn: an output or the
+        // fonts can come after it's shown (a reload asks for it itself).
+        if self.shortcuts_need_content() {
             self.draw_shortcuts_text();
         }
         let drawn = std::mem::take(&mut self.frame_drawn);

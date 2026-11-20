@@ -38,6 +38,8 @@ use crate::{
 
 /// The panel's border.
 const BORDER: i32 = 1;
+/// The room kept around a panel shrunk to fit its monitor (`fit`).
+const FIT_MARGIN: i32 = 32;
 /// A keycap's height, its rounding and its padding around the label.
 const CAP_HEIGHT: i32 = 22;
 const CAP_RADIUS: i32 = 4;
@@ -468,6 +470,9 @@ pub struct SceneShortcuts {
     /// The output it's on, by name.
     pub output: String,
     pub rect: Rectangle<i32, Logical>,
+    /// Its size as laid out (`panel_size`), which its content is drawn at:
+    /// `rect` is that, shrunk to fit its monitor (`fit`).
+    pub layout_size: Size<i32, Logical>,
     pub heading: Heading,
     /// Its sections: the welcome's one, untitled; the full cheatsheet's in
     /// two columns, the first section the first column.
@@ -743,6 +748,15 @@ fn home_relative(path: &std::path::Path) -> String {
     }
 }
 
+/// How much a panel `size` is shrunk to fit `area` with `FIT_MARGIN`
+/// around it: 1 where it fits (it's never grown).
+fn fit(size: Size<i32, Logical>, area: Size<i32, Logical>) -> f64 {
+    let room = |area: i32, size: i32| f64::from(area - 2 * FIT_MARGIN) / f64::from(size.max(1));
+    room(area.w, size.w)
+        .min(room(area.h, size.h))
+        .clamp(0.1, 1.0)
+}
+
 /// The panel's size as `heading` with `sections`.
 fn panel_size(heading: Heading, sections: &[Section]) -> Size<i32, Logical> {
     match heading {
@@ -799,7 +813,7 @@ impl Pila {
         let items = match view.heading {
             Heading::Welcome => {
                 let rows: Vec<Row> = view.rows().cloned().collect();
-                welcome_items(&rows, &view.notes, view.rect.size.h, colors)
+                welcome_items(&rows, &view.notes, view.layout_size.h, colors)
             }
             Heading::Shortcuts => shortcuts_items(&columns(&view.sections), &view.notes, colors),
         };
@@ -814,7 +828,7 @@ impl Pila {
                 bits(colors.hover),
                 bits(colors.icon_inactive),
             ],
-            size: (view.rect.size.w, view.rect.size.h),
+            size: (view.layout_size.w, view.layout_size.h),
             scale,
         };
         let drawn = view.buffers.borrow().text.as_ref().map(|t| &t.key) == Some(&key);
@@ -844,11 +858,19 @@ impl Pila {
                 if state.shortcuts_view.pending.as_ref() != Some(&key) {
                     return;
                 }
-                state.shortcuts_view.pending = None;
-                // `None`: no fonts yet; their arrival asks again.
                 let Some(pixels) = pixels else {
+                    // No fonts yet: their arrival asks again
+                    // (`shortcuts_need_content`). With them, it failed: it
+                    // stays pending, not asked again on every turn of the
+                    // loop, until what it says changes.
+                    if crate::text::loaded() {
+                        tracing::warn!("can't draw the shortcuts' text");
+                    } else {
+                        state.shortcuts_view.pending = None;
+                    }
                     return;
                 };
+                state.shortcuts_view.pending = None;
                 state.shortcuts_view.buffers.borrow_mut().text = Some(TextImage {
                     key: key.clone(),
                     pixels,
@@ -860,6 +882,33 @@ impl Pila {
             tracing::warn!(?err, "can't wait for the shortcuts' text");
             self.shortcuts_view.pending = None;
         }
+    }
+
+    /// Whether the cheatsheet is shown with no content and none on the way,
+    /// and could have it: the fonts are loaded (`after_frames` asks then, so
+    /// an output or the fonts coming after it's shown bring it, without
+    /// building it anew on every turn of the loop).
+    pub(crate) fn shortcuts_need_content(&self) -> bool {
+        self.shortcuts_shown()
+            && self.shortcuts_view.pending.is_none()
+            && self.shortcuts_view.buffers.borrow().text.is_none()
+            && crate::text::loaded()
+    }
+
+    /// The config was reloaded: the cheatsheet shown takes its keys, colors
+    /// and corners as they are now. Its background and border are made anew,
+    /// so that a change of shape alone (the corners) is drawn.
+    pub(crate) fn shortcuts_config_changed(&mut self) {
+        if !self.shortcuts_shown() {
+            return;
+        }
+        {
+            let mut buffers = self.shortcuts_view.buffers.borrow_mut();
+            buffers.background = None;
+            buffers.border = None;
+        }
+        self.redraw_shortcuts_view();
+        self.draw_shortcuts_text();
     }
 
     /// Hide the cheatsheet, if it's shown.
@@ -896,11 +945,18 @@ impl Pila {
         }
     }
 
-    /// The panel, its sections, notes and output, while it's shown.
+    /// The panel (where it shows, and its size as laid out), its sections,
+    /// notes and output, while it's shown.
     #[allow(clippy::type_complexity)]
     fn shortcuts_layout(
         &self,
-    ) -> Option<(Rectangle<i32, Logical>, Vec<Section>, Vec<String>, String)> {
+    ) -> Option<(
+        Rectangle<i32, Logical>,
+        Size<i32, Logical>,
+        Vec<Section>,
+        Vec<String>,
+        String,
+    )> {
         let shown = self.shortcuts_view.shown.as_ref()?;
         let output = shown
             .output
@@ -923,23 +979,37 @@ impl Pila {
             }
         }
         notes.push("Any key or click closes this".into());
-        let size = panel_size(shown.heading, &sections);
+        let layout_size = panel_size(shown.heading, &sections);
+        let scale = fit(layout_size, area.size);
+        let size = Size::from((
+            (f64::from(layout_size.w) * scale).round() as i32,
+            (f64::from(layout_size.h) * scale).round() as i32,
+        ));
         let loc = area.loc + Point::from(((area.size.w - size.w) / 2, (area.size.h - size.h) / 2));
-        Some((Rectangle::new(loc, size), sections, notes, output.name()))
+        Some((
+            Rectangle::new(loc, size),
+            layout_size,
+            sections,
+            notes,
+            output.name(),
+        ))
     }
 
     /// The cheatsheet for `Pila::scene`, while it's shown.
     pub(crate) fn scene_shortcuts(&self) -> Option<SceneShortcuts> {
         let heading = self.shortcuts_view.shown.as_ref()?.heading;
-        let (rect, sections, notes, output) = self.shortcuts_layout()?;
+        let (rect, layout_size, sections, notes, output) = self.shortcuts_layout()?;
+        // Its corners shrink with it.
+        let shrunk = f64::from(rect.size.w) / f64::from(layout_size.w.max(1));
         Some(SceneShortcuts {
             output,
             rect,
+            layout_size,
             heading,
             sections,
             notes,
             rounding: (self.config.corner_radius > 0).then_some((
-                f64::from(self.config.corner_radius),
+                f64::from(self.config.corner_radius) * shrunk,
                 self.config.rounded_corners,
             )),
             buffers: self.shortcuts_view.buffers.clone(),
@@ -1005,14 +1075,18 @@ pub fn elements(
             None,
         )
     });
+    // Shown at the panel's size: smaller than drawn where it was shrunk to
+    // fit its monitor.
     let loc = (view.rect.loc - origin).to_f64().to_physical(scale);
     if let Ok(element) = MemoryRenderBufferRenderElement::from_buffer(
         renderer,
         loc,
         buffer,
         None,
-        None,
-        None,
+        // All of it, at its size as laid out (without a source, Smithay
+        // takes `size` for it and crops).
+        Some(Rectangle::from_size(view.layout_size.to_f64())),
+        Some(view.rect.size),
         Kind::Unspecified,
     ) {
         elements.push(PilaRenderElement::Memory(element));
@@ -1218,6 +1292,20 @@ mod tests {
             panel_size(Heading::Shortcuts, &sheet).h,
             SECTIONS_AT + left.max(right) + SHORTCUTS_BOTTOM
         );
+    }
+
+    /// A panel that fits is drawn as it is; one that doesn't shrinks to its
+    /// monitor with room around it (the welcome on 640x400 logical: 1280x800
+    /// at scale 2), never grown.
+    #[test]
+    fn a_panel_too_big_for_its_monitor_shrinks() {
+        let welcome = Size::from((WELCOME_WIDTH, 398));
+        assert_eq!(fit(welcome, (1280, 800).into()), 1.0);
+        let shrunk = fit(welcome, (640, 400).into());
+        assert!(shrunk < 1.0);
+        assert!(f64::from(welcome.h) * shrunk <= f64::from(400 - 2 * FIT_MARGIN) + 0.5);
+        let sheet = Size::from((SHORTCUTS_WIDTH, 374));
+        assert!(f64::from(sheet.w) * fit(sheet, (640, 400).into()) <= 576.5);
     }
 
     /// A keycap is drawn over what's under it, its label over the cap.

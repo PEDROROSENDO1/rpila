@@ -203,6 +203,8 @@ impl Pila {
                 crate::tool_configs::rewrite_in_background(self.config.colors);
             }
         }
+        // The shortcuts shown: its keys, colors and corners as they are now.
+        self.shortcuts_config_changed();
         self.queue_redraw();
     }
 
