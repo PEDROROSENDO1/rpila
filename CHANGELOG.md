@@ -84,8 +84,8 @@
   goes through in the middle of the monitor, most recently used first: a live preview of each (a
   video keeps playing in it, minimized windows and those on another monitor too), with its
   title, the one it's on highlighted; a click on one switches to it. A quick Mod+Tab, there and
-  back, shows nothing. Pila draws it itself: nothing to start or install, and the previews are
-  the windows' own pictures, with no capture.
+  back, shows nothing. Pila draws it itself, with the windows' corners: nothing to start or
+  install, and the previews are the windows' own pictures, with no capture.
 - **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
   switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
   the one it's on, at each step, and null when it ends: for a program that shows it.

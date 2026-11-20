@@ -751,8 +751,9 @@ Key flows and invariants:
   it is) is centered on the switch's output: tiles of `COLUMNS` to a row, `ROWS` rows shown
   (`first_shown` keeps the selected one's in view), each a preview over the window's title (or
   its app id), the selected one on the accent color (`[colors] snap-preview`, opaque), on
-  `bar-inactive` with a `hover` border, square. `Scene::switcher` (`SceneSwitcher`) is drawn on
-  its output in front of everything but the window menu and the cursor
+  `bar-inactive` with a `hover` border, with the windows' corners (`SceneSwitcher::rounding`:
+  `RoundedSolid`, the border's a pixel wider; the tiles square). `Scene::switcher`
+  (`SceneSwitcher`) is drawn on its output in front of everything but the window menu and the cursor
   (`render::output_elements`), and in captures. A preview is the window's surfaces (no title
   bar, no popups) drawn into an `OffscreenWindow` of its own the size of its place, scaled to
   fit as a whole (`RescaleRenderElement`: a surface element scales only its place) and never
