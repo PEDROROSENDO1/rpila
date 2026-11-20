@@ -221,6 +221,8 @@ pub struct Pila {
     pub idle_inhibitors: IdleInhibitors,
     /// The window switcher Pila draws (`switcher_view.rs`).
     pub switcher_view: crate::switcher_view::SwitcherView,
+    /// The shortcuts cheatsheet Pila draws (`shortcuts_view.rs`).
+    pub shortcuts_view: crate::shortcuts_view::ShortcutsView,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -596,6 +598,7 @@ impl Pila {
             globals,
             idle_inhibitors: IdleInhibitors::default(),
             switcher_view: Default::default(),
+            shortcuts_view: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -678,7 +681,7 @@ impl Pila {
                 .map(|(surface, origin)| Under::Lock(surface, origin));
         }
         // Pila's switcher is in front of everything, and no client's.
-        if self.switcher_view_covers(pos) {
+        if self.switcher_view_covers(pos) || self.shortcuts_view_covers(pos) {
             return None;
         }
         let layer = |layers| {
@@ -814,6 +817,7 @@ impl Pila {
                 .collect(),
             corner_radius: self.config.corner_radius,
             switcher: self.scene_switcher(),
+            shortcuts: self.scene_shortcuts(),
             ..Scene::blank(self.config.colors)
         }
     }
@@ -1783,6 +1787,11 @@ impl Pila {
         self.send_keyboard_events();
         // So can the window switch end (its window was already in front).
         self.send_switch_events();
+        // The cheatsheet's text, while it's shown, for what it says now: an
+        // output, the fonts or a reloaded config can come after it.
+        if self.shortcuts_shown() {
+            self.draw_shortcuts_text();
+        }
         let drawn = std::mem::take(&mut self.frame_drawn);
         let capture_due = std::mem::take(&mut self.capture_due);
         if !std::mem::take(&mut self.housekeeping) && !drawn && !capture_due {
@@ -1899,6 +1908,7 @@ impl Pila {
                 }
             }
             Action::ShowDesktop => self.show_desktop(),
+            Action::ShowShortcuts => self.toggle_shortcuts(),
             Action::FocusOutput(target) => self.focus_output(target),
             Action::MoveToOutput(target) => self.move_focused_to_output(target),
             Action::SwitchLayout(target) => self.switch_layout(target),

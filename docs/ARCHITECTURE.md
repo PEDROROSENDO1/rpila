@@ -756,6 +756,25 @@ Key flows and invariants:
   that window, which ends the switch on it, and the press and its release go nowhere else. The
   state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
   real apps on a headless Pila.
+- **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws listing the common
+  bindings as they're bound (`rows`: a fixed list of actions looked up in `config.bindings`, an
+  unbound one left out; `combo_label` names the keys with Mod resolved; Mod+drag comes from
+  `mod_key`). `main.rs` shows it as the welcome screen when `config::create_default_file` has
+  just written the config (the first run); `show-shortcuts` (Mod+? by default) toggles it. Its
+  output is the one under the pointer when it was shown (the first before there's one), and it's
+  centered there (`shortcuts_layout`, computed for each scene, so a changed binding shows at
+  once). The keyboard filter hides it on any press but a modifier's: a binding still runs (it's
+  hidden after the filter, unless the binding is `show-shortcuts`, which hides it itself), any
+  other key is suppressed; a Mod tap's action hides it too. A press hides it, and on the panel is
+  suppressed (`pointer_button`); `Pila::under` hits nothing over it. The lock hides it, and it's
+  never shown while locked. `Scene::shortcuts` is drawn by `render::output_elements` in front of
+  the switcher, behind the window menu, and keeps a frame from tearing. Its texts are one image the
+  size of the panel, drawn on a thread (`Pila::draw_shortcuts_text`: ~30 lines shaped and
+  uploaded one by one cost a 7 ms frame; as one image drawn off the loop, 2 ms), asked for again
+  from `after_frames` while it's shown whenever what it says changes (an output, the fonts, a
+  reloaded config); the panel is drawn only once its text is there, never empty. The image and
+  the solid buffers are kept in `Buffers` while it's shown. The state dump has it
+  (`shortcuts_view_json`).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its

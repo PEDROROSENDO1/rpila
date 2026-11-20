@@ -211,6 +211,8 @@ impl Pila {
         // the window menu, a binding's repeat to start, a tap's action (run
         // once the client got the release).
         let mut menu_key = None;
+        // A key that hides the shortcuts cheatsheet (`shortcuts_view.rs`).
+        let mut hide_shortcuts = false;
         let mut repeat_next = None;
         let mut tap_action = None;
         // `input_from_source`, but while locked a key that isn't Pila's goes
@@ -290,6 +292,16 @@ impl Pila {
                         let action = sym
                             .and_then(|sym| state.config.action_for(sym, mods))
                             .filter(|action| allowed(state, action));
+                        // The cheatsheet goes with any key but a modifier;
+                        // a binding still runs (`show-shortcuts` hides it
+                        // itself), any other key goes nowhere else.
+                        if state.shortcuts_shown() && !handle.modified_sym().is_modifier_key() {
+                            hide_shortcuts = action != Some(Action::ShowShortcuts);
+                            if action.is_none() {
+                                state.input.suppressed_keys.insert(keycode);
+                                return FilterResult::Intercept(None);
+                            }
+                        }
                         if let Some(action) = action {
                             state.input.suppressed_keys.insert(keycode);
                             if sym.is_some_and(|sym| state.config.repeats(sym, mods)) {
@@ -337,6 +349,9 @@ impl Pila {
         if let Some(sym) = menu_key {
             self.window_menu_key(sym);
         }
+        if hide_shortcuts {
+            self.hide_shortcuts();
+        }
         if let Some(action) = action.flatten() {
             self.run_action(action, serial);
         }
@@ -344,6 +359,9 @@ impl Pila {
             self.start_binding_repeat(keycode, action);
         }
         if let Some(action) = tap_action {
+            if action != Action::ShowShortcuts {
+                self.hide_shortcuts();
+            }
             self.run_action(action, serial);
             acted = true;
         }
@@ -755,6 +773,16 @@ impl Pila {
                 client,
                 at: std::time::Instant::now(),
             });
+        }
+        // A click hides the shortcuts cheatsheet: on it, it does nothing else
+        // (its release neither).
+        if button_state == ButtonState::Pressed && self.shortcuts_shown() {
+            let on_it = self.shortcuts_view_covers(pointer.current_location());
+            self.hide_shortcuts();
+            if on_it {
+                self.input.suppressed_buttons.insert(button);
+                return;
+            }
         }
         // A click on a tile of the switcher ends the switch on that window,
         // and does nothing else (its release neither).

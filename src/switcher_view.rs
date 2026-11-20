@@ -310,7 +310,7 @@ impl Pila {
 }
 
 /// An opaque version of a premultiplied color.
-fn opaque(color: [f32; 4]) -> [f32; 4] {
+pub(crate) fn opaque(color: [f32; 4]) -> [f32; 4] {
     let a = color[3];
     if a <= 0.0 {
         return [0.0, 0.0, 0.0, 1.0];

@@ -291,12 +291,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BackendKind::Udev | BackendKind::Headless => ModKey::Super,
     };
     // No `--config` and no file yet: start the user's from the example (the
-    // defaults, so nothing changes). A path given by hand may be a typo.
+    // defaults, so nothing changes), and welcome them with the shortcuts. A
+    // path given by hand may be a typo.
+    let mut first_run = false;
     if config_path.is_none() {
         if let Some(path) = Config::default_path() {
             match config::create_default_file(&path) {
                 Ok(true) => {
-                    tracing::info!(path = %path.display(), "created the config from the example")
+                    tracing::info!(path = %path.display(), "created the config from the example");
+                    first_run = true;
                 }
                 Ok(false) => {}
                 Err(err) => {
@@ -333,6 +336,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     state.config_path = config_path;
     state.watch_config();
+    if first_run {
+        state.show_shortcuts(pila::shortcuts_view::Heading::Welcome);
+    }
     if let Some(err) = config_error {
         state::notify_after_startup(
             &state.loop_handle,

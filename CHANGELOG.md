@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A welcome screen with the shortcuts:** the first time Pila starts, when it writes your
+  configuration file, it shows a cheatsheet of the common shortcuts as they're bound (your Mod
+  key, your own keys; an action you unbound isn't listed). Any key or click hides it, and a
+  binding still runs (Mod+Return hides it and opens a terminal). **Mod+?** (`Mod+Shift+slash`,
+  the new action `show-shortcuts`) shows it again.
 - **`pila-desktop`, or the compositor alone:** a new metapackage (APT, DNF, the AUR and the
   flake) brings Pila with every tool its default configuration runs: kitty, waybar, fuzzel,
   mako, swayidle and swaylock, Font Awesome, and the volume, brightness, media and screenshot

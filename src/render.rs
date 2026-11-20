@@ -194,6 +194,9 @@ pub struct Scene {
     /// The window switcher, in front of everything but the cursor
     /// (`switcher_view.rs`).
     pub switcher: Option<crate::switcher_view::SceneSwitcher>,
+    /// The shortcuts cheatsheet, in front of the switcher
+    /// (`shortcuts_view.rs`).
+    pub shortcuts: Option<crate::shortcuts_view::SceneShortcuts>,
     pub colors: Colors,
 }
 
@@ -215,6 +218,7 @@ impl Scene {
             hidden_windows: Vec::new(),
             corner_radius: 0,
             switcher: None,
+            shortcuts: None,
             colors,
         }
     }
@@ -227,6 +231,7 @@ impl Scene {
             || self.slide.is_some()
             || self.window_menu.is_some()
             || self.switcher.is_some()
+            || self.shortcuts.is_some()
         {
             return false;
         }
@@ -1777,6 +1782,17 @@ pub fn output_elements(
         Some(view) => crate::switcher_view::elements(renderer, view, &scene.colors, origin, scale),
         None => Vec::new(),
     };
+    if let Some(view) = scene
+        .shortcuts
+        .as_ref()
+        .filter(|view| !scene.locked && view.output == output_name)
+    {
+        // In front of the switcher: it's first, front to back.
+        let mut front =
+            crate::shortcuts_view::elements(renderer, view, &scene.colors, origin, scale);
+        front.append(&mut elements);
+        elements = front;
+    }
     if let Some(menu) = scene.window_menu.as_ref().filter(|_| !scene.locked) {
         elements.extend(crate::window_menu::elements(
             renderer,

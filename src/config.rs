@@ -315,6 +315,8 @@ pub enum Action {
     ToggleAllWorkspaces,
     /// Minimize the workspace's windows, or bring them back (`minimize.rs`).
     ShowDesktop,
+    /// Show Pila's shortcuts cheatsheet, or hide it (`shortcuts_view.rs`).
+    ShowShortcuts,
     /// Go to another output, or send the focused window there (`stacking.rs`).
     FocusOutput(OutputTarget),
     MoveToOutput(OutputTarget),
@@ -483,6 +485,7 @@ const NAMED_ACTIONS: &[(&str, Action)] = &[
     ("toggle-always-on-top", Action::ToggleAlwaysOnTop),
     ("toggle-all-workspaces", Action::ToggleAllWorkspaces),
     ("show-desktop", Action::ShowDesktop),
+    ("show-shortcuts", Action::ShowShortcuts),
     ("power-off-monitors", Action::PowerOffMonitors),
     ("power-on-monitors", Action::PowerOnMonitors),
     ("quit", Action::Quit),
@@ -560,6 +563,7 @@ action_examples! {
     Action::ToggleAlwaysOnTop => Action::ToggleAlwaysOnTop,
     Action::ToggleAllWorkspaces => Action::ToggleAllWorkspaces,
     Action::ShowDesktop => Action::ShowDesktop,
+    Action::ShowShortcuts => Action::ShowShortcuts,
     Action::FocusOutput(_) => Action::FocusOutput(OutputTarget::Next),
     Action::MoveToOutput(_) => Action::MoveToOutput(OutputTarget::Next),
     Action::SwitchLayout(_) => Action::SwitchLayout(LayoutTarget::Next),
