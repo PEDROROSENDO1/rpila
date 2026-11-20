@@ -1351,6 +1351,33 @@ fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
     assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
 }
 
+/// With the windows' top corners only (the default), the backdrop of an app
+/// that draws its own corners still has all four rounded: such an app
+/// (libadwaita's) rounds its bottom corners too, and a square backdrop would
+/// show there.
+#[test]
+fn the_backdrop_of_an_app_that_draws_its_own_corners_is_rounded_at_the_bottom_too() {
+    let config = format!(
+        "corner-radius = 20\n{}",
+        glass_window_rule(638, 300, "blur = true")
+    );
+    let mut pila = TestPila::with_config(&config);
+    let client = pila.client();
+    two_halves(&client);
+    client
+        .window("glass")
+        .color([0, 0, 0, 0])
+        .decorations(Decorations::Client)
+        .csd_shadow(20)
+        .create();
+    pila.wait_focus("glass");
+    let (_, y, _, h) = rect(&pila.window("glass")["geometry"]);
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
+    assert_eq!(pila.pixel(639.0, (y + h - 2) as f64), CLEAR, "bottom left");
+}
+
 /// A clear popup of `parent` at 10,10 of it, of `size`: over the red/green
 /// edge when its parent is the glass window at 540,300.
 fn clear_popup(client: &Client, parent: Result<Window, Surf>, size: (i32, i32)) -> Surf {

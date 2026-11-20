@@ -7,7 +7,8 @@
   the same; the bottom corners stay square. The new `rounded-corners = "all"` rounds all four
   (as before, with `corner-radius`), and `corner-radius = 0` keeps them square. A configuration
   written by an earlier Pila has `corner-radius = 0` of its own: delete the line to take the new
-  default.
+  default. A blur behind an app that rounds its own corners (libadwaita's, on all four) is
+  rounded on all four too.
 - **A wallpaper of Pila's:** the default `autostart` runs `swaybg`, and Pila gives it its own
   wallpaper: `[colors] background`, plain, with a small mark in the bottom-right corner (three
   outlined rectangles piled like windows, in greys just above the background, the accent along

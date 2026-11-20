@@ -878,24 +878,36 @@ impl Pila {
                 props.shadow,
             )
         });
-        let shape = |radius| {
+        let shape = |radius, corners| {
             crate::rounded::Rounding::new(
                 Rectangle::new(loc, window.geometry().size),
                 bar_rect,
                 radius,
-                self.config.rounded_corners,
+                corners,
                 maximized || fullscreen,
             )
         };
+        let corners = self.config.rounded_corners;
         let radius = rule_radius.unwrap_or(self.config.corner_radius);
-        let rounding = shape(if draws_own_shadow && rule_radius.is_none() {
-            0
-        } else {
-            radius
-        });
+        let rounding = shape(
+            if draws_own_shadow && rule_radius.is_none() {
+                0
+            } else {
+                radius
+            },
+            corners,
+        );
         // A blur behind it still has rounded corners: the app leaves its own
-        // corners clear, and a square backdrop would show there.
-        let backdrop_rounding = shape(radius);
+        // corners clear, and a square backdrop would show there; all four of
+        // them, as such an app (libadwaita's) rounds its bottom ones too.
+        let backdrop_rounding = shape(
+            radius,
+            if draws_own_shadow {
+                crate::rounded::Corners::All
+            } else {
+                corners
+            },
+        );
         let title_bar = bar_rect.map(|rect| SceneTitleBar {
             rect,
             focused: focused == Some(window),

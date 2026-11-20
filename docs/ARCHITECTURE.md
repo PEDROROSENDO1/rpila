@@ -1435,8 +1435,9 @@ Key flows and invariants:
   window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; the global
   radius not for a client that draws its own shadow, `bbox` past its geometry, as for shadows,
   since it draws its own corners: a rule's radius still applies; a blur behind it still gets
-  the configured radius, `SceneWindow::backdrop_rounding`, as the corners it leaves clear would
-  show a square backdrop; radius
+  the configured radius, on all four corners whatever `rounded-corners` says (such an app,
+  libadwaita's, rounds them all), `SceneWindow::backdrop_rounding`, as the corners it leaves
+  clear would show a square backdrop; radius
   at most half the shorter side and, with a bar, its height). `render::single_window_elements`
   then builds the window's elements itself (`rounded_window_elements`: popups first and unclipped, as
   `Window::render_elements` does, and an X11 window's own opacity, `render::own_opacity`, as
