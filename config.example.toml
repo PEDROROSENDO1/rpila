@@ -262,8 +262,8 @@ tap = true                       # tap to click
 # shrink-width, grow-height, shrink-height, center,
 # toggle-always-on-top (above the others), toggle-all-workspaces,
 # show-desktop (minimize the workspace's windows; again, bring them back),
-# show-shortcuts (the cheatsheet of these bindings Pila shows on its first
-# run; any key or click hides it),
+# show-shortcuts (all the shortcuts, in sections; on its first run Pila
+# shows the few to get going; any key or click hides it),
 # focus-output <next|prev>, move-to-output <next|prev>,
 # workspace <n|next|prev> (go to a workspace; next/prev don't wrap around),
 # move-to-workspace <n|next|prev> (move the window there; "workspace-next" and

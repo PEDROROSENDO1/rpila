@@ -13,7 +13,8 @@
   outlined rectangles piled like windows, in greys just above the background, the accent along
   the front one's top edge), drawn in your `[colors]` (again when they change, for swaybg's next
   start) and shown whole on any monitor's shape. For a picture of your own,
-  put `swaybg -i FILE -m fill` in its place. `pila-desktop` now brings swaybg.
+  put `swaybg -i FILE -m fill` in its place. A configuration written by an earlier Pila has an
+  `autostart` of its own: add `"swaybg"` to it. `pila-desktop` now brings swaybg.
 - **A welcome screen and a cheatsheet:** the first time Pila starts, when it writes your
   configuration file, it welcomes you with the few keys to get going (a terminal, the launcher,
   switching and closing windows, quitting), as keycaps, as they're bound (your Mod key, your own
@@ -49,8 +50,9 @@
 - **One look for the tools:** the default configuration's tools (waybar, mako, fuzzel, and
   swaylock from the swayidle line) start with a configuration of Pila's where you have none of
   your own, so a session looks like one desktop: your `[colors]` (a change reaches each tool at
-  its next start), the title bars' font at their size, and square corners. waybar shows the apps' own icons in its window list, and symbols for the volume,
-  battery and clock where Font Awesome is installed (`pila-desktop` brings it), words where it
+  its next start), the title bars' font at their size, and square corners. waybar shows the
+  apps' own icons in its window list, and symbols for the volume, battery and clock where Font
+  Awesome is installed (`pila-desktop` brings it), words where it
   isn't. Pila writes nothing in `~/.config`: the files are in `$XDG_RUNTIME_DIR/pila-tools`
   and the default commands name them as they start (`waybar -c ...`), so the same tools in
   another session keep their looks; copy one to `~/.config` to change it. fuzzel is sized by the
@@ -62,9 +64,9 @@
   Sans, and got whichever font came first where it isn't installed.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
-  after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
-  `lspci`, so the packages no longer suggest pciutils. On a TTY, Pila gives the session bus
-  and `systemd --user` its environment over D-Bus too, without
+  after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the
+  system's `pci.ids`, without `lspci`, so the packages no longer suggest pciutils. On a TTY,
+  Pila gives the session bus and `systemd --user` its environment over D-Bus too, without
   `dbus-update-activation-environment` (which some distros package apart, such as Fedora's
   dbus-tools), and again when a reload changes `[cursor]`'s theme or size.
 - **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
@@ -76,8 +78,8 @@
   never quite off) and play, pause, next, previous and stop (playerctl), the volume and
   brightness ones repeating while held. They come with a configuration Pila wrote before too
   (defaults are added to the file's bindings, unless `default-bindings = false`); your own
-  bindings of those keys still win. Without the program a key does nothing; the packages
-  recommend all three.
+  bindings of those keys still win. Without the program a key does nothing; `pila-desktop`
+  brings all three.
 - **A window switcher you can see:** held a moment, Mod+Tab or Alt+Tab shows the windows it
   goes through in the middle of the monitor, most recently used first: a live preview of each (a
   video keeps playing in it, minimized windows and those on another monitor too), with its
