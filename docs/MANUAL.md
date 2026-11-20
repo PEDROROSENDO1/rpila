@@ -495,20 +495,23 @@ works the same with another in its place:
 | `wpctl`, `brightnessctl`, `playerctl` | the volume, brightness and media keys' bindings | bindings of your own (`pactl`, `swayosd-client`, ...) |
 | `grim`, `slurp`, `wl-copy` | `Mod+Shift+S` and `Mod+Ctrl+S`; `slurp` picks the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own; `chooser_cmd` in those settings |
 
-**A look that matches Pila's.** At startup Pila writes a configuration of its own for waybar,
-fuzzel, mako and swaylock, where they're installed and you have none: Pila's default colors
-(`[colors]`) and square corners. Its waybar shows the apps' own icons in the window list, and
-symbols for the volume, battery and clock where Font Awesome is installed (package
-otf-font-awesome, fonts-font-awesome or fontawesome-6-free-fonts), words where it isn't; a font
-installed later needs the file deleted, to be written again. They go where each tool reads
-them (`~/.config/waybar/config.jsonc` and `style.css`, `~/.config/fuzzel/fuzzel.ini`,
-`~/.config/mako/config`, `~/.config/swaylock/config`) and are yours to change: Pila never writes
-over a file, and a tool with a configuration of yours anywhere it reads one (an older
-`~/.config/waybar/config`, `~/.mako/config`, ...) is left alone. A file you delete is written
-again at the next start; a tool installed later gets its own then. They follow the default
-colors, not a `[colors]` of yours. `tool-configs = false` turns this off. Its waybar has Pila's
-workspaces and windows on the left and the tray, the volume (a click mutes), the battery and the
-clock on the right.
+**A look that matches Pila's.** The tools of the default configuration start with a
+configuration of Pila's where you have none of your own: Pila's default colors (`[colors]`) and
+square corners. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
+left and the tray, the volume (a click mutes), the battery and the clock on the right, with
+symbols where Font Awesome is installed (package otf-font-awesome, fonts-font-awesome or
+fontawesome-6-free-fonts; `pila-desktop` brings it), words where it isn't. Pila writes nothing
+where the tools look for yours: the files are in `$XDG_RUNTIME_DIR/pila-tools` (written at each
+start, gone at logout), and the defaults' commands name them as they start (`waybar -c ... -s
+...`, `mako -c ...`, `fuzzel --config=...`, and `swaylock -C ...` in the swayidle line), so the
+same tools in another session look as before, and nothing is left behind.
+
+This is only for the default commands as written (`waybar`, not `waybar -l debug`) and only
+for a tool with no configuration of yours anywhere it reads one (`~/.config/waybar/config` or
+`config.jsonc`, `~/.mako/config`, ...), checked each time it starts. To change one, copy it
+from `$XDG_RUNTIME_DIR/pila-tools` (e.g. `cp -r $XDG_RUNTIME_DIR/pila-tools/waybar ~/.config/`)
+and edit it there: from then on the tool reads yours. The files follow the default colors, not
+a `[colors]` of yours. `tool-configs = false` starts the tools with their own looks.
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way

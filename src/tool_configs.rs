@@ -1,27 +1,37 @@
 //! A configuration of Pila's own for the standard tools its defaults start
-//! (waybar, fuzzel, mako) and swaylock, written at startup where the user has
-//! none, so that a first session looks like one desktop: Pila's default
+//! (waybar, mako, the launcher fuzzel, and swaylock from the swayidle line),
+//! so that a first session looks like one desktop: Pila's default
 //! `[colors]`, square corners. waybar shows the apps' own icons, and symbols
 //! for the volume, battery and clock where Font Awesome is installed (text
-//! where it isn't: a missing glyph would show as a box). Never over
-//! anything of the user's: a tool counts as configured when any file it reads
-//! is there, and each file is created with `create_new`, a link (even a
-//! broken one) included. A tool installed later gets its files at the next
-//! start; a file deleted is written again. `tool-configs = false` turns it off.
+//! where it isn't: a missing glyph would show as a box).
+//!
+//! Nothing is written where the tools look for the user's configuration, so
+//! it never reaches them outside Pila (another session's waybar) and nothing
+//! is left behind: the files go to `$XDG_RUNTIME_DIR/pila-tools` (`prepare`),
+//! and the example's own commands (`config::is_example_command`, as written)
+//! name them on their command line (`with_configs`: `waybar -c ... -s ...`,
+//! `swaylock -C ...` inside the swayidle line). Only for a tool with no
+//! configuration of the user's (`user_has_config`: any file it reads, a
+//! broken link too), checked at each start of it, so one copied into place
+//! takes over. A command written otherwise is the user's and runs as written.
+//! `tool-configs = false` turns it off.
 
 use std::path::{Path, PathBuf};
 
 use tracing::{info, warn};
 
-/// A tool Pila writes a configuration for.
-struct Tool {
-    /// The program, looked up in `PATH`.
+/// A tool Pila has a configuration for.
+pub struct Tool {
+    /// The program, as the example's commands run it.
     program: &'static str,
+    /// The arguments that point it at Pila's files, inserted after the
+    /// program's name; `{dir}` is `prepare`'s directory.
+    args: &'static str,
     /// Files the tool reads, relative to the config directory, or to the home
     /// directory when they start with `~/`: any of them there means the user
     /// has a configuration of their own.
     existing: &'static [&'static str],
-    /// What Pila writes, relative to the config directory.
+    /// What Pila writes, relative to `prepare`'s directory.
     files: &'static [(&'static str, &'static str)],
     /// What it writes instead where an icon font is installed
     /// (`icon_font_installed`); empty for a tool with no such variant.
@@ -36,6 +46,7 @@ const WAYBAR_STYLE: (&str, &str) = (
 const TOOLS: &[Tool] = &[
     Tool {
         program: "waybar",
+        args: "-c {dir}/waybar/config.jsonc -s {dir}/waybar/style.css",
         existing: &["waybar/config", "waybar/config.jsonc"],
         files: &[
             (
@@ -54,6 +65,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         program: "fuzzel",
+        args: "--config={dir}/fuzzel/fuzzel.ini",
         existing: &["fuzzel/fuzzel.ini"],
         files: &[(
             "fuzzel/fuzzel.ini",
@@ -63,6 +75,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         program: "mako",
+        args: "-c {dir}/mako/config",
         existing: &["mako/config", "~/.mako/config"],
         files: &[(
             "mako/config",
@@ -72,6 +85,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         program: "swaylock",
+        args: "-C {dir}/swaylock/config",
         existing: &["swaylock/config", "~/.swaylock/config"],
         files: &[(
             "swaylock/config",
@@ -81,73 +95,117 @@ const TOOLS: &[Tool] = &[
     },
 ];
 
-/// Write the configuration of each installed tool (`installed`) that has none
-/// under `config_home` (or `home`, for the tools that also look there), the
-/// variant with icons where `icon_font` says there's an icon font (asked only
-/// when such a variant is about to be written). Returns the files written; a
-/// file that can't be written is logged, never an error (it's startup: Pila
-/// runs without it).
-pub fn write_missing(
-    config_home: &Path,
-    home: Option<&Path>,
-    installed: impl Fn(&str) -> bool,
-    icon_font: impl Fn() -> bool,
-) -> Vec<PathBuf> {
-    let mut written = Vec::new();
+/// The directory Pila's files go to: `pila-tools` in `runtime`.
+pub fn dir_in(runtime: &Path) -> PathBuf {
+    runtime.join("pila-tools")
+}
+
+/// Write every tool's files into `dir`, waybar's with symbols if `icon_font`.
+/// Each is written to a file of its own and renamed into place, so another
+/// Pila of the same user (nested) never reads one half written.
+pub fn prepare(dir: &Path, icon_font: bool) -> std::io::Result<()> {
     for tool in TOOLS {
-        if !installed(tool.program) {
-            continue;
-        }
-        let configured = tool.existing.iter().any(|path| {
-            let path = match path.strip_prefix("~/") {
-                Some(rest) => match home {
-                    Some(home) => home.join(rest),
-                    None => return false,
-                },
-                None => config_home.join(path),
-            };
-            // A broken link is the user's too.
-            path.symlink_metadata().is_ok()
-        });
-        if configured {
-            continue;
-        }
-        let files = if !tool.with_icons.is_empty() && icon_font() {
+        let files = if icon_font && !tool.with_icons.is_empty() {
             tool.with_icons
         } else {
             tool.files
         };
         for (relative, contents) in files {
-            let path = config_home.join(relative);
-            match crate::config::create_new_file(&path, contents) {
-                Ok(true) => written.push(path),
-                Ok(false) => {}
-                Err(err) => {
-                    warn!(path = %path.display(), %err, "can't write a tool config");
-                }
+            let path = dir.join(relative);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let partial = path.with_extension(format!("partial-{}", std::process::id()));
+            std::fs::write(&partial, contents)?;
+            std::fs::rename(&partial, &path)?;
+        }
+    }
+    Ok(())
+}
+
+/// `prepare` in `$XDG_RUNTIME_DIR` (a session's own, gone at logout), with
+/// symbols for waybar where Font Awesome is installed; the directory, or
+/// `None` (logged) if there's none or it can't be written. At startup, before
+/// the event loop runs: it reads the font directories.
+pub fn prepare_for_session() -> Option<PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
+    let dir = dir_in(Path::new(&runtime));
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let icon_font = icon_font_installed(&font_dirs(home.as_deref()));
+    match prepare(&dir, icon_font) {
+        Ok(()) => {
+            info!(dir = %dir.display(), icon_font, "tool configs ready");
+            Some(dir)
+        }
+        Err(err) => {
+            warn!(dir = %dir.display(), %err, "can't write the tool configs");
+            None
+        }
+    }
+}
+
+/// Whether the user has a configuration of their own for `tool`: any file it
+/// reads under `config_home` (or `home`, for the tools that also look
+/// there), a broken link included.
+fn has_config(tool: &Tool, config_home: Option<&Path>, home: Option<&Path>) -> bool {
+    tool.existing.iter().any(|path| {
+        let path = match path.strip_prefix("~/") {
+            Some(rest) => match home {
+                Some(home) => home.join(rest),
+                None => return false,
+            },
+            None => match config_home {
+                Some(config_home) => config_home.join(path),
+                None => return false,
+            },
+        };
+        path.symlink_metadata().is_ok()
+    })
+}
+
+/// `has_config` in the user's directories (`XDG_CONFIG_HOME`, `HOME`).
+pub fn user_has_config(tool: &Tool) -> bool {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    has_config(
+        tool,
+        crate::config::config_home().as_deref(),
+        home.as_deref(),
+    )
+}
+
+/// `command` with `args` after each tool it runs that `configured` says has
+/// no configuration of the user's, pointing it at `dir`'s files: a tool is
+/// its name as a word of its own (between the start or end, blanks, quotes
+/// and the shell's `;&|()`), so `'swaylock -f'` inside swayidle's line counts.
+/// A `dir` the shell would need quoted (blanks, quotes, `$`) is left out, and
+/// the command runs as written.
+pub fn with_configs(command: &str, dir: &Path, configured: impl Fn(&Tool) -> bool) -> String {
+    let Some(dir) = dir.to_str().filter(|dir| {
+        dir.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/._-+@:,=".contains(c))
+    }) else {
+        warn!(dir = %dir.display(), "the tool configs' directory needs quoting: not used");
+        return command.to_string();
+    };
+    let edge = |c: Option<char>| c.is_none_or(|c| c.is_whitespace() || "'\";&|()".contains(c));
+    let mut result = command.to_string();
+    for tool in TOOLS {
+        if configured(tool) {
+            continue;
+        }
+        let args = tool.args.replace("{dir}", dir);
+        let mut from = 0;
+        while let Some(at) = result[from..].find(tool.program).map(|at| at + from) {
+            let end = at + tool.program.len();
+            if edge(result[..at].chars().next_back()) && edge(result[end..].chars().next()) {
+                result.insert_str(end, &format!(" {args}"));
+                from = end + args.len() + 1;
+            } else {
+                from = end;
             }
         }
     }
-    written
-}
-
-/// `write_missing` for the user's directories and the tools in `PATH`,
-/// logging each file written.
-pub fn write_missing_for_user() {
-    let Some(config_home) = crate::config::config_home() else {
-        return;
-    };
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let font_dirs = font_dirs(home.as_deref());
-    let icon_font = || icon_font_installed(&font_dirs);
-    for path in write_missing(
-        &config_home,
-        home.as_deref(),
-        crate::config::in_path,
-        icon_font,
-    ) {
-        info!(path = %path.display(), "created a tool config");
-    }
+    result
 }
 
 /// Where fontconfig looks for fonts by default: the user's data directory and
@@ -309,10 +367,58 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pila-tool-links-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("fuzzel")).unwrap();
+        let fuzzel = TOOLS.iter().find(|t| t.program == "fuzzel").unwrap();
+        assert!(!has_config(fuzzel, Some(&dir), None));
         std::os::unix::fs::symlink(dir.join("nowhere"), dir.join("fuzzel/fuzzel.ini")).unwrap();
-        let written = write_missing(&dir, None, |p| p == "fuzzel", || false);
-        assert_eq!(written, Vec::<PathBuf>::new());
-        assert!(!dir.join("nowhere").exists());
+        assert!(has_config(fuzzel, Some(&dir), None));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tools_are_found_as_words_of_their_own() {
+        let dir = Path::new("/run/user/1000/pila-tools");
+        let none = |_: &Tool| false;
+        assert_eq!(
+            with_configs("mako", dir, none),
+            "mako -c /run/user/1000/pila-tools/mako/config"
+        );
+        assert_eq!(
+            with_configs("swayidle timeout 5 'swaylock -f'", dir, none),
+            "swayidle timeout 5 'swaylock -C /run/user/1000/pila-tools/swaylock/config -f'"
+        );
+        // Not part of another word, not a tool the user configured.
+        assert_eq!(with_configs("makoctl reload", dir, none), "makoctl reload");
+        assert_eq!(with_configs("my-waybar", dir, none), "my-waybar");
+        assert_eq!(with_configs("waybar", dir, |_| true), "waybar");
+        // A directory the shell would split: the command as written.
+        let spaced = Path::new("/run/my user/pila-tools");
+        assert_eq!(with_configs("waybar", spaced, none), "waybar");
+    }
+
+    #[test]
+    fn every_file_a_tools_args_name_is_written() {
+        let dir = std::env::temp_dir().join(format!("pila-tool-files-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for icon_font in [false, true] {
+            prepare(&dir, icon_font).unwrap();
+            for tool in TOOLS {
+                let args = tool.args.replace("{dir}", &dir.display().to_string());
+                for word in args.split([' ', '=']).filter(|w| w.starts_with('/')) {
+                    assert!(Path::new(word).is_file(), "{word}");
+                }
+            }
+        }
+        // Nothing half written left behind.
+        let mut partial = Vec::new();
+        for tool in ["waybar", "fuzzel", "mako", "swaylock"] {
+            for entry in std::fs::read_dir(dir.join(tool)).unwrap() {
+                let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+                if name.contains("partial") {
+                    partial.push(name);
+                }
+            }
+        }
+        assert!(partial.is_empty(), "{partial:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

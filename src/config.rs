@@ -1811,19 +1811,33 @@ pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
     create_new_file(path, EXAMPLE)
 }
 
+/// `EXAMPLE`'s own `launcher` and `autostart` commands, parsed once.
+#[derive(Default, Deserialize)]
+struct ExampleCommands {
+    #[serde(default)]
+    launcher: Option<String>,
+    #[serde(default)]
+    autostart: Vec<String>,
+}
+
+fn example_commands_parsed() -> &'static ExampleCommands {
+    static PARSED: std::sync::OnceLock<ExampleCommands> = std::sync::OnceLock::new();
+    // Tested to parse (`example_config_is_valid`); the rest is ignored here.
+    PARSED.get_or_init(|| toml::from_str(EXAMPLE).unwrap_or_default())
+}
+
 /// `EXAMPLE`'s own `autostart` commands: the defaults, which a file made from
 /// it (`create_default_file`) holds too, as opposed to commands the user
 /// chose (`Pila::autostart_installed`).
-pub fn example_autostart() -> Vec<String> {
-    #[derive(Deserialize)]
-    struct Autostart {
-        #[serde(default)]
-        autostart: Vec<String>,
-    }
-    // Tested to parse (`example_config_is_valid`); the rest is ignored here.
-    toml::from_str::<Autostart>(EXAMPLE)
-        .map(|file| file.autostart)
-        .unwrap_or_default()
+pub fn example_autostart() -> &'static [String] {
+    &example_commands_parsed().autostart
+}
+
+/// Whether `command` is, as written, one of `EXAMPLE`'s own commands: its
+/// `launcher` or one of its `autostart` (`tool_configs::with_configs`).
+pub fn is_example_command(command: &str) -> bool {
+    let example = example_commands_parsed();
+    example.launcher.as_deref() == Some(command) || example.autostart.iter().any(|c| c == command)
 }
 
 /// Write `contents` to `path`, creating its directories, unless something is

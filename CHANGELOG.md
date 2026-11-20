@@ -27,13 +27,16 @@
   waybar, or any launcher and bar, in their place. `scripts/install` and `scripts/uninstall`
   remove the binaries an older install left. The screenshot keys keep running grim, slurp and
   wl-copy, and screen sharing keeps picking the monitor with slurp.
-- **One look for the tools:** at startup Pila writes a configuration of its own for waybar,
-  fuzzel, mako and swaylock, where they're installed and you have none, so a first session
-  looks like one desktop: Pila's default colors and square corners. waybar shows the apps' own
-  icons in its window list, and symbols for the volume, battery and clock where Font Awesome is
-  installed (`pila-desktop` brings it), words where it isn't.
-  Never over a file of yours; a file you delete is written again; `tool-configs = false` turns
-  it off. mako, the notification daemon, joins waybar in the default `autostart`.
+- **One look for the tools:** the default configuration's tools (waybar, mako, fuzzel, and
+  swaylock from the swayidle line) start with a configuration of Pila's where you have none of
+  your own, so a first session looks like one desktop: Pila's default colors and square
+  corners. waybar shows the apps' own icons in its window list, and symbols for the volume,
+  battery and clock where Font Awesome is installed (`pila-desktop` brings it), words where it
+  isn't. Pila writes nothing in `~/.config`: the files are in `$XDG_RUNTIME_DIR/pila-tools`
+  and the default commands name them as they start (`waybar -c ...`), so the same tools in
+  another session keep their looks; copy one to `~/.config` to change it.
+  `tool-configs = false` turns it off. mako, the notification daemon, joins waybar in the
+  default `autostart`.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
   after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without

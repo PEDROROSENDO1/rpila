@@ -26,10 +26,17 @@ Key flows and invariants:
   `--config`, documented in `config.example.toml`, which `main` writes to the default path
   when nothing is there, without `--config`: `config::create_default_file`, before the event
   loop; never over a file or a symlink, and a failure only logged; then, with `tool-configs`,
-  `tool_configs::write_missing_for_user` writes waybar's, fuzzel's, mako's and swaylock's
-  configurations from `resources/tools/` the same way, for those installed with none of the
-  user's, before autostart starts them; waybar's with Font Awesome symbols where a font file
-  under fontconfig's default directories has "awesome" in its path, `icon_font_installed`) parsed by
+  `tool_configs::prepare_for_session` writes waybar's, fuzzel's, mako's and swaylock's
+  configurations from `resources/tools/` into `$XDG_RUNTIME_DIR/pila-tools` (`Pila::tool_configs_dir`;
+  each file renamed into place, so a nested Pila never reads one half written), waybar's with
+  Font Awesome symbols where a font file under fontconfig's default directories has "awesome"
+  in its path, `icon_font_installed`: nothing in the user's directories. `Pila::spawn` gives
+  them to the example's own commands as written (`config::is_example_command`: its `launcher`
+  and `autostart`), on their command line (`tool_configs::with_configs`: the tool's arguments
+  after each word that is its name, swaylock inside the swayidle line too), for each tool with
+  no configuration of the user's (`tool_configs::user_has_config`, at every spawn, so one
+  copied into place takes over); a reload that turns `tool-configs` on writes them at the
+  first such spawn) parsed by
   `Config::from_toml` (pure,
   unit-tested; `PILA_*` env vars override it), loaded at startup by `Config::load`, which
   falls back to defaults on errors (`main` notifies of them once the session has had time to

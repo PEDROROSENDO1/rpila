@@ -307,10 +307,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let config_path = Config::path(config_path.as_deref());
     let (config, config_error) = Config::load(config_path.as_deref(), default_mod);
-    // Before autostart starts the tools: their first run reads it.
-    if config.tool_configs {
-        tool_configs::write_missing_for_user();
-    }
     tracing::info!(
         mod_key = ?config.mod_key,
         terminal = ?config.terminal_command(),
@@ -328,6 +324,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let display: Display<Pila> = Display::new()?;
     let mut state = Pila::new(&mut event_loop, display, config);
+    // Before the event loop: it reads the font directories. The tools the
+    // example starts get these by their command line (`Pila::spawn`).
+    if state.config.tool_configs {
+        let _ = state
+            .tool_configs_dir
+            .set(tool_configs::prepare_for_session());
+    }
     state.config_path = config_path;
     state.watch_config();
     if let Some(err) = config_error {

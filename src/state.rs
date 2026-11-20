@@ -123,6 +123,11 @@ pub struct Pila {
     /// Programs that commands needed and weren't installed, each told once
     /// (`missing_program.rs`).
     pub missing_programs: std::collections::HashSet<String>,
+    /// Where Pila's configurations for the default tools are, once written
+    /// (`tool_configs::prepare_for_session`): at startup with `tool-configs`,
+    /// else the first time a reload turns it on; `None` inside if that
+    /// failed (not tried again).
+    pub tool_configs_dir: std::cell::OnceCell<Option<std::path::PathBuf>>,
     /// Desktop notifications, sent from a thread (`notifications.rs`).
     pub notifier: crate::notifications::Notifier,
 
@@ -557,6 +562,7 @@ impl Pila {
             pending_startup: Vec::new(),
             children: Vec::new(),
             missing_programs: Default::default(),
+            tool_configs_dir: Default::default(),
             notifier: Default::default(),
             snap_preview: None,
             snap_preview_buffer: SolidColorBuffer::default(),
@@ -2172,7 +2178,7 @@ impl Pila {
     pub fn spawn(&mut self, command: &str) {
         info!(command, "spawning");
         let mut cmd = Command::new("/bin/sh");
-        cmd.arg("-c").arg(command);
+        cmd.arg("-c").arg(self.with_tool_configs(command));
         self.session_env(&mut cmd);
         // The output under the pointer, for commands that act on "this
         // screen" (e.g. `grim -o "$PILA_OUTPUT"`).
@@ -2189,6 +2195,27 @@ impl Pila {
             }
             Err(err) => warn!(command, ?err, "failed to spawn"),
         }
+    }
+
+    /// `command` as Pila runs it: one of the example's own (as written) with
+    /// Pila's configuration for its tools, where `tool-configs` is on and the
+    /// user has none of their own (`tool_configs.rs`).
+    fn with_tool_configs(&self, command: &str) -> String {
+        if !self.config.tool_configs || !crate::config::is_example_command(command) {
+            return command.to_string();
+        }
+        let dir = self
+            .tool_configs_dir
+            .get_or_init(crate::tool_configs::prepare_for_session);
+        let Some(dir) = dir else {
+            return command.to_string();
+        };
+        let run =
+            crate::tool_configs::with_configs(command, dir, crate::tool_configs::user_has_config);
+        if run != command {
+            debug!(command = run.as_str(), "with Pila's tool configs");
+        }
+        run
     }
 
     /// Reap the programs pila started that exited (on SIGCHLD, `main.rs`).

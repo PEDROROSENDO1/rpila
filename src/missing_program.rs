@@ -232,7 +232,7 @@ impl Pila {
             .autostart
             .iter()
             .filter(|command| {
-                if !defaults.contains(command) {
+                if !defaults.contains(*command) {
                     return true;
                 }
                 let missing = missing(command, path.as_deref());
