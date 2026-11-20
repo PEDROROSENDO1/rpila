@@ -309,6 +309,59 @@ fn a_command_line_command_replaces_autostart() {
     assert_eq!(pila.wait_file("ran"), "command\n");
 }
 
+/// The example's own `autostart` commands (waybar, mako, swayidle), also in a
+/// file made from it, are left out without a word where their program isn't
+/// installed: the user didn't choose them. A command of the user's own still
+/// runs, and says so in a notification when its program is missing.
+#[test]
+fn the_examples_autostart_skips_what_isnt_installed_silently() {
+    let defaults = pila::config::Config::from_toml("", &|_| None)
+        .unwrap()
+        .autostart;
+    assert!(!defaults.is_empty());
+    let mut autostart: Vec<String> = defaults.iter().map(|c| format!("{c:?}")).collect();
+    autostart.push("\"surely-not-installed-xyz\"".into());
+    autostart.push("\"echo mine > $XDG_RUNTIME_DIR/ran\"".into());
+    // A PATH with nothing on it: none of the defaults' programs are there
+    // (echo is the shell's).
+    let empty = std::env::temp_dir().join(format!("pila-empty-path-{}", std::process::id()));
+    std::fs::create_dir_all(&empty).unwrap();
+    let bus = notifications::Bus::start();
+    let daemon = bus.notification_daemon();
+    let mut pila = TestPila::start_with(Options {
+        config: format!("autostart = [{}]\n", autostart.join(", ")),
+        env: vec![("PATH".into(), empty.display().to_string()), bus.env()],
+        ..Options::default()
+    });
+    assert_eq!(pila.wait_file("ran"), "mine\n");
+    let shown = daemon.wait_for(1);
+    assert!(
+        shown[0]
+            .summary
+            .contains("surely-not-installed-xyz isn't installed"),
+        "{shown:#?}"
+    );
+    pila.stays(
+        "one notification",
+        std::time::Duration::from_millis(300),
+        |_| daemon.shown().len() == 1,
+    );
+    let log = pila.log();
+    for command in &defaults {
+        assert!(
+            !log.contains(&format!("spawning command={command:?}")),
+            "{command} was started:\n{log}"
+        );
+    }
+    assert_eq!(
+        log.matches("not starting the example's autostart command")
+            .count(),
+        defaults.len(),
+        "{log}"
+    );
+    let _ = std::fs::remove_dir_all(&empty);
+}
+
 #[test]
 fn a_reload_with_an_unchanged_file_keeps_windows_as_they_are() {
     let mut pila = TestPila::start();

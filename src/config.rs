@@ -1305,6 +1305,7 @@ struct ConfigFile {
     direct_scanout: Option<bool>,
     tearing: Option<bool>,
     render_late: Option<bool>,
+    tool_configs: Option<bool>,
     shadow: ShadowFile,
     colors: ColorsFile,
     animations: AnimationsFile,
@@ -1556,17 +1557,6 @@ impl XwaylandFile {
     }
 }
 
-/// The `[idle]` `monitors-off` times Pila takes, in seconds.
-pub const MONITORS_OFF_TIMES: std::ops::RangeInclusive<u32> = 1..=86400;
-
-/// `[idle]`: what Pila does itself when there's no input (`idle.rs`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdleConfig {
-    /// Turn the monitors off after this many seconds without input (none
-    /// while an idle inhibitor is visible); `None` never.
-    pub monitors_off: Option<u32>,
-}
-
 /// A time in seconds as written, or `false` for never.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(
@@ -1578,7 +1568,9 @@ enum SecondsFile {
     Seconds(u32),
 }
 
-/// `[idle]` as written.
+/// `[idle]` as written: an old file's. Turning the monitors off after a
+/// while is swayidle's job (the example's `autostart`); the key is still
+/// read, so such a file keeps working, and a time in it gets a warning.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct IdleFile {
@@ -1586,69 +1578,25 @@ struct IdleFile {
 }
 
 impl IdleFile {
-    fn or_example(self, example: Self) -> Self {
-        or_example!(self, example, IdleFile { monitors_off })
-    }
-
-    fn validate(self) -> Result<IdleConfig, String> {
-        let monitors_off = match need(self.monitors_off, "idle.monitors-off")? {
-            SecondsFile::Never(false) => None,
-            SecondsFile::Never(true) => {
-                return Err(
-                    "idle.monitors-off = true: give the seconds (e.g. 600), or false".into(),
-                )
-            }
-            SecondsFile::Seconds(seconds) if !MONITORS_OFF_TIMES.contains(&seconds) => {
-                return Err(format!(
-                    "idle.monitors-off = {seconds}: must be {} to {} seconds, or false",
-                    MONITORS_OFF_TIMES.start(),
-                    MONITORS_OFF_TIMES.end()
-                ))
-            }
-            SecondsFile::Seconds(seconds) => Some(seconds),
+    /// The warning for a time Pila no longer acts on, with the swayidle
+    /// command that does it.
+    fn warning(&self) -> Option<String> {
+        let seconds = match self.monitors_off? {
+            SecondsFile::Never(false) => return None,
+            SecondsFile::Never(true) => 600,
+            SecondsFile::Seconds(seconds) => seconds,
         };
-        Ok(IdleConfig { monitors_off })
+        Some(format!(
+            "idle.monitors-off: Pila no longer turns the monitors off itself, swayidle does: \
+             remove [idle] and put \"swayidle -w timeout {seconds} 'pila msg action \
+             power-off-monitors'\" in `autostart` (the example's also locks the screen)"
+        ))
     }
 }
 
-/// How the wallpaper covers a monitor (`[wallpaper] fit`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WallpaperFit {
-    /// The whole monitor, the image cropped to its shape.
-    Fill,
-    /// The whole image, `[colors] background` around it.
-    Fit,
-    /// The whole monitor and the whole image, out of shape.
-    Stretch,
-    /// The image at its size, in the middle.
-    Center,
-}
-
-impl WallpaperFit {
-    const NAMES: [(&'static str, WallpaperFit); 4] = [
-        ("fill", WallpaperFit::Fill),
-        ("fit", WallpaperFit::Fit),
-        ("stretch", WallpaperFit::Stretch),
-        ("center", WallpaperFit::Center),
-    ];
-
-    pub fn name(self) -> &'static str {
-        Self::NAMES
-            .iter()
-            .find(|(_, fit)| *fit == self)
-            .map_or("fill", |(name, _)| name)
-    }
-}
-
-/// `[wallpaper]`: the picture Pila draws behind everything (`wallpaper.rs`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WallpaperConfig {
-    /// An absolute path (`~/` expanded); none: `[colors] background`.
-    pub image: Option<std::path::PathBuf>,
-    pub fit: WallpaperFit,
-}
-
-/// `[wallpaper]` as written.
+/// `[wallpaper]` as written: an old file's. The wallpaper is swaybg's job
+/// (`autostart`); the section is still read, so such a file keeps working,
+/// and an image in it gets a warning with the swaybg line that draws it.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct WallpaperFile {
@@ -1657,49 +1605,21 @@ struct WallpaperFile {
 }
 
 impl WallpaperFile {
-    fn or_example(self, example: Self) -> Self {
-        or_example!(self, example, WallpaperFile { image, fit })
-    }
-
-    /// The section, and a warning if the image isn't there (yet).
-    fn validate(self, home: Option<&str>) -> Result<(WallpaperConfig, Option<String>), String> {
-        let name = need(self.fit, "wallpaper.fit")?;
-        let fit = WallpaperFit::NAMES
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, fit)| *fit)
-            .ok_or_else(|| {
-                format!("wallpaper.fit = {name:?}: must be fill, fit, stretch or center")
-            })?;
-        let image = match self.image.as_deref() {
-            None | Some("") => None,
-            Some(text) => Some(wallpaper_path(text, home)?),
+    fn warning(&self) -> Option<String> {
+        let image = self.image.as_deref().filter(|image| !image.is_empty())?;
+        // `~/` outside the quotes, for the shell to expand.
+        let (tilde, path) = match image.strip_prefix("~/") {
+            Some(rest) => ("~/", rest),
+            None => ("", image),
         };
-        let warning = image
-            .as_ref()
-            .filter(|path| !path.is_file())
-            .map(|path| format!("wallpaper.image: {} isn't there", path.display()));
-        Ok((WallpaperConfig { image, fit }, warning))
+        let quoted = format!("{tilde}'{}'", path.replace('\'', r"'\''"));
+        // swaybg's modes have the names `fit` took.
+        let mode = self.fit.as_deref().unwrap_or("fill");
+        Some(format!(
+            "[wallpaper]: Pila no longer draws the wallpaper, swaybg does: remove [wallpaper] \
+             and put \"swaybg -i {quoted} -m {mode}\" in `autostart`"
+        ))
     }
-}
-
-/// `[wallpaper] image` as a path: absolute, or `~/...` in `home`.
-fn wallpaper_path(text: &str, home: Option<&str>) -> Result<std::path::PathBuf, String> {
-    let path = match text.strip_prefix("~/") {
-        Some(rest) => {
-            let home = home
-                .filter(|h| !h.is_empty())
-                .ok_or_else(|| format!("wallpaper.image = {text:?}: HOME isn't set to expand ~"))?;
-            std::path::Path::new(home).join(rest)
-        }
-        None => std::path::PathBuf::from(text),
-    };
-    if !path.is_absolute() {
-        return Err(format!(
-            "wallpaper.image = {text:?}: must be an absolute path or start with ~/"
-        ));
-    }
-    Ok(path)
 }
 
 /// The largest `[shadow]` `size` and, either way, `offset` (logical pixels).
@@ -1819,6 +1739,9 @@ pub struct Config {
     /// Whether a frame is drawn as close to its vblank as it safely can be,
     /// for less latency (`udev/render_late.rs`).
     pub render_late: bool,
+    /// Whether Pila writes its own configuration for the tools it starts
+    /// where the user has none, at startup (`tool_configs.rs`).
+    pub tool_configs: bool,
     pub shadow: ShadowConfig,
     pub colors: Colors,
     /// Which animations play and how long they last (`animation.rs`).
@@ -1827,10 +1750,6 @@ pub struct Config {
     pub cursor: CursorConfig,
     /// `[xwayland]`: stopping it when unused.
     pub xwayland: XwaylandConfig,
-    /// `[idle]`: the monitors off after a while without input.
-    pub idle: IdleConfig,
-    /// `[wallpaper]`: the picture behind everything (`wallpaper.rs`).
-    pub wallpaper: WallpaperConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -1889,6 +1808,28 @@ pub const EXAMPLE: &str = include_str!("../config.example.toml");
 /// there already (a file, or a symlink, even a broken one). `Ok(true)` when it
 /// wrote it.
 pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
+    create_new_file(path, EXAMPLE)
+}
+
+/// `EXAMPLE`'s own `autostart` commands: the defaults, which a file made from
+/// it (`create_default_file`) holds too, as opposed to commands the user
+/// chose (`Pila::autostart_installed`).
+pub fn example_autostart() -> Vec<String> {
+    #[derive(Deserialize)]
+    struct Autostart {
+        #[serde(default)]
+        autostart: Vec<String>,
+    }
+    // Tested to parse (`example_config_is_valid`); the rest is ignored here.
+    toml::from_str::<Autostart>(EXAMPLE)
+        .map(|file| file.autostart)
+        .unwrap_or_default()
+}
+
+/// Write `contents` to `path`, creating its directories, unless something is
+/// there already (a file, or a symlink, even a broken one). `Ok(true)` when it
+/// wrote it.
+pub fn create_new_file(path: &Path, contents: &str) -> std::io::Result<bool> {
     use std::io::Write;
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
@@ -1904,18 +1845,22 @@ pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
         Err(err) => return Err(err),
     };
-    file.write_all(EXAMPLE.as_bytes())?;
+    file.write_all(contents.as_bytes())?;
     Ok(true)
+}
+
+/// The user's configuration directory: `$XDG_CONFIG_HOME`, else `~/.config`.
+pub fn config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
 }
 
 impl Config {
     /// The config file pila reads without `--config`.
     pub fn default_path() -> Option<PathBuf> {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-        Some(base.join("pila/config.toml"))
+        Some(config_home()?.join("pila/config.toml"))
     }
 
     /// The file pila reads: `explicit` (`--config`) or the default path.
@@ -2026,6 +1971,7 @@ impl Config {
         )?;
         let tearing = flag(file.tearing, example.tearing, "tearing")?;
         let render_late = flag(file.render_late, example.render_late, "render-late")?;
+        let tool_configs = flag(file.tool_configs, example.tool_configs, "tool-configs")?;
 
         let keyboard = file.keyboard.or_example(example.keyboard).validate()?;
         let shadow = file.shadow.or_example(example.shadow).validate()?;
@@ -2033,11 +1979,8 @@ impl Config {
         let animations = file.animations.or_example(example.animations).validate()?;
         let cursor = file.cursor.or_example(example.cursor).validate()?;
         let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
-        let idle = file.idle.or_example(example.idle).validate()?;
-        let (wallpaper, wallpaper_warning) = file
-            .wallpaper
-            .or_example(example.wallpaper)
-            .validate(env("HOME").as_deref())?;
+        let idle_warning = file.idle.warning();
+        let wallpaper_warning = file.wallpaper.warning();
         let window_rules = file
             .window_rules
             .into_iter()
@@ -2129,6 +2072,7 @@ impl Config {
         entries.extend(file.environment);
         let environment = environment(entries, &mut warnings)?;
         warnings.extend(wallpaper_warning);
+        warnings.extend(idle_warning);
         for (i, output) in outputs.iter().enumerate() {
             // Once a name, at its second section.
             let before = outputs[..i].iter().filter(|o| o.name == output.name);
@@ -2183,13 +2127,12 @@ impl Config {
             direct_scanout,
             tearing,
             render_late,
+            tool_configs,
             shadow,
             colors,
             animations,
             cursor,
             xwayland,
-            idle,
-            wallpaper,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -2456,11 +2399,18 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: fuzzel and waybar come from config.example.toml,
-        // not the code.
+        // As every setting: fuzzel, waybar, mako and swayidle come from
+        // config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
-        assert_eq!(config.autostart, ["waybar"]);
+        let programs: Vec<_> = config
+            .autostart
+            .iter()
+            .filter_map(|command| command.split_whitespace().next())
+            .collect();
+        assert_eq!(programs, ["waybar", "mako", "swayidle"]);
+        assert!(config.autostart[2].contains("'swaylock -f'"));
+        assert!(config.autostart[2].contains("'pila msg action power-off-monitors'"));
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -3083,64 +3033,56 @@ mod tests {
     }
 
     #[test]
-    fn monitors_go_off_after_ten_minutes_by_default_and_never_with_false() {
-        let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.idle.monitors_off, Some(600));
+    fn idle_monitors_off_is_left_to_swayidle_with_a_warning() {
+        // Not in the example: no warning for a file without it.
+        assert!(Config::from_toml("", &no_env).unwrap().warnings.is_empty());
         let idle = |text: &str| Config::from_toml(&format!("[idle]\n{text}"), &no_env);
-        assert_eq!(
-            idle("monitors-off = 30").unwrap().idle.monitors_off,
-            Some(30)
-        );
-        assert_eq!(
-            idle("monitors-off = false").unwrap().idle.monitors_off,
-            None
-        );
+        // `false` asked for what Pila does now: nothing to say.
+        assert!(idle("monitors-off = false").unwrap().warnings.is_empty());
         for text in [
+            "monitors-off = 600",
             "monitors-off = 0",
-            "monitors-off = 86401",
             "monitors-off = true",
         ] {
-            let error = idle(text).unwrap_err();
-            assert!(error.contains("idle.monitors-off"), "{text}: {error}");
+            let config = idle(text).unwrap();
+            assert_eq!(config.warnings.len(), 1, "{text}: {:?}", config.warnings);
+            let warning = &config.warnings[0];
+            assert!(
+                warning.contains("idle.monitors-off") && warning.contains("swayidle"),
+                "{text}: {warning}"
+            );
         }
         assert!(idle("monitors-off = \"soon\"").is_err());
+        assert!(idle("lock = 300").is_err());
     }
 
     #[test]
-    fn the_wallpaper_is_an_absolute_path_and_a_fit() {
-        let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.wallpaper.image, None);
-        assert_eq!(config.wallpaper.fit, WallpaperFit::Fill);
-        let home = |name: &str| (name == "HOME").then(|| "/home/someone".to_string());
-        let wallpaper = |text: &str| Config::from_toml(&format!("[wallpaper]\n{text}"), &home);
-        let config = wallpaper("image = \"~/Pictures/a.jpg\"\nfit = \"center\"").unwrap();
-        assert_eq!(
-            config.wallpaper.image.as_deref(),
-            Some(std::path::Path::new("/home/someone/Pictures/a.jpg"))
-        );
-        assert_eq!(config.wallpaper.fit, WallpaperFit::Center);
-        // Not there: a warning, as it may come later.
-        assert!(
-            config
-                .warnings
-                .iter()
-                .any(|w| w.contains("wallpaper.image")),
-            "{:?}",
-            config.warnings
-        );
-        assert_eq!(wallpaper("image = \"\"").unwrap().wallpaper.image, None);
-        for (text, what) in [
-            ("image = \"pictures/a.jpg\"", "absolute"),
-            ("fit = \"tile\"", "wallpaper.fit"),
+    fn the_wallpaper_is_left_to_swaybg_with_a_warning() {
+        let wallpaper = |text: &str| Config::from_toml(&format!("[wallpaper]\n{text}"), &no_env);
+        // No image, nothing lost: nothing to say.
+        for text in ["", "image = \"\"", "fit = \"fit\""] {
+            let config = wallpaper(text).unwrap();
+            assert!(config.warnings.is_empty(), "{text}: {:?}", config.warnings);
+        }
+        // The swaybg line that draws it, quoted for the shell (~ still
+        // expands), in swaybg's mode of the same name.
+        for (text, line) in [
+            (
+                "image = \"~/Pictures/a b.jpg\"\nfit = \"center\"",
+                "swaybg -i ~/'Pictures/a b.jpg' -m center",
+            ),
+            (
+                "image = \"/srv/it's.png\"",
+                r#"swaybg -i '/srv/it'\''s.png' -m fill"#,
+            ),
         ] {
-            let error = wallpaper(text).unwrap_err();
-            assert!(error.contains(what), "{text}: {error}");
+            let config = wallpaper(text).unwrap();
+            assert_eq!(config.warnings.len(), 1, "{text}: {:?}", config.warnings);
+            let warning = &config.warnings[0];
+            assert!(warning.contains("[wallpaper]"), "{warning}");
+            assert!(warning.contains(line), "{text}: {warning}");
         }
-        let error = Config::from_toml("[wallpaper]\nimage = \"~/a.png\"", &no_env).unwrap_err();
-        assert!(error.contains("HOME"), "{error}");
-        for (name, fit) in WallpaperFit::NAMES {
-            assert_eq!(fit.name(), name);
-        }
+        assert!(wallpaper("picture = \"/a.png\"").is_err());
     }
 
     #[test]

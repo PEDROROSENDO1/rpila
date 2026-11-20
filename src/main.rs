@@ -6,7 +6,9 @@ use std::io::IsTerminal;
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
 use pila::config::{self, Config, ModKey};
-use pila::{headless, ipc, ipc_client, state, test_control, text, udev, version, winit, Pila};
+use pila::{
+    headless, ipc, ipc_client, state, test_control, text, tool_configs, udev, version, winit, Pila,
+};
 
 const USAGE: &str = "\
 Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headless]
@@ -305,6 +307,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let config_path = Config::path(config_path.as_deref());
     let (config, config_error) = Config::load(config_path.as_deref(), default_mod);
+    // Before autostart starts the tools: their first run reads it.
+    if config.tool_configs {
+        tool_configs::write_missing_for_user();
+    }
     tracing::info!(
         mod_key = ?config.mod_key,
         terminal = ?config.terminal_command(),
@@ -355,11 +361,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // `-c`, else the config's autostart (no terminal by itself: it's
-    // Mod+Return's). They get the reserved X display, so they can be X11
+    // Mod+Return's), less the example's own tools that aren't installed. They get the reserved X display, so they can be X11
     // apps: the first to connect starts Xwayland.
     let startup = match startup_command {
         Some(command) => vec![command],
-        None => state.config.autostart.clone(),
+        None => state.autostart_installed(),
     };
     state.reserve_xwayland();
     state.start_session(startup);

@@ -8,10 +8,12 @@
 # Pila user manual
 
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
-desktops. Pila draws the windows, their title bars and shadows, the wallpaper and the window switcher,
-and handles the keyboard, mouse, touchpad and monitors. The rest of a desktop (a bar, a launcher,
-notifications, a lock screen) comes from separate, standard programs: by default waybar and
-fuzzel, where they're installed. A desktop shell that has them all works too.
+desktops. Pila draws the windows, their title bars and shadows and the window switcher, and
+handles the keyboard, mouse, touchpad and monitors. The rest of a desktop (a bar, a launcher,
+notifications, a wallpaper, a lock screen) comes from separate, standard programs: by default waybar,
+fuzzel, mako and swayidle with swaylock, where they're installed (the package `pila-desktop`
+brings them all; `pila` alone is the compositor alone). A desktop shell that has them all works
+too.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -205,20 +207,24 @@ windows without a wallpaper, and `snap-preview` the area a dragged window would 
 be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors. Pila's
 window switcher takes the same colors; other programs can read them with `pila msg colors`.
 
-**Wallpaper.** `[wallpaper]` sets the picture behind everything, on every monitor: `image`, a
-PNG, JPEG or WebP file (an absolute path, or starting with `~/`), and `fit`, how it covers a
-monitor: `fill` (the whole monitor, the picture cropped to its shape; the default), `fit` (the
-whole picture, `[colors] background` around it), `stretch` or `center` (at its size). It
-changes as soon as the file is saved; without an image, `background` shows.
+**Wallpaper.** A wallpaper program draws it: swaybg (package swaybg), or a shell's. Add it to
+`autostart`, with `-m` for how the picture covers each monitor: `fill` (the whole monitor, the
+picture cropped to its shape), `fit` (the whole picture, `-c` color around it), `stretch`,
+`center` or `tile`:
 
 ```toml
-[wallpaper]
-image = "~/Pictures/wallpaper.jpg"
-fit = "fill"
+autostart = [
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+    "swaybg -i ~/Pictures/wallpaper.jpg -m fill",
+]
 ```
 
-Pila draws it itself, under everything else: a wallpaper program in `autostart` (`swaybg -i
-FILE`, or a shell's) draws over it. A file Pila can't read is said in a notification.
+`autostart` runs at startup: to change the picture now, `pkill swaybg` and start it again
+(`swaybg -i FILE -m fill &` from a terminal). Without one, `[colors] background` shows. A
+configuration with `[wallpaper]`, which development builds read for a while, still loads, with
+a warning that gives the swaybg line doing the same.
 
 **Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
 64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
@@ -309,8 +315,8 @@ and which monitors are on another one.
 `Mod+O` moves the pointer and the focus to the next monitor, and `Mod+Shift+O` sends the focused
 window there, keeping its place, or still filling the monitor or the same half.
 
-Pila turns the monitors off after a while without input (`[idle] monitors-off`, in "Locking the
-screen and idling"). To turn them off at once, run
+The monitors turn off after a while without input (swayidle, in "Locking the screen and
+idling"). To turn them off at once, run
 `pila msg action power-off-monitors` (or bind the action to a key): any key, click or move of the
 pointer turns them back on, and that first key or click does nothing else. Through `pila msg` it
 works with the screen locked too, as idling usually locks first; a key binding doesn't run while
@@ -472,7 +478,11 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); by default the bar `waybar`, and no terminal. `autostart = []` starts nothing.
+Xwayland); by default the bar `waybar`, the notification daemon `mako` and `swayidle`, and no
+terminal. `autostart = []` starts nothing. The defaults are skipped, with only a line in the log,
+where they aren't installed: Pila without them is a bare compositor, and the package
+`pila-desktop` brings them all (see [INSTALL.md](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#packages-for-a-full-session)). A
+command you wrote yourself whose program isn't installed says so in a notification.
 
 **Pila ships no bar, launcher or on-screen display of its own.** Its defaults are standard
 programs, packaged by most distributions, each named in the default configuration alone; Pila
@@ -481,9 +491,24 @@ works the same with another in its place:
 | Default | Where it's set | Swap it for |
 |---|---|---|
 | `fuzzel` | `launcher` | any launcher (`wofi --show drun`, `rofi -show drun`, ...) |
-| `waybar` | `autostart` | any other bar (a list without `waybar`) |
+| `waybar`, `mako` | `autostart` | any other bar or notification daemon (a list without them) |
 | `wpctl`, `brightnessctl`, `playerctl` | the volume, brightness and media keys' bindings | bindings of your own (`pactl`, `swayosd-client`, ...) |
 | `grim`, `slurp`, `wl-copy` | `Mod+Shift+S` and `Mod+Ctrl+S`; `slurp` picks the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own; `chooser_cmd` in those settings |
+
+**A look that matches Pila's.** At startup Pila writes a configuration of its own for waybar,
+fuzzel, mako and swaylock, where they're installed and you have none: Pila's default colors
+(`[colors]`) and square corners. Its waybar shows the apps' own icons in the window list, and
+symbols for the volume, battery and clock where Font Awesome is installed (package
+otf-font-awesome, fonts-font-awesome or fontawesome-6-free-fonts), words where it isn't; a font
+installed later needs the file deleted, to be written again. They go where each tool reads
+them (`~/.config/waybar/config.jsonc` and `style.css`, `~/.config/fuzzel/fuzzel.ini`,
+`~/.config/mako/config`, `~/.config/swaylock/config`) and are yours to change: Pila never writes
+over a file, and a tool with a configuration of yours anywhere it reads one (an older
+`~/.config/waybar/config`, `~/.mako/config`, ...) is left alone. A file you delete is written
+again at the next start; a tool installed later gets its own then. They follow the default
+colors, not a `[colors]` of yours. `tool-configs = false` turns this off. Its waybar has Pila's
+workspaces and windows on the left and the tray, the volume (a click mutes), the battery and the
+clock on the right.
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way
@@ -546,7 +571,7 @@ launcher = "fuzzel"
 autostart = [
     "waybar",
     "mako",
-    "swayidle -w timeout 300 'swaylock -f' before-sleep 'swaylock -f'",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
 ]
 ```
 
@@ -575,7 +600,7 @@ A bar that uses standard protocols and fails on Pila is a bug: please
 
 **Waybar** shows Pila's workspaces with its `ext/workspaces` module (the active one marked, a
 click switches) and the windows with `wlr/taskbar` (a click focuses one, a middle click closes
-it). In `~/.config/waybar/config.jsonc`:
+it); the configuration Pila writes has both. In a `~/.config/waybar/config.jsonc` of your own:
 
 ```jsonc
 {
@@ -656,28 +681,32 @@ Lock screens that use ext-session-lock work: `swaylock`, or your shell's own.
 While the screen is locked, only the lock screen gets the keyboard and the mouse, and Pila's
 bindings don't run; `Ctrl+Alt+F1` to `F12` still switch virtual terminals.
 
-Pila turns the screens off by itself after 10 minutes without input (a key, a click, a move of
-the pointer); any input turns them back on, and that first key or click does nothing else.
-`[idle] monitors-off` sets how long, in seconds, or `false` for never:
-
-```toml
-[idle]
-monitors-off = 300                 # 5 minutes
-```
-
-A video playing in a visible window keeps the screens on, and the session from idling, if the
-player asks for it, as most do.
-
-To lock the screen after a while too, use `swayidle` (or your shell's idle settings):
+What happens without input is swayidle's job, which the default `autostart` runs: it locks the
+screen with swaylock after 5 minutes without input (a key, a click, a move of the pointer) and
+before the computer sleeps, and turns the monitors off after 10. Any input turns them back on,
+and that first key or click does nothing else. A video playing in a visible window keeps the
+session from idling, if the player asks for it, as most do. To change the times, or not lock,
+put your own swayidle line in `autostart` (it's read at startup: log in again, or start swayidle
+again yourself):
 
 ```toml
 autostart = [
-    "swayidle -w timeout 300 'swaylock -f' before-sleep 'swaylock -f'",
+    "waybar",
+    "mako",
+    # Lock after 15 minutes, monitors off after 20, lock before sleeping.
+    "swayidle -w timeout 900 'swaylock -f' timeout 1200 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
 ]
 ```
 
-A tool that turns the screens off itself works as before (`pila msg action power-off-monitors`
-from swayidle, a shell's idle settings); set `monitors-off = false` to leave it to that tool.
+`man swayidle` has the rest (`idlehint`, `lock` and `unlock` from logind). Locking before the
+computer sleeps (`before-sleep`) needs logind (systemd or elogind); the timeouts work without
+it. A shell with its own idle settings takes swayidle's place: leave it out of `autostart`.
+Monitors that `pila msg action power-off-monitors` turned off come back at any input; `wlopm
+--off '*'` works too, with a `resume` that runs `wlopm --on '*'`, as monitors a tool turned off
+stay off until it turns them on.
+
+A configuration with `[idle] monitors-off`, which development builds read for a while, still
+loads, with a warning that gives the swayidle line doing the same.
 
 If the lock screen crashes, the session stays locked, for safety. Switch to a free virtual
 terminal (`Ctrl+Alt+F3`, or another free one: F1 and F2 may be the login screen or this very
@@ -842,7 +871,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | A notification says the configuration is invalid | It gives the line and the problem; fix it and save. `pila --check-config` checks it again. A key binding must be under `[bindings]`. |
 | A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
 | Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
-| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). The media keys need a player that speaks MPRIS. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "brightnessctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
+| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). The media keys need a player that speaks MPRIS. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "brightnessctl isn't installed"); any binding, the terminal, the launcher or `autostart` too, except the default `autostart`'s own tools, skipped quietly. |
 | `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | They need `grim`, and `Mod+Shift+S` also `slurp` and `wl-clipboard` (`wl-copy`): Pila tells you when one of them isn't installed. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |

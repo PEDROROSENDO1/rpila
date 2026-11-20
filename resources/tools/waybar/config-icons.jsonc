@@ -1,0 +1,41 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 28,
+    "spacing": 0,
+    "modules-left": ["ext/workspaces", "wlr/taskbar"],
+    "modules-right": ["tray", "wireplumber", "battery", "clock"],
+    "ext/workspaces": {
+        "format": "{name}",
+        "on-click": "activate",
+        "sort-by-id": true
+    },
+    "wlr/taskbar": {
+        "format": "{icon} {title}",
+        "icon-size": 16,
+        "tooltip-format": "{title}",
+        "max-length": 32,
+        "on-click": "activate",
+        "on-click-middle": "close"
+    },
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8
+    },
+    "wireplumber": {
+        "format": "{icon} {volume}%",
+        "format-muted": "\uf026 muted",
+        "format-icons": ["\uf026", "\uf027", "\uf028"],
+        "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+    "battery": {
+        "format": "{icon} {capacity}%",
+        "format-charging": "\uf1e6 {capacity}%",
+        "format-icons": ["\uf244", "\uf243", "\uf242", "\uf241", "\uf240"],
+        "states": { "warning": 15 }
+    },
+    "clock": {
+        "format": "\uf017 {:%H:%M}",
+        "tooltip-format": "{:%A %e %B %Y}"
+    }
+}

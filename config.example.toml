@@ -31,17 +31,36 @@ launcher = "fuzzel"
 
 # Commands run at startup (`pila -c` replaces them); [] for none. X11 apps
 # among them start Xwayland as they connect. No terminal starts unless it's
-# listed (Mod+Return opens one). waybar is a bar on every monitor (its
-# workspaces module for Pila is in the manual); any other bar works too. Only
-# one `autostart` line can be active: to use the longer example, put it in
-# place of the active one.
+# listed (Mod+Return opens one). waybar is a bar on every monitor and mako
+# shows notifications. swayidle locks the screen (swaylock) after 5 minutes
+# without input and before the computer sleeps, and turns the monitors off
+# after 10: any input turns them back on, and that first key or click does
+# nothing else; not while a shown window asks to stay awake (a video playing).
+# Without the lock: "swayidle -w timeout 600 'pila msg action power-off-monitors'".
+# Without a wallpaper program (swaybg), [colors] background shows. These
+# three, as written here, are skipped where they aren't installed (package
+# pila-desktop brings them); a command of your own that isn't says so in a
+# notification. Any others work too. Only one `autostart` can be active: to use the longer example, put
+# it in place of the active one.
 # autostart = [                    # e.g.
 #     "waybar",
-#     "mako",                      # notifications
+#     "mako",
+#     "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+#     "swaybg -i ~/Pictures/wallpaper.jpg -m fill",  # fill, fit, center, ...
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
-autostart = ["waybar"]
+autostart = [
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+]
+
+# At startup Pila writes a configuration of its own, in these colors, for
+# waybar, fuzzel, mako and swaylock where they're installed and you have none
+# (in ~/.config/waybar, fuzzel, mako, swaylock): never over a file of yours, and
+# a file you delete is written again. false: they keep their own looks.
+tool-configs = true
 
 # How many workspaces (virtual desktops) there are, 1 to 32. They span all
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
@@ -170,26 +189,6 @@ shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 [xwayland]
 # idle-timeout = 10                # e.g.
 enabled = true
-
-# Without input (a key, a click, a move of the pointer) for monitors-off
-# seconds, 1 to 86400, the monitors turn off; any input turns them back on, and
-# that first key or click does nothing else. Not while a window that's shown
-# asks to stay awake (a video playing); false: never. On a TTY. Read as soon as
-# the file is saved.
-[idle]
-# monitors-off = false             # e.g.: never
-monitors-off = 600                 # 10 minutes
-
-# The wallpaper behind everything, on every monitor, drawn by Pila: a PNG,
-# JPEG or WebP file, as an absolute path or starting with ~/. Unset,
-# [colors] background shows. fit: fill (the whole monitor, the image cropped
-# to its shape), fit (the whole image, [colors] background around it),
-# stretch, or center (the image at its size). A saved change shows at once.
-# A wallpaper program in `autostart` (swaybg -i FILE) draws over it.
-[wallpaper]
-# image = "~/Pictures/wallpaper.jpg"  # e.g.
-# fit = "fit"                      # e.g.
-fit = "fill"
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and

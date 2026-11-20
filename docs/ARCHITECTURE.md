@@ -25,7 +25,11 @@ Key flows and invariants:
 - **Configuration** (`config.rs`): a TOML file (`~/.config/pila/config.toml` or
   `--config`, documented in `config.example.toml`, which `main` writes to the default path
   when nothing is there, without `--config`: `config::create_default_file`, before the event
-  loop; never over a file or a symlink, and a failure only logged) parsed by
+  loop; never over a file or a symlink, and a failure only logged; then, with `tool-configs`,
+  `tool_configs::write_missing_for_user` writes waybar's, fuzzel's, mako's and swaylock's
+  configurations from `resources/tools/` the same way, for those installed with none of the
+  user's, before autostart starts them; waybar's with Font Awesome symbols where a font file
+  under fontconfig's default directories has "awesome" in its path, `icon_font_installed`) parsed by
   `Config::from_toml` (pure,
   unit-tested; `PILA_*` env vars override it), loaded at startup by `Config::load`, which
   falls back to defaults on errors (`main` notifies of them once the session has had time to
@@ -745,24 +749,6 @@ Key flows and invariants:
   that window, which ends the switch on it, and the press and its release go nowhere else. The
   state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
   real apps on a headless Pila.
-- **Wallpaper** (`wallpaper.rs`, `[wallpaper]`): a picture Pila draws itself under the lower
-  layer surfaces, so a wallpaper program's Background surface covers it. A new image (at startup,
-  from `start_session`, or a reload that changes `[wallpaper]`, `wallpaper_config_changed`) is
-  decoded on a thread of its own (the `image` crate's PNG, JPEG and WebP; shrunk once to what
-  still covers the largest output, `wallpaper::shrunk`, but at `center`) and comes back through a
-  calloop channel; a decode for an image no longer wanted (a newer request since, `generation`)
-  is dropped. It's uploaded then, outside any frame, as one texture of the renderer
-  (`import_memory`), and the decoded copy dropped (and `malloc_trim`, on glibc: the decode's
-  arena would otherwise keep tens of megabytes per picture); an error is logged and notified, and shows
-  `[colors] background`. `Pila::scene` hands it over as `Scene::wallpaper` with each output's
-  rect and scale and an element id per output (new with each picture, so every output's damage
-  tracker sees a new element); `scene_elements_from` draws it last, behind the lower layer
-  surfaces, wherever it's drawn: outputs, blur backdrops and captures alike. Where it goes on an
-  output is `wallpaper::placement` (`fill` crops the picture to the output's shape, `fit` shows
-  all of it on `background`, `stretch`, `center` at a picture's pixel per output pixel), a pure
-  function. Not drawn while locked (the scene is the lock surfaces only), and it stays put
-  through a workspace slide. The config side: `config::WallpaperConfig` (the image as an
-  absolute path, `~/` expanded; a missing file a warning, as it may come later).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its
@@ -1121,7 +1107,11 @@ Key flows and invariants:
   its programs get (`[environment]`'s, else Pila's), and each that isn't installed gets a
   notification (`notify_missing_programs`), once a session (`Pila::missing_programs`): a key
   bound to a missing program otherwise does nothing but write to the log. A program that exits
-  127 itself, with everything installed, names none. Pila raises
+  127 itself, with everything installed, names none. The example's own `autostart` commands
+  (`config::example_autostart`, the same words in a file made from it) aren't started at all
+  where their programs are missing (`Pila::autostart_installed`, in `main`; `-c` isn't
+  filtered): they're the defaults, which a user may leave uninstalled (`pila-desktop` brings
+  them), so only the log mentions them. Pila raises
   its soft limit of open files to the hard one at startup (`state::raise_file_limit`: a
   descriptor or more per client, shm pool, dma-buf and fence), and `session_env`'s `pre_exec`
   gives what it starts the limit it was started with, since programs using `select()` break
@@ -1190,15 +1180,10 @@ Key flows and invariants:
   session isn't locked; `update_idle_inhibit` re-checks in `after_frames` (after a frame,
   a client dispatch or input). A new input path
   must go through `process_input_event` (or set `input_activity`) to count as activity.
-  `[idle] monitors-off` is Pila's own idle action: one calloop timer (`MonitorsOff`), armed at
-  startup, by a reload of `[idle]` (`idle_config_changed`) and by the first input after it
-  fired (`notify_activity`), due `monitors-off` after the last activity; when it fires
-  (`monitors_off_due`) it moves itself to the new deadline if input came since, waits a whole
-  `monitors-off` while an inhibitor counts, and else turns the monitors off
-  (`power_off_monitors`: the next input wakes them, swallowed, `wake_monitors`) and drops
-  itself. Input does nothing but note the time, so a 1000 Hz mouse costs no timer work; an
-  inhibitor going away counts as activity, so the monitors don't go off as a video ends.
-  Nested the backend has no monitor power and nothing happens.
+  Pila has no idle action of its own: locking and turning the monitors off are swayidle's
+  (the example's `autostart`), through `power-off-monitors` (`power_off_monitors`: the next
+  input wakes them, swallowed, `wake_monitors`). An old file's `[idle] monitors-off` is read
+  for a warning only (`IdleFile`).
 - **Pointer constraints** (`pointer_constraints.rs`): a lock/confine activates only while
   the pointer is over its surface (inside its region) and that window has keyboard focus;
   `SeatHandler::focus_changed` releases it (`release_constraint_for_focus`), which makes

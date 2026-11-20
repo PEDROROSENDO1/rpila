@@ -19,6 +19,34 @@
             commit = self.shortRev or self.dirtyShortRev or null;
           };
           default = pila;
+          # Pila and the standard tools its default configuration runs (the
+          # same list as packaging/nfpm-desktop.yaml's): `pila` alone is the
+          # compositor alone, whose defaults that aren't installed are skipped.
+          # swaylock needs `security.pam.services.swaylock = { };` on NixOS.
+          pila-desktop = pkgs.buildEnv {
+            name = "pila-desktop-${pila.version}";
+            paths = [
+              pila
+              pkgs.kitty
+              pkgs.waybar
+              pkgs.fuzzel
+              pkgs.mako
+              pkgs.font-awesome
+              pkgs.swayidle
+              pkgs.swaylock
+              pkgs.wireplumber
+              pkgs.brightnessctl
+              pkgs.playerctl
+              pkgs.grim
+              pkgs.slurp
+              pkgs.wl-clipboard
+            ];
+            # For `services.displayManager.sessionPackages`, as `pila`.
+            passthru.providedSessions = [ "pila" ];
+            meta = pila.meta // {
+              description = "Pila with the bar, launcher, notifications, lock and keys of its default configuration";
+            };
+          };
         }
       );
 

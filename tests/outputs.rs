@@ -9,7 +9,6 @@ use std::time::Duration;
 use common::client::Ev;
 use common::*;
 use wayland_client::{protocol::wl_output::Transform, Proxy};
-use wayland_protocols::wp::idle_inhibit::zv1::client::zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1;
 use wayland_protocols_wlr::{
     gamma_control::v1::client::zwlr_gamma_control_manager_v1::ZwlrGammaControlManagerV1,
     output_management::v1::client::{
@@ -915,82 +914,19 @@ fn moving_the_pointer_wakes_the_monitors() {
 
 // --- [idle] monitors-off -----------------------------------------------------
 
-/// Two outputs and a focused app, with the monitors off after `seconds`
-/// without input.
-fn idle_after(seconds: u32) -> (TestPila, Client) {
+/// `[idle] monitors-off` is swayidle's job now: an old file's setting turns
+/// nothing off, and says so.
+#[test]
+fn idle_monitors_off_no_longer_turns_the_monitors_off() {
     let mut pila = TestPila::start_with(Options {
         outputs: Some("A:1280x800,B:1024x768".into()),
-        config: format!("[idle]\nmonitors-off = {seconds}\n"),
+        config: "[idle]\nmonitors-off = 1\n".into(),
         ..Options::default()
     });
-    let app = pila.client();
-    app.window("app").create();
-    pila.wait_focus("app");
-    (pila, app)
-}
-
-#[test]
-fn without_input_the_monitors_go_off_and_a_key_brings_them_back_unseen() {
-    let (mut pila, app) = idle_after(1);
-    pila.wait("every monitor off", |s| powered(s) == [false, false]);
-    app.roundtrip();
-    app.clear_events();
-    pila.key("a");
-    pila.wait("every monitor on", |s| powered(s) == [true, true]);
-    app.roundtrip();
-    assert!(
-        !app.events().iter().any(|e| matches!(e, Ev::Key { .. })),
-        "{:?}",
-        app.events()
-    );
-    // And again, after another second without input.
-    pila.wait("off again", |s| powered(s) == [false, false]);
-}
-
-#[test]
-fn input_keeps_the_monitors_on() {
-    let (mut pila, _app) = idle_after(1);
-    let started = std::time::Instant::now();
-    while started.elapsed() < Duration::from_millis(2500) {
-        // Looked at before the next input, which would wake them.
-        std::thread::sleep(Duration::from_millis(250));
-        let state = pila.state();
-        assert_eq!(powered(&state), [true, true], "off despite input");
-        pila.move_by(1.0, 0.0);
-    }
-}
-
-#[test]
-fn a_shown_window_that_inhibits_idle_keeps_the_monitors_on() {
-    let (mut pila, app) = idle_after(1);
-    let window = app.window("video").create();
-    pila.wait_focus("video");
-    let manager: ZwpIdleInhibitManagerV1 = app.bind("zwp_idle_inhibit_manager_v1", 1);
-    let inhibitor = manager.create_inhibitor(&app.surface(window), &app.qh, "inhibitor".into());
-    app.flush();
-    pila.stays(
-        "on while the video plays",
-        Duration::from_millis(2500),
-        |s| powered(s) == [true, true],
-    );
-    inhibitor.destroy();
-    app.flush();
-    pila.wait("off once it stops", |s| powered(s) == [false, false]);
-}
-
-#[test]
-fn monitors_off_false_never_turns_them_off_and_a_reload_sets_a_time() {
-    let mut pila = TestPila::start_with(Options {
-        outputs: Some("A:1280x800,B:1024x768".into()),
-        config: "[idle]\nmonitors-off = false\n".into(),
-        ..Options::default()
-    });
-    pila.stays("on", Duration::from_millis(2000), |s| {
+    pila.wait_log("swayidle");
+    pila.stays("on", Duration::from_millis(2500), |s| {
         powered(s) == [true, true]
     });
-    pila.write_config("[idle]\nmonitors-off = 1\n");
-    pila.wait_log("config reloaded");
-    pila.wait("off a second later", |s| powered(s) == [false, false]);
 }
 
 /// A monitor a client turned off (wlopm, a shell's idle handling) stays off

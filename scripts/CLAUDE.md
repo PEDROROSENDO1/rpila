@@ -3,8 +3,8 @@
 `scripts/check` drives a real Pila with real programs (a terminal, xterm, fuzzel, grim,
 waybar if installed: windows opening and closing, minimize, maximize, workspace switches, a
 launcher, a capture, a capture stream, a blurred window, a fullscreen one), over a wallpaper
-(the base config's `[wallpaper]`, else a 4K gradient it writes with python3), and judges the log: the scenarios finished without a panic, animations
-ran (`starts` on `pila::animation`), the wallpaper loaded, waybar's surfaces follow their layer rule, grim got a
+(swaybg on a 4K gradient it writes with python3, if both are installed), and judges the log: the scenarios finished without a panic, animations
+ran (`starts` on `pila::animation`), swaybg's layer surface came, waybar's surfaces follow their layer rule, grim got a
 picture, the stream got frames, monitors were identified from their EDID (bare metal), and the
 frame statistics (no missed refresh, frames shown late included, CPU per frame on average within 4 ms, for the outputs'
 frames and, on average over all of them, the captures'; bare metal, if a night light set gamma,

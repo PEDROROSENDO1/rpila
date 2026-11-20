@@ -25,21 +25,15 @@ depends=(
     systemd-libs
 )
 makedepends=(cargo git pkgconf)
+# The desktop's tools (bar, launcher, notifications, lock, the keys' programs)
+# are pila-desktop's (packaging/aur/pila-desktop): this is the compositor
+# alone, and the defaults that aren't installed are skipped.
 optdepends=(
+    'pila-desktop: the bar, launcher, notifications, lock and keys of the default configuration'
     'xorg-xwayland: X11 apps (games, older programs)'
-    'kitty: the default terminal (or foot, alacritty, ...)'
     'xdg-desktop-portal-wlr: screen sharing'
     'xdg-desktop-portal-gtk: file chooser and other portals'
-    'swaylock: locking the session'
     'xdg-utils: opening links and files from programs such as kitty (xdg-open)'
-    'waybar: the default bar'
-    'fuzzel: the default launcher'
-    'wireplumber: the volume and mute keys (wpctl)'
-    'brightnessctl: the brightness keys'
-    'playerctl: the media keys'
-    'grim: the screenshot keys'
-    'slurp: the region screenshot key'
-    'wl-clipboard: screenshots to the clipboard (wl-copy)'
 )
 provides=(pila)
 conflicts=(pila)

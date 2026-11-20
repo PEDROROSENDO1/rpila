@@ -50,27 +50,17 @@ overrides:
       - libudev1
       - libxkbcommon0
     # X11 apps: Pila runs without (and with [xwayland] enabled = false).
+    # The rest is how apps work with any compositor: portals and xdg-open.
     recommends:
       - xwayland
-      - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The default bar and launcher.
-      - waybar
-      - fuzzel
-      # The volume, brightness and media keys' default bindings.
-      - wireplumber
-      - brightnessctl
-      - playerctl
-      # The screenshot keys' default bindings.
-      - grim
-      - slurp
-      - wl-clipboard
-    # Not installed by default: a desktop shell may have its own lock
-    # screen.
+    # The desktop's tools (bar, launcher, notifications, lock, the keys'
+    # programs) are pila-desktop's (nfpm-desktop.yaml): Pila alone is the
+    # compositor, and the defaults that aren't installed are skipped.
     suggests:
-      - swaylock
+      - pila-desktop
   # Built on the oldest Fedora maintained, 44: its glibc is the minimum.
   rpm:
     depends:
@@ -84,22 +74,8 @@ overrides:
       - libxkbcommon
     recommends:
       - xorg-x11-server-Xwayland
-      - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The default bar and launcher.
-      - waybar
-      - fuzzel
-      # The volume, brightness and media keys' default bindings.
-      - wireplumber
-      - brightnessctl
-      - playerctl
-      # The screenshot keys' default bindings.
-      - grim
-      - slurp
-      - wl-clipboard
-    # Not installed by default: a desktop shell may have its own lock
-    # screen.
     suggests:
-      - swaylock
+      - pila-desktop

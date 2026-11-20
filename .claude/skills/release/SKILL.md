@@ -42,9 +42,20 @@ that the AUR shows the new `pkgver` (`https://aur.archlinux.org/rpc/v5/info?arg[
 Any other change to the `PKGBUILD` that waits there is still the user's to approve. The Nix
 flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
 
+# pila-desktop
+
+A metapackage with no files: `pila` plus the standard tools `config.example.toml`'s defaults
+run (terminal, bar, launcher, notifications, idle and lock, the keys' programs), so `pila` alone
+stays the compositor alone. Its list is in four places that change together when a default tool
+does: `packaging/aur/pila-desktop/PKGBUILD` (raise its `pkgver`), `packaging/nfpm-desktop.yaml`
+(built and installed with its tools by `packages.yml`, with the release's version),
+`flake.nix`'s `pila-desktop` (built by `compat.yml`) and docs/INSTALL.md's "Packages for a full
+session". A release needs nothing else for it.
+
 # Arch package
 
 `packaging/aur/pila-git` holds the `PKGBUILD` and `.SRCINFO`; test with `makepkg -f` there.
+`aur.yml` publishes every directory in `packaging/aur` (`pila-desktop` too) under one approval.
 
 - Its `package()` runs `scripts/install --no-build` with `PREFIX=/usr DESTDIR=`, so files added
   to `install_files` need no change there. The docs in `share/doc/pila` are installed apart:

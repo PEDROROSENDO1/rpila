@@ -1,0 +1,18 @@
+# Written by Pila (`tool-configs`): Pila's default colors, square corners.
+# Yours to change; Pila never writes over it.
+
+font=sans-serif 11
+background-color=#26272b
+text-color=#dfe1e5
+border-color=#3f4249
+border-size=1
+border-radius=0
+progress-color=over #4477cc
+width=360
+padding=10
+margin=12
+default-timeout=5000
+
+[urgency=high]
+border-color=#c42b1c
+default-timeout=0

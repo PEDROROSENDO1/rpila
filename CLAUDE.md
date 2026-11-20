@@ -49,8 +49,10 @@ timeout 10 cargo run            # nested smoke test; never leave it running
 - Pila ships no desktop programs of its own (no bar, launcher, on-screen display or
   screenshot tool): its defaults are standard tools packaged by Arch, Debian and Fedora
   (fuzzel, waybar, wpctl, brightnessctl, playerctl, grim, slurp, wl-copy), named in
-  `config.example.toml` alone. What a compositor does best itself, Pila draws: title bars,
-  `[wallpaper]` and the window switcher's live previews (`wallpaper.rs`, `switcher_view.rs`).
+  `config.example.toml` alone (swayidle and swaylock to lock and turn the monitors off,
+  swaybg for a wallpaper). Where a packaged tool does a job well, Pila uses it rather than
+  growing the feature; what only a compositor can do, Pila draws: title bars and the window
+  switcher's live previews (`switcher_view.rs`).
   Programs an older install left are in `scripts/install-paths`' `removed_files`.
 
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,
@@ -62,9 +64,9 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `resources/` change (not `packaging/`), weekly and by hand before a release. `packages.yml`
   builds the `.deb` and `.rpm` of a release, and `repos.yml` then puts the last three releases'
   in the signed APT and DNF repositories on GitHub Pages (key in the `repos` environment, public
-  half `packaging/pila.asc`). `aur.yml` publishes `packaging/aur/pila-git` to
-  the AUR once approved in the `aur` environment: a release's `pkgver` commit by Claude, as
-  part of the release; any other change by the user. `vkms.yml` (by hand, an
+  half `packaging/pila.asc`). `aur.yml` publishes `packaging/aur/*` (`pila-git`, and
+  the metapackage `pila-desktop`) to the AUR once approved in the `aur` environment: a
+  release's `pkgver` commit by Claude, as part of the release; any other change by the user. `vkms.yml` (by hand, an
   experiment) runs the udev backend on the kernel's virtual KMS driver in the runner's VM.
   `fuzz.yml` (by hand) runs the fuzz targets in `fuzz/` for a few minutes each.
 - Test: `cargo test`; single test: `cargo test <name_substring>`. Every feature gets
@@ -127,7 +129,9 @@ where there's systemd, whose `@BINDIR@` it fills in), the
   Taking a change into the session means logging out and back in, which ends this
   Claude session; the user does it.
 - Packages: Arch (`packaging/aur/pila-git`), Debian/Fedora (`packaging/nfpm.yaml`) and Nix
-  (`flake.nix`, `package.nix`). A file added to `scripts/install`'s `install_files` or a newly
+  (`flake.nix`, `package.nix`); each also has `pila-desktop`, a metapackage of the tools the
+  default configuration runs (`packaging/aur/pila-desktop`, `packaging/nfpm-desktop.yaml`, the
+  flake's `pila-desktop`), whose lists change together when a default tool does. A file added to `scripts/install`'s `install_files` or a newly
   linked library also goes in those packages, so read the `release` skill first (it covers
   packaging as well as releases).
 - TTY runs (the user, on the host): `scripts/tty [config]` runs the release build

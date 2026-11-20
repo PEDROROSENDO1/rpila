@@ -195,15 +195,9 @@ impl Pila {
         if cursor_changed || old.environment != self.config.environment {
             self.export_environment();
         }
-        if old.idle != self.config.idle {
-            self.idle_config_changed();
-        }
         // Clients that look like Pila take them up (`pila msg subscribe colors`).
         if old.colors != self.config.colors {
             self.send_colors_event();
-        }
-        if old.wallpaper != self.config.wallpaper {
-            self.wallpaper_config_changed();
         }
         self.queue_redraw();
     }

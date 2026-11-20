@@ -159,7 +159,7 @@ jobs:
           printf 'Types: deb\nURIs: %s/deb\nSuites: stable\nComponents: main\nSigned-By: /etc/apt/keyrings/pila.asc\n' "$SITE" \
             | tee /etc/apt/sources.list.d/pila.sources
           for _ in $(seq 24); do
-            apt-get update && apt-get install -y --no-install-recommends "pila=$VERSION-1" && break
+            apt-get update && apt-get install -y --no-install-recommends "pila=$VERSION-1" "pila-desktop=$VERSION-1" && break
             sleep 30
           done
       - name: Repository (DNF)
@@ -167,7 +167,7 @@ jobs:
         run: |
           curl -fsSLo /etc/yum.repos.d/pila.repo "$SITE/rpm/pila.repo"
           for _ in $(seq 24); do
-            dnf install -y --refresh --setopt=install_weak_deps=False "pila-$VERSION" && break
+            dnf install -y --refresh --setopt=install_weak_deps=False "pila-$VERSION" "pila-desktop-$VERSION" && break
             sleep 30
           done
       - name: What's installed
@@ -175,3 +175,4 @@ jobs:
           pila --version
           pila --version | grep -F "pila $VERSION"
           test -x /usr/bin/pila-session
+          command -v waybar && command -v fuzzel && command -v mako

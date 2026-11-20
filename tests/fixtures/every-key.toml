@@ -15,6 +15,7 @@ other-gpus = false
 direct-scanout = true
 tearing = true
 render-late = true
+tool-configs = true
 default-bindings = true
 
 [environment]

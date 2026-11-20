@@ -51,8 +51,9 @@
 # what the checks expect doesn't depend on them: animations on, their own
 # rules, four workspaces.
 # Nested there's no base. Programs it uses when installed: kitty or foot
-# (needed), xterm, python3 (minimize, maximize, workspaces, the capture stream), fuzzel
-# (launcher), grim (capture), waybar (layer rule).
+# (needed), xterm, python3 (minimize, maximize, workspaces, the capture stream, the
+# wallpaper's picture), swaybg (wallpaper), fuzzel (launcher), grim (capture), waybar
+# (layer rule).
 set -euo pipefail
 
 # In a checkout (scripts/check) or installed (pila-check): see above.
@@ -138,6 +139,14 @@ if [ "${1:-}" = "--workload" ]; then
     }
 
     mark "terminal ${terminal:-none}"
+    # A wallpaper under every frame, as most sessions have: swaybg on the
+    # check's 4K gradient (`-c` replaces the base config's autostart).
+    if [ -n "${PILA_CHECK_WALLPAPER:-}" ] && command -v swaybg >/dev/null; then
+        swaybg -i "$PILA_CHECK_WALLPAPER" -m fill >/dev/null 2>&1 &
+        mark "wallpaper swaybg"
+    else
+        mark "wallpaper skip (no swaybg or python3)"
+    fi
     sleep 3
     if [ -z "$terminal" ]; then
         mark "no terminal (kitty or foot)"
@@ -479,9 +488,8 @@ if ! $judge_only; then
         done
         export PILA_CHECK_VRR=1
     fi
-    # A wallpaper under every frame, as most have: the base config's, else a
-    # 4K gradient of the check's own (Pila shrinks it to the monitors).
-    if ! grep -q '^[ \t]*\[wallpaper\]' "$config" && command -v python3 >/dev/null; then
+    # A 4K gradient for swaybg to draw under every frame (the workload).
+    if command -v python3 >/dev/null; then
         python3 -I - "$work/wallpaper.png" <<'PNG'
 import struct, sys, zlib
 width, height = 3840, 2160
@@ -493,8 +501,7 @@ with open(sys.argv[1], "wb") as f:
     f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(rows, 1)) + chunk(b"IEND", b""))
 PNG
-        printf '\n[wallpaper]\nimage = "%s"\n' "$work/wallpaper.png" >>"$config"
-        export PILA_CHECK_WALLPAPER=1
+        export PILA_CHECK_WALLPAPER="$work/wallpaper.png"
     fi
     cat >>"$config" <<EOF
 
@@ -616,10 +623,12 @@ fi
 # refreshes count while one runs (and, on bare metal, frames shown late).
 n=$(grep -c 'starts what="' "$log" || true)
 [ "$n" -gt 0 ] && pass "animations ran ($n)" || fail "animations ran (none started)"
-if grep -q 'wallpaper loaded' "$log"; then
-    pass "Pila draws the wallpaper"
-elif [ -n "${PILA_CHECK_WALLPAPER:-}" ]; then
-    fail "Pila draws the wallpaper (no 'wallpaper loaded' in the log)"
+if grep -q 'check: wallpaper swaybg' "$log"; then
+    if grep -q 'layer rules namespace="wallpaper"' "$log"; then
+        pass "swaybg draws a wallpaper under every frame"
+    else
+        fail "swaybg draws a wallpaper under every frame (no layer surface of its own)"
+    fi
 fi
 if ran capture; then
     s=$(section capture)

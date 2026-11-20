@@ -34,9 +34,10 @@ X11 apps run through Xwayland, which Pila starts when the first one connects (an
 set, stops again once none is left);
 .B [xwayland] enabled = false
 turns them off.
-The monitors turn off after 10 minutes without input, and back on at any input
-.RB ( "[idle] monitors-off" ,
-in seconds, or false).
+The default
+.B autostart
+runs swayidle, which locks the screen with swaylock after 5 minutes without input and before
+the computer sleeps, and turns the monitors off after 10; any input turns them back on.
 .PP
 Started from a login screen or a TTY, Pila drives the monitors and input devices itself.
 Started inside another desktop, it opens as a window there (nested), with Alt as its Mod key.
@@ -46,21 +47,6 @@ starts Pila as a login session: with its log in
 .IR ~/.local/state/pila/pila.log ,
 and a D-Bus session bus of its own (with dbus-run-session) when the system gives none.
 Login screens run it; from a TTY, run it after logging in.
-.PP
-.B pila\-bar
-is Pila's bar: on every monitor, the workspaces (a click or the wheel switches) and a clock.
-It's the default
-.BR autostart .
-.B pila\-bar \-\-help
-lists its options.
-.PP
-.B pila\-launcher
-is Pila's app launcher: the installed apps, searched as you type.
-It's the default
-.B launcher
-(Mod+D and tapping Mod).
-.B pila\-launcher \-\-help
-lists its options.
 .PP
 .B pila\-report
 gathers what a bug report needs (version, system, GPU, monitors, whether the configuration is
@@ -84,8 +70,7 @@ Run the shell command
 .I CMD
 at startup, instead of the configuration's
 .B autostart
-(which defaults to
-.BR pila\-bar ).
+(which defaults to waybar, mako and swayidle).
 .TP
 .BR \-\-config " " \fIFILE\fR
 Read the configuration from
@@ -362,6 +347,12 @@ file (and without
 it writes that example there.
 Its active values are the defaults, and nowhere else: Pila has it built in and takes from it every
 setting the configuration leaves out.
+.TP
+.IR ~/.config/waybar/ ", " ~/.config/fuzzel/ ", " ~/.config/mako/ ", " ~/.config/swaylock/
+Where Pila writes its own configuration for those tools at startup, if they're installed and
+have none (never over a file);
+.B tool\-configs = false
+in the configuration turns it off.
 .TP
 .IR ~/.local/state/pila/pila.log " (or " $XDG_STATE_HOME/pila/pila.log )
 The log of a session started by

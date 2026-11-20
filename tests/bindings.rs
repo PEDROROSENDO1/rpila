@@ -523,10 +523,10 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 #[test]
 fn the_bar_and_the_launcher_come_from_the_example_config() {
     use std::os::unix::fs::PermissionsExt;
-    // A waybar and a fuzzel on PATH that say they ran.
+    // A waybar, a mako and a fuzzel on PATH that say they ran.
     let bin = std::env::temp_dir().join(format!("pila-tools-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["waybar", "fuzzel"] {
+    for name in ["waybar", "mako", "fuzzel"] {
         let script = bin.join(name);
         std::fs::write(
             &script,
@@ -546,6 +546,7 @@ fn the_bar_and_the_launcher_come_from_the_example_config() {
     });
     pila.wait_log("created the config from the example");
     assert_eq!(pila.wait_file("waybar"), "waybar\n");
+    assert_eq!(pila.wait_file("mako"), "mako\n");
     pila.combo("Super+d");
     assert_eq!(pila.wait_file("fuzzel"), "fuzzel\n");
 
@@ -558,6 +559,7 @@ fn the_bar_and_the_launcher_come_from_the_example_config() {
         ..Options::default()
     });
     assert_eq!(pila.wait_file("waybar"), "waybar\n");
+    assert_eq!(pila.wait_file("mako"), "mako\n");
     pila.combo("Super+d");
     assert_eq!(pila.wait_file("fuzzel"), "fuzzel\n");
 

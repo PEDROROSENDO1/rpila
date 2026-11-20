@@ -1,0 +1,30 @@
+# Written by Pila (`tool-configs`): Pila's default colors.
+# Yours to change; Pila never writes over it.
+
+color=1f2126
+indicator-radius=60
+indicator-thickness=8
+font=sans-serif
+
+inside-color=26272bff
+inside-clear-color=26272bff
+inside-ver-color=26272bff
+inside-wrong-color=26272bff
+ring-color=3f4249ff
+ring-clear-color=80838aff
+ring-ver-color=4477ccff
+ring-wrong-color=c42b1cff
+key-hl-color=4477ccff
+bs-hl-color=80838aff
+line-color=00000000
+line-clear-color=00000000
+line-ver-color=00000000
+line-wrong-color=00000000
+separator-color=00000000
+text-color=dfe1e5ff
+text-clear-color=dfe1e5ff
+text-ver-color=dfe1e5ff
+text-wrong-color=dfe1e5ff
+layout-text-color=dfe1e5ff
+layout-bg-color=26272bff
+layout-border-color=3f4249ff

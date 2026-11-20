@@ -2,25 +2,38 @@
 
 ## Unreleased
 
-- **A wallpaper, set in the config:** `[wallpaper] image` (a PNG, JPEG or WebP file) and `fit`
-  (`fill`, `fit`, `stretch` or `center`) put a picture behind everything on every monitor, and a
-  saved change shows at once. Pila draws it itself, from the first frame, as one texture on the
-  GPU (a picture decoded on a thread, shrunk to what the largest monitor needs); without an
-  image, `[colors] background` shows as before. A wallpaper program (swaybg) draws over it.
-- **The screens turn off by themselves:** after 10 minutes without input the monitors turn off,
-  and any key, click or move of the pointer turns them back on (that first key or click does
-  nothing else). `[idle] monitors-off` sets the seconds, or `false` for never; a video playing
-  in a visible window keeps them on, as it keeps the session from idling. swayidle is still the
-  way to lock the screen after a while; a setup that turns the monitors off through it keeps
-  working.
+- **`pila-desktop`, or the compositor alone:** a new metapackage (APT, DNF, the AUR and the
+  flake) brings Pila with every tool its default configuration runs: kitty, waybar, fuzzel,
+  mako, swayidle and swaylock, Font Awesome, and the volume, brightness, media and screenshot
+  keys' programs. `pila` itself no longer recommends them, only what apps want in any session
+  (Xwayland, the portals, xdg-utils), so installing `pila` gives the compositor alone; on
+  Debian and Fedora, install `pila-desktop` to keep the tools an earlier `pila` brought in
+  (`apt autoremove` or `dnf autoremove` would otherwise take them away). The default
+  `autostart`'s own commands (waybar, mako, swayidle) are skipped, with a line in the log,
+  where they aren't installed, rather than reported in a notification; a command of your own
+  that isn't installed is still reported.
+- **The screen locks and the monitors turn off by themselves:** the default `autostart` runs
+  swayidle, which locks the screen with swaylock after 5 minutes without input and before the
+  computer sleeps, and turns the monitors off after 10 (`pila msg action power-off-monitors`:
+  any key, click or move of the pointer turns them back on, and that first key or click does
+  nothing else). A video playing in a visible window keeps the session from idling. A
+  configuration with its own `autostart` adds the swayidle line from the example or the manual;
+  a shell with its own idle settings needs none. `pila-desktop` brings swayidle and swaylock.
 - **Standard tools in place of Pila's own:** `pila-launcher` and `pila-bar` are gone, so that
   Pila is the compositor alone; the default `launcher` is now fuzzel and the default `autostart`
-  waybar, both packaged by every major distribution (the packages recommend them, and the
+  waybar, both packaged by every major distribution (`pila-desktop` brings them, and the
   manual's waybar configuration shows Pila's workspaces). A configuration that still names
   `pila-launcher` or `pila-bar` gets the notification that it isn't installed: put fuzzel and
   waybar, or any launcher and bar, in their place. `scripts/install` and `scripts/uninstall`
   remove the binaries an older install left. The screenshot keys keep running grim, slurp and
   wl-copy, and screen sharing keeps picking the monitor with slurp.
+- **One look for the tools:** at startup Pila writes a configuration of its own for waybar,
+  fuzzel, mako and swaylock, where they're installed and you have none, so a first session
+  looks like one desktop: Pila's default colors and square corners. waybar shows the apps' own
+  icons in its window list, and symbols for the volume, battery and clock where Font Awesome is
+  installed (`pila-desktop` brings it), words where it isn't.
+  Never over a file of yours; a file you delete is written again; `tool-configs = false` turns
+  it off. mako, the notification daemon, joins waybar in the default `autostart`.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
   (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
   after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without

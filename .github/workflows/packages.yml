@@ -1,4 +1,5 @@
-# The .deb and .rpm of a release: built when one is published, installed on
+# The .deb and .rpm of a release, pila's and pila-desktop's (a metapackage: the
+# tools of the default configuration): built when one is published, installed on
 # clean systems and started there, then attached to it. By hand (gh workflow run
 # packages.yml) it stops before attaching, and the packages are the run's
 # artifacts. Once attached, repos.yml puts them in the APT and DNF repositories.
@@ -76,6 +77,7 @@ jobs:
           install -Dm644 -t stage/usr/share/doc/pila README.md config.example.toml docs/MANUAL.md docs/IPC.md
           mkdir dist
           ./nfpm package --config packaging/nfpm.yaml --packager "${{ matrix.packager }}" --target dist/
+          ./nfpm package --config packaging/nfpm-desktop.yaml --packager "${{ matrix.packager }}" --target dist/
           ls -l dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -93,22 +95,27 @@ jobs:
       matrix:
         include:
           # Without what's only recommended: what's required has to be enough.
+          # Then pila-desktop, whose tools must all be packaged there.
           - image: ubuntu:24.04
             packager: deb
             install: >-
-              apt-get update && apt-get install -y --no-install-recommends ./dist/*.deb
+              apt-get update && apt-get install -y --no-install-recommends ./dist/pila_*.deb
+            desktop: apt-get install -y --no-install-recommends ./dist/pila-desktop_*.deb
           - image: debian:trixie
             packager: deb
             install: >-
-              apt-get update && apt-get install -y --no-install-recommends ./dist/*.deb
+              apt-get update && apt-get install -y --no-install-recommends ./dist/pila_*.deb
+            desktop: apt-get install -y --no-install-recommends ./dist/pila-desktop_*.deb
           - image: fedora:44
             packager: rpm
             install: >-
-              dnf install -y --setopt=install_weak_deps=False ./dist/*.rpm
+              dnf install -y --setopt=install_weak_deps=False ./dist/pila-[0-9]*.rpm
+            desktop: dnf install -y --setopt=install_weak_deps=False ./dist/pila-desktop-*.rpm
           - image: fedora:latest
             packager: rpm
             install: >-
-              dnf install -y --setopt=install_weak_deps=False ./dist/*.rpm
+              dnf install -y --setopt=install_weak_deps=False ./dist/pila-[0-9]*.rpm
+            desktop: dnf install -y --setopt=install_weak_deps=False ./dist/pila-desktop-*.rpm
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -138,6 +145,17 @@ jobs:
           tail -n 20 pila.log
           test "$status" = 124
           grep -F "Xwayland isn't installed" pila.log
+          # Pila alone: the default autostart's tools are skipped, not run.
+          grep -F "not starting the example's autostart command" pila.log
+      - name: pila-desktop
+        run: ${{ matrix.desktop }}
+      # Every program the default configuration runs (config.example.toml).
+      - name: The desktop's programs
+        run: |
+          for program in kitty waybar fuzzel mako swayidle swaylock wpctl brightnessctl \
+            playerctl grim slurp wl-copy; do
+            command -v "$program"
+          done
 
   attach:
     name: Attach to the release

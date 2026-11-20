@@ -11,8 +11,9 @@
 
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
 Windows float and overlap, with server-side title bars, like a classic desktop. Pila draws
-its wallpaper and window switcher itself; the bar, the launcher, notifications and lock
-screens come from the usual Wayland tools (by default waybar and fuzzel; mako, swaylock, ...;
+its window switcher itself; the bar, the launcher, notifications, the wallpaper and lock
+screens come from the usual Wayland tools (by default waybar, fuzzel, mako, swayidle and
+swaylock; swaybg, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,
@@ -89,8 +90,8 @@ A short report helps even if everything works:
   launcher (fuzzel by default); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
   attention marked with an amber title bar; volume, brightness, media and screenshot keys bound
-  by default (wpctl, brightnessctl, playerctl, grim and slurp); a wallpaper set in the config
-  (`[wallpaper]`); the screens off after a while without input; a shadow under each window (`[shadow]`); optional
+  by default (wpctl, brightnessctl, playerctl, grim and slurp); the screen locked and the
+  monitors off after a while without input, by default (swayidle and swaylock); a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
   snapping; launchers and notifications; workspaces sliding. Configurable, or off.
@@ -140,9 +141,13 @@ X11 session. The safest first run is nested: from a checkout, `cargo run --relea
 window on your current desktop and changes nothing else (nested, Mod is **Alt**: Mod+Return
 opens a terminal, Mod+Shift+E quits).
 
+Every package comes in two: `pila-desktop`, Pila with the standard tools its defaults run (bar,
+launcher, notifications, lock, the keys' programs), and `pila`, the compositor alone.
+
 - **Debian, Ubuntu, Fedora:** signed APT and DNF repositories
   ([setup](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#debian-ubuntu-and-fedora)).
-- **Arch Linux:** [`pila-git`](https://aur.archlinux.org/packages/pila-git) in the AUR
+- **Arch Linux:** [`pila-git`](https://aur.archlinux.org/packages/pila-git) and
+  [`pila-desktop`](https://aur.archlinux.org/packages/pila-desktop) in the AUR
   ([more](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#arch-linux-aur)).
 - **Nix and NixOS:** `nix run github:igalmarino/pila`, or as a login session
   ([more](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#nix-and-nixos)).

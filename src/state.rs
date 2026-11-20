@@ -214,10 +214,6 @@ pub struct Pila {
     /// State of the simpler protocols (`handlers/protocols.rs`).
     pub globals: Globals,
     pub idle_inhibitors: IdleInhibitors,
-    /// `[idle] monitors-off`'s timer (`idle.rs`).
-    pub monitors_off: crate::idle::MonitorsOff,
-    /// `[wallpaper]`'s picture (`wallpaper.rs`).
-    pub wallpaper: crate::wallpaper::Wallpaper,
     /// The window switcher Pila draws (`switcher_view.rs`).
     pub switcher_view: crate::switcher_view::SwitcherView,
 
@@ -593,8 +589,6 @@ impl Pila {
             session_lock: SessionLock::default(),
             globals,
             idle_inhibitors: IdleInhibitors::default(),
-            monitors_off: Default::default(),
-            wallpaper: Default::default(),
             switcher_view: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
@@ -813,7 +807,6 @@ impl Pila {
                 .filter_map(|window| Some(window.wl_surface()?.into_owned()))
                 .collect(),
             corner_radius: self.config.corner_radius,
-            wallpaper: self.scene_wallpaper(),
             switcher: self.scene_switcher(),
             ..Scene::blank(self.config.colors)
         }
@@ -1960,8 +1953,6 @@ impl Pila {
     /// (for portals), or `EXPORT_TIMEOUT` if that hangs. The X display is
     /// reserved already (`reserve_xwayland`), so X11 apps among them work.
     pub fn start_session(&mut self, commands: Vec<String>) {
-        self.idle_config_changed();
-        self.wallpaper_config_changed();
         self.pending_startup = commands;
         if !self.export_environment() {
             self.run_pending_startup();
