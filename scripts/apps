@@ -28,38 +28,6 @@ Rime's luna_pinyin isn't installed):
   - a binding of Pila's still runs, and (GTK) a context menu opens and closes
     with Escape while the input method holds the keyboard, leaving no grab.
 
-And pila-launcher (launcher: built in launcher/ with cargo build --release,
-or PILA_LAUNCHER_BIN; skipped where it isn't), set as `launcher`:
-
-  - Mod+D opens it and it takes the keyboard; Mod+D hides it and shows it
-    again (twice, the second run reaching the one in the background), Escape
-    hides it;
-  - typing finds an app, Return starts it; an app that asks for a terminal
-    starts in the one given with --terminal (foot); a click on a row starts
-    it; each time it hides, leaving no grab;
-  - fcitx5-launcher: "nihao" shows fcitx5's candidate window by its search
-    field, and a space puts the two characters into it.
-
-And pila-bar (bar: built in launcher/ with cargo build --release, or
-PILA_BAR_BIN; skipped where it isn't), started in the run:
-
-  - a layer surface along the top edge, as wide as the output, that windows
-    keep clear of (its exclusive zone) and that takes no keyboard; a
-    maximized window fills the rest;
-  - the pointer resting on the clock shows the date in a tooltip below the
-    bar, gone when it leaves;
-  - a click on a workspace goes to it and the wheel over the bar to the next
-    or previous one, starting from where a binding of Pila's left it (the
-    bar follows ext-workspace), and never past the last;
-  - a monitor that comes gets a bar of its own, one that goes takes its bar
-    along and the bar runs on; with --bottom, along the bottom edge;
-  - --height 40 --output HDMI-A-1: no bar until that monitor comes, then a
-    bar 40 high on it alone, back when it's plugged in again;
-  - the tray (where fcitx5 and busctl are): the bar is the session's
-    StatusNotifierWatcher, fcitx5's item registers, a right click opens its
-    menu with a grab, a click elsewhere closes it, and the item goes when
-    fcitx5 quits.
-
 And the window switcher Pila draws (switcher), with three foot windows:
 
   - a quick Super+Tab, there and back, shows nothing;
@@ -70,47 +38,19 @@ And the window switcher Pila draws (switcher), with three foot windows:
   - a click on a tile while Alt+Tab is held switches to that window and takes
     it away, leaving no grab.
 
-And pila-osd (osd: built in launcher/ with cargo build --release, or
-PILA_OSD_BIN; skipped where it isn't), run as the volume keys run it, with a
-wpctl of the run's own that says the volume, over a maximized foot:
-
-  - `pila-osd volume` shows it: an Overlay layer surface at the bottom
-    center of the output, above the bottom edge, taking no keyboard (foot
-    keeps it) and no pointer (the pointer over it is on foot);
-  - a second run while it's shown, muted this time, goes to the first: one
-    pila-osd process, still shown; and it goes away on its own;
-  - `pila-osd brightness` shows the backlight's where there's one, and
-    where there's none exits with an error and shows nothing; so does
-    `pila-osd volume` without wpctl;
-  - `pila-osd play-pause` on a session bus of the run's own (dbus-daemon)
-    with no media player shows that there's none.
-
-And pila-shot (shot: built in launcher/ with cargo build --release, or
-PILA_SHOT_BIN; skipped where it isn't), over a maximized foot:
-
-  - `pila-shot output --file F` writes a PNG of the whole output, and with no
-    --file one into ~/Pictures, whose path it prints;
-  - `pila-shot region` covers the output with an Overlay layer surface that
-    takes the keyboard; a drag on it puts a PNG of the dragged size on the
-    clipboard (wl-paste, where it's installed) and takes the surface away;
-    the process that serves it goes when something else is copied;
-    Escape cancels (exit 1, no surface left);
-  - `pila-shot pick-output`: a click prints "Monitor: eDP-1".
-
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
-                                     weston-terminal, xterm, launcher,
-                                     bar, switcher, osd, shot, fcitx5-foot,
-                                     fcitx5-gtk4, fcitx5-launcher)
+                                     weston-terminal, xterm, switcher,
+                                     fcitx5-foot, fcitx5-gtk4)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
 (app.log) and a screenshot at the end (grim, if installed). Uses
 target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
 (package dbus); xterm needs Xwayland; fcitx5-gtk4 reads the text back with
-wl-paste (package wl-clipboard); launcher, bar, switcher, osd and shot need foot. Standard
+wl-paste (package wl-clipboard); switcher needs foot. Standard
 library only.
 """
 
@@ -140,31 +80,11 @@ APPS = {
 IME_APPS = {
     "fcitx5-foot": (lambda typed: ["foot", "sh", "-c", f"cat > {shlex.quote(typed)}"], "file"),
     "fcitx5-gtk4": (lambda typed: ["gtk4-demo", "--run=entry_undo"], "clipboard"),
-    # pila-launcher, opened with Mod+D: no command of its own.
-    "fcitx5-launcher": (None, "launcher"),
 }
 
-# pila-launcher, set as `launcher` for its run.
-LAUNCHER = "pila-launcher"
-# pila-bar, its layer surfaces' namespace and height.
-BAR_APP, BAR_HEIGHT, BAR_BUTTON = "pila-bar", 28, 28
 # The switcher's tiles' size, the spacing between them and the padding
 # around them all (`src/switcher_view.rs`).
 SWITCHER_TILE, SWITCHER_SPACING, SWITCHER_PADDING = (200, 157), 4, 12
-# pila-osd, its layer surface's namespace, size and margin above the bottom
-# edge (`osd/src/ui.rs`).
-OSD_APP, OSD_SIZE, OSD_MARGIN = "pila-osd", (320, 52), 96
-# pila-shot and its layer surfaces' namespace (`shot/src/ui.rs`).
-SHOT_APP = "pila-shot"
-# Apps for it to find (in the sealed XDG_DATA_HOME): what they write to the
-# runtime directory says they ran.
-LAUNCHER_APPS = {
-    "zephyrtest": "[Desktop Entry]\nType=Application\nName=Zephyrtest Launch\n"
-                  "Exec=sh -c \"echo launched > $XDG_RUNTIME_DIR/launched\"\n",
-    "zephyrterm": "[Desktop Entry]\nType=Application\nName=Zephyrterm Run\nTerminal=true\n"
-                  "Exec=sh -c \"echo terminal > $XDG_RUNTIME_DIR/terminal\"\n",
-}
-
 # fcitx5's settings for the run: Rime as the input method, on from the start,
 # with the one schema the run types in (deploying every schema takes minutes).
 FCITX5_PROFILE = """[Groups/0]
@@ -350,8 +270,6 @@ class Workload:
         present = self.wait(lambda s: s["input_method"]["present"], 20)
         if not self.check("fcitx5 is Pila's input method", present is not None, "none within 20 s"):
             return
-        if how == "launcher":
-            return self.launcher_ime_steps(rime)
         typed = os.path.join(self.out, "typed.txt")
         subprocess.Popen(command(typed), stdout=open(os.path.join(self.out, "app.log"), "w"),
                          stderr=subprocess.STDOUT)
@@ -424,363 +342,6 @@ class Workload:
             expected = HANZI
         got = self.typed(how, typed)
         self.check(f"{PINYIN!r} and a space put {expected!r} into the app", got == expected, f"it has {got!r}")
-
-    # --- pila-bar ---
-
-    def bars(self, state):
-        return [l for l in state["layers"] if l["namespace"] == BAR_APP]
-
-    def start_bar(self, *args):
-        return subprocess.Popen([os.environ["PILA_APPS_BAR"], *args],
-                                stdout=open(os.path.join(self.out, "bar.log"), "a"), stderr=subprocess.STDOUT)
-
-    def stop_bar(self, bar, label):
-        bar.terminate()
-        bar.wait(5)
-        gone = self.wait(lambda s: not self.bars(s) and s["outputs"][0]["usable"]["h"] == 1080, 5)
-        return self.check(label, gone is not None, f"layers {self.bars(self.state())}")
-
-    def wheel(self, notches):
-        self.ctl(cmd="axis", v=notches)
-        time.sleep(0.2)
-
-    def run_bar(self):
-        """pila-bar (module docs)."""
-        self.mark(f"{self.app} begin")
-        bar = self.start_bar()
-        # Its first frame: the surface mapped at its size.
-        state = self.wait(lambda s: any(l["geometry"] and l["geometry"]["h"] for l in self.bars(s)), 20)
-        if not self.check("pila-bar opens a layer surface", state is not None, "none within 20 s"):
-            bar.terminate()
-            return self.finish()
-        layer, = self.bars(state)
-        g, usable = layer["geometry"], state["outputs"][0]["usable"]
-        self.check("along the top edge, as wide as the output, on the Top layer",
-                   (g["x"], g["y"], g["w"], g["h"]) == (0, 0, 1920, BAR_HEIGHT) and layer["layer"] == "top",
-                   f"{layer['layer']} at {g}")
-        self.check("windows keep clear of it, and it takes no keyboard",
-                   layer["exclusive_zone"] == BAR_HEIGHT and (usable["y"], usable["h"]) == (BAR_HEIGHT, 1080 - BAR_HEIGHT)
-                   and layer["keyboard"] == "none", f"zone {layer['exclusive_zone']}, usable {usable}, "
-                   f"keyboard {layer['keyboard']}")
-
-        subprocess.Popen(["foot"], stdout=open(os.path.join(self.out, "app.log"), "w"), stderr=subprocess.STDOUT)
-        state = self.wait(lambda s: self.window(s) is not None and self.window(s)["geometry"]["w"] > 0
-                          and s["focused"] == self.window(s)["app_id"], 20)
-        if not self.check("foot opens a window, focused", state is not None, "none within 20 s"):
-            bar.terminate()
-            return self.finish()
-        time.sleep(1)
-        self.ctl(cmd="combo", keys="Super+m")
-        state = self.wait(lambda s: self.window(s)["maximized"], 3)
-        if self.check("Super+m maximizes it", state is not None):
-            time.sleep(0.5)
-            state = self.state()
-            x, y, w, h = self.geometry(state)
-            top = y - (BAR if self.window(state).get("title_bar") else 0)
-            self.check("a maximized window fills the output below the bar",
-                       (x, top, w, y + h) == (0, BAR_HEIGHT, 1920, 1080), f"geometry {(x, y, w, h)}")
-        if shutil.which("grim"):
-            subprocess.run(["grim", os.path.join(self.out, "bar.png")], check=False)
-
-        # The clock's tooltip (the date): a layer surface of its own below the
-        # bar while the pointer rests on the clock (the last block: the time
-        # alone), taking no input; gone when the pointer leaves.
-        tooltip = lambda s: next((l for l in s["layers"] if l["namespace"] == "pila-bar-tooltip"
-                                  and l["geometry"] and l["geometry"]["h"]), None)
-        self.move(1920 - 30, BAR_HEIGHT // 2)
-        state = self.wait(tooltip, 5)
-        if self.check("the pointer resting on the clock shows its tooltip", state is not None,
-                      f"layers {[l['namespace'] for l in self.state()['layers']]}"):
-            g = tooltip(state)["geometry"]
-            self.check("below the bar, inside the output, with no grab or keyboard",
-                       g["y"] >= BAR_HEIGHT and g["x"] >= 0 and g["x"] + g["w"] <= 1920
-                       and not state["pointer"]["grabbed"] and tooltip(state)["keyboard"] == "none",
-                       f"at {g}, grabbed {state['pointer']['grabbed']}")
-            if shutil.which("grim"):
-                time.sleep(0.5)  # Past its opening animation, for the picture.
-                subprocess.run(["grim", os.path.join(self.out, "tooltip.png")], check=False)
-        self.move(960, 600)
-        state = self.wait(lambda s: tooltip(s) is None, 5)
-        self.check("and leaving the clock hides it", state is not None)
-
-        # A click on the second workspace's button.
-        self.move(BAR_BUTTON + BAR_BUTTON // 2, BAR_HEIGHT // 2)
-        time.sleep(0.2)
-        self.ctl(cmd="button", button="left", state="click")
-        state = self.wait(lambda s: s["workspace"] == 2 and not s["pointer"]["grabbed"], 3)
-        self.check("a click on a workspace goes to it, leaving no grab", state is not None,
-                   f"on workspace {self.state()['workspace']}")
-        # Back by a binding of Pila's: the wheel goes on from there.
-        self.ctl(cmd="combo", keys="Super+Page_Up")
-        self.wait(lambda s: s["workspace"] == 1, 3)
-        time.sleep(0.5)
-        self.move(960, BAR_HEIGHT // 2)
-        self.wheel(1)
-        state = self.wait(lambda s: s["workspace"] == 2, 3)
-        self.check("the wheel down goes to the next workspace, from where a binding left it",
-                   state is not None, f"on workspace {self.state()['workspace']}")
-        for _ in range(5):
-            self.wheel(1)
-            time.sleep(0.3)
-        state = self.wait(lambda s: s["workspace"] == 4, 3)
-        time.sleep(0.5)
-        self.check("and never past the last", self.state()["workspace"] == 4,
-                   f"on workspace {self.state()['workspace']}")
-        self.wheel(-1)
-        state = self.wait(lambda s: s["workspace"] == 3, 3)
-        self.check("the wheel up goes to the previous one", state is not None,
-                   f"on workspace {self.state()['workspace']}")
-        self.ctl(cmd="combo", keys="Super+1")
-        self.wait(lambda s: s["workspace"] == 1, 3)
-        self.ctl(cmd="combo", keys="Super+m")
-        self.wait(lambda s: not self.window(s)["maximized"], 3)
-
-        # Monitors that come and go.
-        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
-        state = self.wait(lambda s: sorted(l["output"] for l in self.bars(s) if l["geometry"]
-                                           and l["geometry"]["h"]) == ["HDMI-A-1", "eDP-1"], 10)
-        self.check("a monitor that comes gets a bar of its own", state is not None,
-                   f"layers {self.bars(self.state())}")
-        if state is not None:
-            layer = next(l for l in self.bars(state) if l["output"] == "HDMI-A-1")
-            self.check("as wide as that monitor", layer["geometry"]["w"] == 1280, f"at {layer['geometry']}")
-        self.ctl(cmd="output_remove", name="HDMI-A-1")
-        state = self.wait(lambda s: [l["output"] for l in self.bars(s)] == ["eDP-1"], 5)
-        time.sleep(0.5)
-        self.check("one that goes takes its bar along, and the bar runs on",
-                   state is not None and bar.poll() is None, f"exit status {bar.poll()}")
-        self.stop_bar(bar, "the bar gone, windows have the whole output again")
-
-        bar = self.start_bar("--bottom")
-        state = self.wait(lambda s: any(l["geometry"] and l["geometry"]["h"] for l in self.bars(s)), 20)
-        if self.check("pila-bar --bottom opens a layer surface", state is not None, "none within 20 s"):
-            g, usable = self.bars(state)[0]["geometry"], state["outputs"][0]["usable"]
-            self.check("along the bottom edge, which windows keep clear of",
-                       (g["y"], g["h"]) == (1080 - BAR_HEIGHT, BAR_HEIGHT)
-                       and (usable["y"], usable["h"]) == (0, 1080 - BAR_HEIGHT), f"at {g}, usable {usable}")
-        self.stop_bar(bar, "gone again")
-
-        # Only on the monitor named, as high as asked, also once it comes back.
-        bar = self.start_bar("--height", "40", "--output", "HDMI-A-1")
-        time.sleep(2)
-        self.check("pila-bar --output HDMI-A-1 opens nothing while there's no HDMI-A-1",
-                   not self.bars(self.state()) and bar.poll() is None,
-                   f"layers {self.bars(self.state())}, exit status {bar.poll()}")
-        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
-        shown = lambda s: [(l["output"], l["geometry"] and l["geometry"]["h"]) for l in self.bars(s)] \
-            == [("HDMI-A-1", 40)]
-        state = self.wait(shown, 10)
-        self.check("then a bar on HDMI-A-1 alone, 40 high", state is not None, f"layers {self.bars(self.state())}")
-        if state is not None:
-            layer = next(l for l in self.bars(state))
-            self.check("whose exclusive zone is its height", layer["exclusive_zone"] == 40,
-                       f"zone {layer['exclusive_zone']}")
-        self.ctl(cmd="output_remove", name="HDMI-A-1")
-        self.wait(lambda s: not self.bars(s), 5)
-        self.ctl(cmd="output_add", spec="HDMI-A-1:1280x720@60")
-        state = self.wait(shown, 10)
-        self.check("unplugged and plugged again, it's back", state is not None,
-                   f"layers {self.bars(self.state())}")
-        self.ctl(cmd="output_remove", name="HDMI-A-1")
-        self.stop_bar(bar, "and gone with it")
-        self.bar_tray()
-        return self.finish()
-
-    def bar_tray(self):
-        """The tray: the bar is the session's StatusNotifierWatcher, a real
-        item (fcitx5's) registers with it, shows its tooltip while the pointer
-        rests on it, its menu opens on a right click
-        with a grab that a click elsewhere ends, and the item goes when
-        fcitx5 quits. With no battery or clock, the item is the last block."""
-        if not (shutil.which("fcitx5") and shutil.which("busctl")):
-            return
-        def busctl(*args):
-            out = subprocess.run(["busctl", "--user", *args], capture_output=True, text=True)
-            return out.stdout.strip()
-        bar = self.start_bar("--no-battery", "--clock", "")
-        self.wait(lambda s: any(l["geometry"] and l["geometry"]["h"] for l in self.bars(s)), 20)
-        watcher = ("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher")
-        end = time.monotonic() + 10
-        owner = ""
-        while owner != f"u {bar.pid}" and time.monotonic() < end:
-            owner = busctl("call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-                           "GetConnectionUnixProcessID", "s", watcher[0])
-            time.sleep(0.2)
-        self.check("pila-bar is the tray's StatusNotifierWatcher", owner == f"u {bar.pid}", owner or "no owner")
-        fcitx = subprocess.Popen(["fcitx5"], stdout=open(os.path.join(self.out, "fcitx5.log"), "w"),
-                                 stderr=subprocess.STDOUT)
-        registered = lambda: busctl("get-property", *watcher, "RegisteredStatusNotifierItems")
-        end = time.monotonic() + 15
-        while registered() in ("", "as 0") and time.monotonic() < end:
-            time.sleep(0.2)
-        self.check("fcitx5's tray item registers with it", registered() not in ("", "as 0"), registered())
-        # Resting on its icon shows its tooltip (its ToolTip, or its title),
-        # below the bar, under the pointer and inside the output.
-        time.sleep(1.5)
-        tooltip = lambda s: next((l for l in s["layers"] if l["namespace"] == "pila-bar-tooltip"
-                                  and l["geometry"] and l["geometry"]["h"]), None)
-        icon_x = 1920 - BAR_HEIGHT // 2
-        self.move(icon_x, BAR_HEIGHT // 2)
-        state = self.wait(tooltip, 5)
-        if self.check("resting on its icon shows its tooltip", state is not None,
-                      f"layers {[l['namespace'] for l in self.state()['layers']]}"):
-            g = tooltip(state)["geometry"]
-            self.check("below the bar, under the pointer, inside the output",
-                       g["y"] >= BAR_HEIGHT and g["x"] <= icon_x <= g["x"] + g["w"]
-                       and g["x"] >= 0 and g["x"] + g["w"] <= 1920 and not state["pointer"]["grabbed"],
-                       f"at {g}")
-            if shutil.which("grim"):
-                time.sleep(0.5)
-                subprocess.run(["grim", os.path.join(self.out, "tray-tooltip.png")], check=False)
-        self.move(960, 600)
-        self.check("and gone when the pointer leaves it", self.wait(lambda s: tooltip(s) is None, 5) is not None)
-        # Its menu is read ahead by now: a right click.
-        self.move(icon_x, BAR_HEIGHT // 2)
-        time.sleep(0.2)
-        self.ctl(cmd="button", button="right", state="click")
-        state = self.wait(lambda s: s["popups"] and s["pointer"]["grabbed"], 5)
-        self.check("a right click on its icon opens its menu, with a grab", state is not None,
-                   f"popups {self.state()['popups']}, grabbed {self.state()['pointer']['grabbed']}")
-        if shutil.which("grim"):
-            time.sleep(0.5)
-            subprocess.run(["grim", os.path.join(self.out, "tray.png")], check=False)
-        self.move(960, 600)
-        time.sleep(0.2)
-        self.ctl(cmd="button", button="left", state="click")
-        state = self.wait(lambda s: not s["popups"] and not s["pointer"]["grabbed"], 5)
-        self.check("a click elsewhere closes it, leaving no grab", state is not None,
-                   f"popups {self.state()['popups']}")
-        fcitx.terminate()
-        fcitx.wait(5)
-        end = time.monotonic() + 10
-        while registered() != "as 0" and time.monotonic() < end:
-            time.sleep(0.2)
-        self.check("the item leaves when fcitx5 quits, the bar running on",
-                   registered() == "as 0" and bar.poll() is None, f"{registered()}, exit status {bar.poll()}")
-        self.stop_bar(bar, "the tray's bar gone")
-
-    # --- pila-launcher ---
-
-    def launcher_layer(self, state):
-        return next((l for l in state["layers"] if l["namespace"] == LAUNCHER), None)
-
-    def launcher_shown(self, state):
-        return self.launcher_layer(state) is not None and state["keyboard_focus"] == "layer:" + LAUNCHER
-
-    def open_launcher(self, label):
-        self.ctl(cmd="combo", keys="Super+d")
-        state = self.wait(self.launcher_shown, 20)
-        self.check(label, state is not None, "not within 20 s")
-        time.sleep(0.3)
-        return state
-
-    def launcher_hidden(self, label, timeout=5):
-        state = self.wait(lambda s: self.launcher_layer(s) is None and not s["pointer"]["grabbed"], timeout)
-        return self.check(label, state is not None, "still shown")
-
-    def ran(self, name, timeout=10):
-        """Whether an app of LAUNCHER_APPS wrote its file."""
-        path = os.path.join(os.environ["XDG_RUNTIME_DIR"], name)
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            if os.path.exists(path) and os.path.getsize(path):
-                os.remove(path)
-                return True
-            time.sleep(0.1)
-        return False
-
-    def launcher_ime_steps(self, rime):
-        """Typing into pila-launcher's search field through fcitx5 (module docs)."""
-        self.ctl(cmd="combo", keys="Super+d")
-        state = self.wait(lambda s: self.launcher_shown(s) and s["keyboard_grab"] == "input_method"
-                          and s["input_method"]["text_input_focus"] == LAUNCHER, 20)
-        now = self.state()
-        if not self.check("the input method takes the keyboard in the launcher's search field",
-                          state is not None,
-                          f"keyboard on {now['keyboard_focus']}, grab {now['keyboard_grab']}, "
-                          f"text input on {now['input_method']['text_input_focus']}"):
-            return
-        self.wait_rime(rime)
-        for key in PINYIN:
-            self.tap(key)
-        state = self.wait(lambda s: s["input_method"]["popups"], 5)
-        if self.check(f"typing {PINYIN!r} shows the candidate window", state is not None, "none within 5 s"):
-            time.sleep(0.3)
-            state = self.state()
-            popup = state["input_method"]["popups"][0]
-            px, py, pw, ph = popup["geometry"]
-            g = self.launcher_layer(state)["geometry"]
-            screen = state["outputs"][0]["geometry"]
-            by_field = g["x"] <= px < g["x"] + g["w"] and g["y"] < py < g["y"] + g["h"]
-            on_screen = 0 <= px and px + pw <= screen["w"] and 0 <= py and py + ph <= screen["h"]
-            self.check("the candidate window is the launcher's, by its search field, on the screen",
-                       popup["parent"] == LAUNCHER and by_field and on_screen,
-                       f"{popup['parent']}'s at {(px, py, pw, ph)}, the launcher at {g}")
-            if shutil.which("grim"):
-                subprocess.run(["grim", os.path.join(self.out, "candidates.png")], check=False)
-        self.tap("space")
-        gone = self.wait(lambda s: not s["input_method"]["popups"], 5)
-        self.check("a space closes the candidate window", gone is not None)
-        time.sleep(0.5)
-        if shutil.which("grim"):
-            subprocess.run(["grim", os.path.join(self.out, "typed.png")], check=False)
-        got = self.typed("clipboard", None)
-        self.check(f"{PINYIN!r} and a space put {HANZI!r} into the search field", got == HANZI,
-                   f"it has {got!r}")
-        self.tap("Escape")
-        self.launcher_hidden("Escape hides the launcher, leaving no grab")
-
-    def run_launcher(self):
-        """pila-launcher (module docs)."""
-        self.mark(f"{self.app} begin")
-        apps = os.path.join(os.environ["XDG_DATA_HOME"], "applications")
-        os.makedirs(apps, exist_ok=True)
-        for name, entry in LAUNCHER_APPS.items():
-            with open(os.path.join(apps, f"{name}.desktop"), "w") as f:
-                f.write(entry)
-        if not self.open_launcher("Mod+D opens pila-launcher, which takes the keyboard"):
-            return self.finish()
-        if shutil.which("grim"):
-            subprocess.run(["grim", os.path.join(self.out, "launcher.png")], check=False)
-        # Each run after the first hands the request to the one in the
-        # background, which shows a new layer surface each time.
-        for which in ("once", "twice"):
-            self.ctl(cmd="combo", keys="Super+d")
-            self.launcher_hidden(f"Mod+D hides it ({which})")
-            self.open_launcher(f"Mod+D shows it again ({which})")
-        running = launcher_processes()
-        self.check("one pila-launcher runs, in the background", len(running) == 1, f"pids {running}")
-        self.tap("Escape")
-        self.launcher_hidden("Escape hides it")
-
-        self.open_launcher("it opens again")
-        for key in "zephyrtest":
-            self.tap(key)
-        time.sleep(0.5)
-        self.tap("Return")
-        self.check("typing finds an app and Return starts it", self.ran("launched"))
-        self.launcher_hidden("starting an app hides it")
-
-        self.open_launcher("it opens for an app that asks for a terminal")
-        for key in "zephyrterm":
-            self.tap(key)
-        time.sleep(0.5)
-        self.tap("Return")
-        self.check("an app with Terminal=true starts in the --terminal one", self.ran("terminal", 20))
-        self.launcher_hidden("it hides then too")
-
-        self.open_launcher("it opens for a click")
-        for key in "zephyrtest":
-            self.tap(key)
-        time.sleep(0.5)
-        g = self.launcher_layer(self.state())["geometry"]
-        # The first row, below the search field.
-        self.move(g["x"] + g["w"] // 2, g["y"] + 80)
-        time.sleep(0.2)
-        self.ctl(cmd="button", button="left", state="click")
-        self.check("a click on an app starts it", self.ran("launched"))
-        self.launcher_hidden("and hides it, leaving no grab")
-        return self.finish()
 
     # --- the switcher Pila draws ---
 
@@ -858,261 +419,11 @@ class Workload:
         self.ctl(cmd="key", key="Alt_L", state="release")
         return self.finish()
 
-    # --- pila-osd ---
-
-    def osds(self, state):
-        return [l for l in state["layers"] if l["namespace"] == OSD_APP and l["geometry"]
-                and l["geometry"]["h"]]
-
-    def osd_processes(self, name=OSD_APP):
-        """This run's live processes of `name`."""
-        mine = f"XDG_RUNTIME_DIR={os.environ['XDG_RUNTIME_DIR']}".encode()
-        count = 0
-        for pid in filter(str.isdigit, os.listdir("/proc")):
-            try:
-                with open(f"/proc/{pid}/stat") as f:
-                    stat = f.read()
-                with open(f"/proc/{pid}/cmdline", "rb") as f:
-                    argv0 = f.read().split(b"\0")[0].decode(errors="replace")
-                with open(f"/proc/{pid}/environ", "rb") as f:
-                    environ = f.read().split(b"\0")
-            except OSError:
-                continue
-            if os.path.basename(argv0) == name and mine in environ and stat.rsplit(")", 1)[1].split()[0] != "Z":
-                count += 1
-        return count
-
-    def run_osd(self):
-        """pila-osd (module docs)."""
-        self.mark(f"{self.app} begin")
-        osd = os.environ["PILA_APPS_OSD"]
-        # A wpctl of the run's own: the volume it says is in a file.
-        bin_dir = os.path.join(os.environ["XDG_RUNTIME_DIR"], "osd-bin")
-        os.makedirs(bin_dir, exist_ok=True)
-        said = os.path.join(bin_dir, "volume")
-        with open(os.path.join(bin_dir, "wpctl"), "w") as f:
-            f.write(f"#!/bin/sh\ncat {shlex.quote(said)}\n")
-        os.chmod(os.path.join(bin_dir, "wpctl"), 0o755)
-        env = dict(os.environ, PATH=bin_dir + ":" + os.environ["PATH"])
-        log = open(os.path.join(self.out, "osd.log"), "a")
-
-        def run(*args, path=None):
-            return subprocess.Popen([osd, *args], stdout=log, stderr=subprocess.STDOUT,
-                                    env=dict(env, PATH=path) if path else env)
-
-        subprocess.Popen(["foot"], stdout=open(os.path.join(self.out, "app.log"), "w"), stderr=subprocess.STDOUT)
-        if not self.check("foot opens", self.wait(lambda s: s["focused"] == "foot", 20) is not None):
-            return self.finish()
-        self.ctl(cmd="combo", keys="Super+m")
-        self.wait(lambda s: self.window(s)["maximized"], 3)
-
-        with open(said, "w") as f:
-            f.write("Volume: 0.45\n")
-        first = run("volume")
-        state = self.wait(lambda s: self.osds(s), 20)
-        if not self.check("pila-osd volume shows it", state is not None, "no surface within 20 s"):
-            first.terminate()
-            return self.finish()
-        layer, = self.osds(state)
-        g, (w, h) = layer["geometry"], OSD_SIZE
-        self.check("an Overlay at the bottom center, above the bottom edge",
-                   layer["layer"] == "overlay" and (g["w"], g["h"]) == (w, h)
-                   and g["x"] == (1920 - w) // 2 and g["y"] == 1080 - OSD_MARGIN - h, f"{layer['layer']} at {g}")
-        self.move(g["x"] + w // 2, g["y"] + h // 2)
-        state = self.wait(lambda s: s["pointer"]["focus"] == "foot", 2) or self.state()
-        self.check("it takes no keyboard and no pointer: foot keeps both",
-                   layer["keyboard"] == "none" and state["focused"] == "foot"
-                   and state["pointer"]["focus"] == "foot",
-                   f"keyboard {layer['keyboard']}, focused {state['focused']}, pointer on {state['pointer']['focus']}")
-        if shutil.which("grim"):
-            subprocess.run(["grim", os.path.join(self.out, "osd.png")], check=False)
-
-        with open(said, "w") as f:
-            f.write("Volume: 0.40 [MUTED]\n")
-        second = run("volume")
-        second.wait(5)
-        state = self.state()
-        self.check("a second run goes to the first: one pila-osd, still shown",
-                   second.returncode == 0 and self.osd_processes() == 1 and self.osds(state),
-                   f"exit {second.returncode}, {self.osd_processes()} processes, layers {self.osds(state)}")
-        if shutil.which("grim"):
-            time.sleep(0.2)
-            subprocess.run(["grim", os.path.join(self.out, "osd-muted.png")], check=False)
-        gone = self.wait(lambda s: not self.osds(s), 4)
-        self.check("it goes away on its own", gone is not None)
-
-        brightness = run("brightness")
-        brightness.wait(5)
-        if os.listdir("/sys/class/backlight") if os.path.isdir("/sys/class/backlight") else []:
-            shown = self.wait(lambda s: self.osds(s), 3)
-            self.check("pila-osd brightness shows the backlight's", brightness.returncode == 0 and shown is not None,
-                       f"exit {brightness.returncode}")
-            self.wait(lambda s: not self.osds(s), 4)
-        else:
-            self.check("pila-osd brightness without a backlight exits with an error",
-                       brightness.returncode == 1 and not self.osds(self.state()), f"exit {brightness.returncode}")
-        no_wpctl = run("volume", path="/nonexistent")
-        no_wpctl.wait(5)
-        self.check("pila-osd volume without wpctl exits with an error and shows nothing",
-                   no_wpctl.returncode == 1 and not self.osds(self.state()), f"exit {no_wpctl.returncode}")
-        if shutil.which("dbus-daemon"):
-            bus = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--print-address=1"],
-                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            address = bus.stdout.readline().strip()
-            media = subprocess.Popen([osd, "play-pause"], stdout=log, stderr=subprocess.STDOUT,
-                                     env=dict(env, DBUS_SESSION_BUS_ADDRESS=address))
-            media.wait(5)
-            shown = self.wait(lambda s: self.osds(s), 3)
-            self.check("pila-osd play-pause with no media player says so",
-                       media.returncode == 0 and shown is not None, f"exit {media.returncode}")
-            if shutil.which("grim"):
-                time.sleep(0.2)
-                subprocess.run(["grim", os.path.join(self.out, "osd-media.png")], check=False)
-            bus.terminate()
-            bus.wait(5)
-        first.terminate()
-        first.wait(5)
-        return self.finish()
-
-    # --- pila-shot ---
-
-    def shots(self, state):
-        return [l for l in state["layers"] if l["namespace"] == SHOT_APP and l["geometry"]
-                and l["geometry"]["h"]]
-
-    def run_shot(self):
-        """pila-shot (module docs)."""
-        self.mark(f"{self.app} begin")
-        shot = os.environ["PILA_APPS_SHOT"]
-        log = open(os.path.join(self.out, "shot.log"), "a")
-
-        def run(*args):
-            return subprocess.Popen([shot, *args], stdout=subprocess.PIPE, stderr=log, text=True)
-
-        def png_size(data):
-            """A PNG's width and height, from its IHDR; None if it isn't one."""
-            if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
-                return None
-            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
-
-        def size_of(path):
-            try:
-                with open(path, "rb") as f:
-                    return png_size(f.read(32))
-            except OSError:
-                return None
-
-        subprocess.Popen(["foot"], stdout=open(os.path.join(self.out, "app.log"), "w"), stderr=subprocess.STDOUT)
-        if not self.check("foot opens", self.wait(lambda s: s["focused"] == "foot", 20) is not None):
-            return self.finish()
-        self.ctl(cmd="combo", keys="Super+m")
-        self.wait(lambda s: self.window(s)["maximized"], 3)
-
-        # A whole output, to a file and to the pictures folder.
-        path = os.path.join(self.out, "output.png")
-        done = run("output", "--file", path)
-        said, _ = done.communicate(timeout=20)
-        self.check("pila-shot output --file writes a PNG of the whole output",
-                   done.returncode == 0 and size_of(path) == (1920, 1080),
-                   f"exit {done.returncode}, size {size_of(path)}")
-        done = run("output")
-        said, _ = done.communicate(timeout=20)
-        said = said.strip()
-        pictures = os.path.join(os.environ["HOME"], "Pictures")
-        self.check("pila-shot output alone writes one into ~/Pictures and prints its path",
-                   done.returncode == 0 and os.path.dirname(said) == pictures
-                   and os.path.basename(said).startswith("screenshot-") and size_of(said) == (1920, 1080),
-                   f"exit {done.returncode}, said {said!r}, size {size_of(said)}")
-
-        # A region, to the clipboard.
-        picking = run("region")
-        state = self.wait(lambda s: self.shots(s), 10)
-        if not self.check("pila-shot region covers the output", state is not None, "no surface within 10 s"):
-            picking.kill()
-            return self.finish()
-        layer, = self.shots(state)
-        g = layer["geometry"]
-        self.check("an Overlay over the whole output, taking the keyboard",
-                   layer["layer"] == "overlay" and (g["x"], g["y"], g["w"], g["h"]) == (0, 0, 1920, 1080)
-                   and layer["keyboard"] == "exclusive", f"{layer['layer']} at {g}, keyboard {layer['keyboard']}")
-        time.sleep(0.3)
-        self.move(200, 150)
-        time.sleep(0.1)
-        self.ctl(cmd="button", button="left", state="press")
-        for i in range(1, STEPS + 1):
-            self.move(200 + 400 * i / STEPS, 150 + 300 * i / STEPS)
-            time.sleep(0.02)
-        # Mid-drag, as it looks (pila-shot itself takes it).
-        subprocess.run([shot, "output", "--file", os.path.join(self.out, "region.png")],
-                       stdout=subprocess.DEVNULL, stderr=log, check=False)
-        self.ctl(cmd="button", button="left", state="release")
-        try:
-            picking.wait(10)
-        except subprocess.TimeoutExpired:
-            picking.kill()
-        gone = self.wait(lambda s: not self.shots(s), 3)
-        self.check("a drag picks the region: the surface goes and pila-shot exits",
-                   picking.returncode == 0 and gone is not None, f"exit {picking.returncode}")
-        if shutil.which("wl-paste"):
-            types = subprocess.run(["wl-paste", "-l"], capture_output=True, text=True, timeout=5).stdout.split()
-            data = subprocess.run(["wl-paste", "-t", "image/png"], capture_output=True, timeout=5).stdout
-            self.check("the clipboard has the region as image/png, the size dragged",
-                       "image/png" in types and png_size(data) == (400, 300),
-                       f"types {types}, size {png_size(data)}")
-            serving = self.osd_processes(SHOT_APP)
-            subprocess.run(["wl-copy", "something else"], check=False, timeout=5)
-            end = time.monotonic() + 5
-            while time.monotonic() < end and self.osd_processes(SHOT_APP):
-                time.sleep(0.1)
-            self.check("its clipboard's process stays until something else is copied, then goes",
-                       serving == 1 and self.osd_processes(SHOT_APP) == 0,
-                       f"{serving} serving, {self.osd_processes(SHOT_APP)} left")
-
-        # Escape cancels.
-        picking = run("region")
-        if self.wait(lambda s: self.shots(s), 10) is not None:
-            time.sleep(0.3)
-            self.tap("Escape")
-        try:
-            picking.wait(10)
-        except subprocess.TimeoutExpired:
-            picking.kill()
-        state = self.wait(lambda s: not self.shots(s), 3) or self.state()
-        self.check("Escape cancels: exit 1, no surface left, the keyboard back on foot",
-                   picking.returncode == 1 and not self.shots(state) and state["focused"] == "foot",
-                   f"exit {picking.returncode}, layers {self.shots(state)}, focused {state['focused']}")
-
-        # The monitor to share.
-        picking = run("pick-output")
-        if self.wait(lambda s: self.shots(s), 10) is not None:
-            time.sleep(0.3)
-            self.move(960, 540)
-            time.sleep(0.1)
-            self.ctl(cmd="button", button="left", state="click")
-        try:
-            said, _ = picking.communicate(timeout=10)
-        except subprocess.TimeoutExpired:
-            picking.kill()
-            said, _ = picking.communicate()
-        self.check("pila-shot pick-output: a click prints the monitor for the portal",
-                   picking.returncode == 0 and said.strip() == "Monitor: eDP-1",
-                   f"exit {picking.returncode}, said {said!r}")
-        self.wait(lambda s: not self.shots(s), 3)
-        return self.finish()
-
     def run(self):
-        if self.app == "shot":
-            return self.run_shot()
-        if self.app == "osd":
-            return self.run_osd()
         if self.app == "switcher":
             return self.run_switcher()
         if self.app in IME_APPS:
             return self.run_ime()
-        if self.app == "launcher":
-            return self.run_launcher()
-        if self.app == "bar":
-            return self.run_bar()
         command, _ = APPS[self.app]
         self.mark(f"{self.app} begin")
         appdir = os.path.join(self.out, "app.log")
@@ -1200,27 +511,6 @@ class Workload:
 
 # --- Outside: a sealed headless Pila per app, and the judge ----------------------
 
-def launcher_processes():
-    """The pids of this run's pila-launcher processes still running (by
-    their sealed runtime directory)."""
-    mine = f"XDG_RUNTIME_DIR={os.environ['XDG_RUNTIME_DIR']}".encode()
-    pids = []
-    for pid in filter(str.isdigit, os.listdir("/proc")):
-        try:
-            with open(f"/proc/{pid}/stat") as f:
-                stat = f.read()
-            with open(f"/proc/{pid}/cmdline", "rb") as f:
-                argv0 = f.read().split(b"\0")[0].decode(errors="replace")
-            with open(f"/proc/{pid}/environ", "rb") as f:
-                environ = f.read().split(b"\0")
-        except OSError:
-            continue
-        # Zombies don't count: a run that handed its request over and exited.
-        if os.path.basename(argv0) == LAUNCHER and mine in environ and stat.rsplit(")", 1)[1].split()[0] != "Z":
-            pids.append(int(pid))
-    return pids
-
-
 def judge(app, out):
     log = open(os.path.join(out, "pila.log"), errors="replace").read()
     results = []
@@ -1253,26 +543,16 @@ def data_file(relative):
     return any(os.path.exists(os.path.join(d, relative)) for d in dirs.split(":") if d)
 
 
-def missing_for(app, launcher, bar, osd, shot):
-    """What `app`'s run needs and the system lacks, if anything (`launcher`,
-    `bar`, `osd`, `shot`: pila-launcher's, pila-bar's, pila-osd's and
-    pila-shot's binaries)."""
+def missing_for(app):
+    """What `app`'s run needs and the system lacks, if anything."""
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
-    if app in ("launcher", "fcitx5-launcher") and not os.access(launcher, os.X_OK):
-        return f"no {launcher} (cargo build --release in launcher/, or PILA_LAUNCHER_BIN)"
-    if app == "bar" and not os.access(bar, os.X_OK):
-        return f"no {bar} (cargo build --release in launcher/, or PILA_BAR_BIN)"
-    if app == "osd" and not os.access(osd, os.X_OK):
-        return f"no {osd} (cargo build --release in launcher/, or PILA_OSD_BIN)"
-    if app == "shot" and not os.access(shot, os.X_OK):
-        return f"no {shot} (cargo build --release in launcher/, or PILA_SHOT_BIN)"
-    if app in ("launcher", "bar", "switcher", "osd", "shot"):
+    if app == "switcher":
         return "" if shutil.which("foot") else "foot not installed"
     command, how = IME_APPS[app]
-    tools = ([command("")[0]] if command else []) + ["fcitx5"]
-    tools += ["wl-paste"] if how in ("clipboard", "launcher") else []
+    tools = [command("")[0], "fcitx5"]
+    tools += ["wl-paste"] if how == "clipboard" else []
     for tool in tools:
         if not shutil.which(tool):
             return f"{tool} not installed"
@@ -1288,7 +568,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    names = list(APPS) + ["launcher", "bar", "switcher", "osd", "shot"] + list(IME_APPS)
+    names = list(APPS) + ["switcher"] + list(IME_APPS)
     unknown = [a for a in argv if a not in names]
     if unknown:
         print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)
@@ -1302,14 +582,9 @@ def main(argv):
         if not shutil.which(tool):
             print(f"{tool} is missing (package dbus)", file=sys.stderr)
             return 2
-    launcher = os.environ.get("PILA_LAUNCHER_BIN") or os.path.join(
-        repo, "launcher/target/release", LAUNCHER)
-    bar = os.environ.get("PILA_BAR_BIN") or os.path.join(repo, "launcher/target/release", BAR_APP)
-    osd = os.environ.get("PILA_OSD_BIN") or os.path.join(repo, "launcher/target/release", OSD_APP)
-    shot = os.environ.get("PILA_SHOT_BIN") or os.path.join(repo, "launcher/target/release", SHOT_APP)
     ok = True
     for app in argv or names:
-        missing = missing_for(app, launcher, bar, osd, shot)
+        missing = missing_for(app)
         if missing:
             print(f"\nSKIP  {app} ({missing})")
             continue
@@ -1324,8 +599,6 @@ def main(argv):
         config = os.path.join(sealed, "config.toml")
         with open(config, "w") as f:
             f.write('# Written by scripts/apps.\nmod = "super"\n')
-            if app in ("launcher", "fcitx5-launcher"):
-                f.write(f'launcher = "{launcher} --terminal foot"\n')
         env = {k: v for k, v in os.environ.items()
                if k not in ("WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PILA_SOCKET",
                             "NIRI_SOCKET", "SWAYSOCK", "I3SOCK", "HYPRLAND_INSTANCE_SIGNATURE",
@@ -1336,8 +609,7 @@ def main(argv):
                    XDG_STATE_HOME=os.path.join(home, ".local/state"),
                    XDG_CACHE_HOME=os.path.join(home, ".cache"),
                    XDG_DATA_HOME=os.path.join(home, ".local/share"),
-                   PILA_HEADLESS_CHECK_INVARIANTS="1", PILA_APPS_BAR=os.path.abspath(bar),
-                   PILA_APPS_OSD=os.path.abspath(osd), PILA_APPS_SHOT=os.path.abspath(shot),
+                   PILA_HEADLESS_CHECK_INVARIANTS="1",
                    RUST_LOG=env.get("PILA_APPS_RUST_LOG", "info,pila=debug,pila::frames=info"))
         workload = f"python3 -I {os.path.abspath(__file__)} --workload {app} {out}"
         with open(os.path.join(out, "pila.log"), "w") as log:

@@ -104,7 +104,7 @@ keyboard) types with a keymap of its own, these are still the physical keyboard'
 `bar_inactive`, `bar_urgent`, `icon`, `icon_inactive`, `hover`, `hover_icon`, `close_hover`,
 `close_hover_icon`, `background`, `snap_preview`), each `#rrggbb`, or `#rrggbbaa` when
 translucent: those of the configuration file, the example's where it leaves one out. For
-programs that want to look like Pila's title bars, as `pila-bar` and `pila-launcher` do.
+programs that want to look like Pila's title bars (a bar's or launcher's theme).
 
 **The window switch:** while Mod+Tab or Alt+Tab is held (or a switching swipe goes on), an object:
 `windows`, the ids of the windows it goes through, most recently used first (minimized ones

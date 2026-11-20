@@ -10,11 +10,9 @@
 [![CI](https://github.com/igalmarino/pila/actions/workflows/ci.yml/badge.svg)](https://github.com/igalmarino/pila/actions/workflows/ci.yml)
 
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
-Windows float and overlap, with server-side title bars, like a classic desktop. It comes with
-a bar and an app launcher of its own (`pila-bar`, `pila-launcher`, on by default) and draws its
-window switcher itself; the rest
-(notifications, lock screens), or another bar and launcher, come from the usual
-Wayland tools (waybar, fuzzel, swaybg, mako, swaylock, ...;
+Windows float and overlap, with server-side title bars, like a classic desktop. Pila draws
+its wallpaper and window switcher itself; the bar, the launcher, notifications and lock
+screens come from the usual Wayland tools (by default waybar and fuzzel; mako, swaylock, ...;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,
@@ -30,7 +28,7 @@ standard replacement yet (layer shell, screencopy, foreign toplevel management, 
 output management and power management, virtual keyboard, input method) are supported too,
 each to be replaced when an `ext-` version lands.
 
-![Pila in 35 seconds, with pila-bar: windows opening and snapping to halves and quarters, blur behind a translucent terminal, workspaces, and the configuration applied as it's saved](https://raw.githubusercontent.com/igalmarino/pila/main/docs/demo.webp)
+![Pila in 35 seconds: windows opening and snapping to halves and quarters, blur behind a translucent terminal, workspaces, and the configuration applied as it's saved](https://raw.githubusercontent.com/igalmarino/pila/main/docs/demo.webp)
 
 How to use and set it up is in the [user manual](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md) (and `man pila`).
 
@@ -88,13 +86,10 @@ A short report helps even if everything works:
   desktop; keeping a window above the others or on all workspaces; moving windows and focus
   between monitors; switching by recent use (Mod+Tab, Alt+Tab), the windows shown as live
   previews while it's held; tapping Mod alone opens the
-  launcher, your own or Pila's (`pila-launcher`, the default: the installed apps, searched as
-  you type); a bar of Pila's own (`pila-bar`, on by default: workspaces, a
-  tray, the battery and a clock); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
+  launcher (fuzzel by default); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
   four-finger swipes); a window menu on the title bar (right click); windows asking for
-  attention marked with an amber title bar; the volume, brightness and media keys working out of
-  the box, each change shown for a moment (`pila-osd`); screenshots of a monitor or a region
-  you drag, to a file or the clipboard (`pila-shot`); a wallpaper set in the config
+  attention marked with an amber title bar; volume, brightness, media and screenshot keys bound
+  by default (wpctl, brightnessctl, playerctl, grim and slurp); a wallpaper set in the config
   (`[wallpaper]`); the screens off after a while without input; a shadow under each window (`[shadow]`); optional
   rounded corners (`corner-radius`); your own colors (`[colors]`).
 - **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
@@ -112,7 +107,7 @@ A short report helps even if everything works:
   X11 app needs it and, with `[xwayland] idle-timeout`, stops when none is left.
 - **Desktop tools:** layer shell (waybar, fuzzel, mako, swaybg), session lock (swaylock),
   idle notification and inhibition (swayidle, video players), clipboard managers
-  (ext-data-control), screenshots (`pila-shot`, or grim; ext-image-copy-capture and wlr-screencopy) and screen sharing
+  (ext-data-control), screenshots (grim; ext-image-copy-capture and wlr-screencopy) and screen sharing
   (xdg-desktop-portal-wlr, for browsers and OBS), taskbars that act on windows
   (foreign-toplevel-management), night light (gamma control), screen off and monitor
   settings (output power and management), blur behind panels and windows (background-effect),
@@ -221,5 +216,3 @@ dev container in which Pila runs nested on your desktop).
 Pila is free software: you can redistribute it and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation, either version 3 of
 the License, or (at your option) any later version. See [LICENSE](https://github.com/igalmarino/pila/blob/main/LICENSE).
-The icons built into `pila-bar` and `pila-osd` are Material Design Icons, under the Apache
-License 2.0 ([`bar/icons`](bar/icons/README.md)).

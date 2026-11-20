@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A demo video of Pila: a sealed headless Pila (one 1920x1080 output at
-# scale 1.5, its default looks, pila-bar, swaybg on a generated gradient,
+# scale 1.5, its default looks, waybar, swaybg on a generated gradient,
 # mako) where scripts/demo-scenes plays scenes with real input (windows opening,
 # moved, resized, snapped, maximized, minimized, Mod+Tab, blur, the
 # launcher, workspaces, the config applied as it's saved, shake to find,
@@ -23,9 +23,7 @@
 # Needs: kitty, vim, gtk4-demo and gtk4-print-editor (package gtk4-demos on
 # some distros), swaybg, mako, grim, wtype, notify-send (package libnotify),
 # python3, dbus-run-session (package dbus), and ffmpeg and libwebp but for
-# --shots. Uses target/release/pila, or PILA_BIN, and pila-bar and
-# pila-launcher from launcher/target/release (cargo build --release
-# --manifest-path launcher/Cargo.toml), or PILA_UI_DIR.
+# --shots, waybar and fuzzel. Uses target/release/pila, or PILA_BIN.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -48,7 +46,7 @@ if [ "$mode" = encode ]; then
     exec scripts/demo-scenes encode "$out" "$here"
 fi
 
-tools=(kitty vim gtk4-demo gtk4-print-editor swaybg mako grim wtype notify-send python3 dbus-run-session)
+tools=(kitty vim gtk4-demo gtk4-print-editor swaybg waybar fuzzel mako grim wtype notify-send python3 dbus-run-session)
 [ "$mode" = record ] && tools+=(ffmpeg)
 for tool in "${tools[@]}"; do
     if ! command -v "$tool" >/dev/null; then
@@ -62,24 +60,14 @@ if [ ! -x "$bin" ]; then
     exit 1
 fi
 bin=$(realpath "$bin")
-ui="${PILA_UI_DIR:-launcher/target/release}"
-for tool in pila-bar pila-launcher; do
-    if [ ! -x "$ui/$tool" ]; then
-        echo "$ui/$tool not found; build it first: cargo build --release --manifest-path launcher/Cargo.toml, or set PILA_UI_DIR" >&2
-        exit 1
-    fi
-done
-ui=$(realpath "$ui")
 
 sealed=$(mktemp -d)
 trap 'chmod -R u+w "${sealed:?}" 2>/dev/null || true; rm -rf "${sealed:?}"' EXIT
 home="$sealed/home"
 mkdir -p "$home/.config/pila" "$sealed/run" "$sealed/bin"
 chmod 700 "$sealed/run"
-# `pila msg` in the terminals runs this Pila, and the bar and the launcher
-# are the ones built here.
+# `pila msg` in the terminals runs this Pila.
 ln -s "$bin" "$sealed/bin/pila"
-ln -s "$ui/pila-bar" "$ui/pila-launcher" "$sealed/bin/"
 rm -rf "$out"
 mkdir -p "$out"
 
@@ -115,12 +103,32 @@ border-size=1
 margin=12
 EOF
 
+# The bar: Pila's workspaces and a clock, in the title bars' colors.
+mkdir -p "$home/.config/waybar"
+cat >"$home/.config/waybar/config.jsonc" <<'EOF'
+{
+    "layer": "top",
+    "height": 28,
+    "modules-left": ["ext/workspaces"],
+    "modules-right": ["clock"],
+    "ext/workspaces": { "format": "{name}", "on-click": "activate", "sort-by-id": true },
+    "clock": { "format": "{:%H:%M}" }
+}
+EOF
+cat >"$home/.config/waybar/style.css" <<'EOF'
+* { font-family: sans-serif; font-size: 13px; border: none; border-radius: 0; min-height: 0; }
+window#waybar { background: #2f3136; color: #e6e6e6; }
+#workspaces button { padding: 0 10px; color: #9a9da4; }
+#workspaces button.active { color: #e6e6e6; box-shadow: inset 0 -2px #4477cc; }
+#clock { padding: 0 12px; }
+EOF
+
 # Pila's config, which a scene edits in vim: what it changes comes first.
 cat >"$home/.config/pila/config.toml" <<'EOF'
 # Pila applies this file as soon as it's saved.
 mod = "super"
 terminal = "kitty"
-launcher = "pila-launcher"
+launcher = "fuzzel"
 corner-radius = 0
 
 [colors]

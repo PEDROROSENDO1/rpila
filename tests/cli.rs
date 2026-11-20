@@ -654,8 +654,8 @@ fn scripts_check_gives_a_verdict_on_a_log_that_stops_early() {
 /// scripts/check installed as `pila-check` with its helpers, laid out under
 /// `root` as scripts/install (and the packages made from it) lays them out with
 /// `PREFIX=/usr`, next to a fake `pila` that writes its arguments to `ran` and
-/// a scenario's last line to its log. The built binaries are left out: CI runs
-/// the tests before it builds pila-launcher and pila-bar. Returns `root`.
+/// a scenario's last line to its log. The built binary is left out: CI runs
+/// the tests before the release build. Returns `root`.
 fn installed_check(name: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
     let root = std::env::temp_dir().join(format!("pila-installed-{}-{name}", std::process::id()));

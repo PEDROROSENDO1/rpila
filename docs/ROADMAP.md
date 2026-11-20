@@ -47,6 +47,10 @@ to say so.
 
 ## Not planned
 
+- A bar, launcher, on-screen display or screenshot tool of Pila's own: standard tools (waybar,
+  fuzzel, swayosd, grim and slurp, ...) do those jobs, and Pila is the compositor alone. Pila
+  draws what a compositor must or does best itself: title bars, the wallpaper and the window
+  switcher.
 - Vendor protocols (KDE, GNOME, Hyprland, …), even when Smithay implements them; wlroots ones only
   as the protocol policy in
   [CONTRIBUTING.md](https://github.com/igalmarino/pila/blob/main/CONTRIBUTING.md) allows.

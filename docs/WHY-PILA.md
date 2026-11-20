@@ -14,10 +14,10 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
   all outputs. Shells built on layer shell usually run on tiling compositors (Hyprland,
   sway); Pila gives them a floating desktop.
 - **A compositor, not a desktop environment:** bar, launcher, notifications, wallpaper and lock
-  screen are external clients (layer shell, ext-session-lock, ...). Even Pila's own bar and
-  launcher (`pila-bar`, `pila-launcher`, written with iced) are separate programs on the same
-  standard protocols, so any other one replaces them; its window switcher, with live previews,
-  is drawn by Pila, and its IPC tells another one what to show. The floating modes of KDE
+  screen are external clients (layer shell, ext-session-lock, ...): standard tools such as
+  waybar and fuzzel by default, any other one in their place. Pila draws only what a
+  compositor must or does best itself: title bars, the wallpaper and the window switcher, with
+  live previews (its IPC tells another one what to show). The floating modes of KDE
   Plasma, GNOME and COSMIC come with their own shell; labwc keeps Openbox's model and XML
   config; Wayfire is built around Compiz-style plugins. Pila has one TOML file and an IPC
   socket.

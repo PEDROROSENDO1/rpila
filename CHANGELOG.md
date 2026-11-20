@@ -13,27 +13,17 @@
   in a visible window keeps them on, as it keeps the session from idling. swayidle is still the
   way to lock the screen after a while; a setup that turns the monitors off through it keeps
   working.
-- **Pila's own tools are defaults, never requirements:** `pila-launcher`, `pila-bar`,
-  `pila-osd` and `pila-shot` are named in the default configuration alone, and
-  the manual's "Building your desktop" says where each is set and what to put in its place; the
-  example configuration shows other tools next to the screenshot and media keys too.
-- **Screenshots with nothing else installed, `pila-shot`:** Mod+Shift+S and Mod+Ctrl+S run
-  `pila-shot`, a new program installed with Pila, instead of grim, slurp and wl-copy. For a
-  region the monitors hold still and dim while you drag it, shown as it is in a square frame
-  (Escape or a right click cancels), and it goes to the clipboard as a PNG image; Mod+Ctrl+S
-  saves the monitor under the pointer to your pictures folder (`XDG_PICTURES_DIR`, else
-  `~/Pictures`). The cursor is left out. From a terminal, `pila-shot output [NAME]` and
-  `pila-shot region` take `--file PATH` (`-` for a pipe) or `--clipboard`. It also picks the
-  monitor to share for screen sharing (`pila-shot pick-output`, in the portal's configuration
-  Pila installs), so slurp isn't needed there either. A copy of that configuration in
-  `~/.config/xdg-desktop-portal-wlr/pila` still runs slurp until you change its `chooser_cmd`;
-  `scripts/tty` changes the copy it made itself. The packages no longer recommend grim, slurp and wl-clipboard, and
-  `pila-report` says whether `wpctl` is installed instead of `wl-copy`.
+- **Standard tools in place of Pila's own:** `pila-launcher` and `pila-bar` are gone, so that
+  Pila is the compositor alone; the default `launcher` is now fuzzel and the default `autostart`
+  waybar, both packaged by every major distribution (the packages recommend them, and the
+  manual's waybar configuration shows Pila's workspaces). A configuration that still names
+  `pila-launcher` or `pila-bar` gets the notification that it isn't installed: put fuzzel and
+  waybar, or any launcher and bar, in their place. `scripts/install` and `scripts/uninstall`
+  remove the binaries an older install left. The screenshot keys keep running grim, slurp and
+  wl-copy, and screen sharing keeps picking the monitor with slurp.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
-  (libnotify) is no longer needed, only a notification daemon such as mako; and the brightness
-  and media keys need nothing but `pila-osd` (below), so brightnessctl and playerctl are no
-  longer recommended by the packages. A daemon started after Pila still gets the next
-  notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
+  (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
+  after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
   `lspci`, so the packages no longer suggest pciutils. On a TTY, Pila gives the session bus
   and `systemd --user` its environment over D-Bus too, without
   `dbus-update-activation-environment` (which some distros package apart, such as Fedora's
@@ -43,16 +33,12 @@
   notification names it ("wpctl isn't installed") and the command, once a session per
   program, where before only the log said so and the key did nothing.
 - **The volume, brightness and media keys work out of the box:** default bindings for the volume
-  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (never quite
-  off) and play, pause, next, previous and stop, the volume and brightness ones repeating while
-  held. The brightness and media keys need no other program: `pila-osd brightness +5%` sets the
-  backlight (in `/sys/class/backlight`, else through logind or elogind, with no permissions of
-  your own) and `pila-osd play-pause|next|previous|stop` tells the player that's playing over
-  MPRIS and shows what it did with the track's title and artist. Each change shows for a moment at the bottom of the monitor:
-  `pila-osd`, a new program installed with Pila, with an icon, a level bar and the percentage
-  (dimmed while muted). They come with a configuration Pila wrote before too (defaults are added
-  to the file's bindings, unless `default-bindings = false`); your own bindings of those keys
-  still win. Without wpctl the volume keys do nothing, as before; the packages recommend it.
+  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (brightnessctl,
+  never quite off) and play, pause, next, previous and stop (playerctl), the volume and
+  brightness ones repeating while held. They come with a configuration Pila wrote before too
+  (defaults are added to the file's bindings, unless `default-bindings = false`); your own
+  bindings of those keys still win. Without the program a key does nothing; the packages
+  recommend all three.
 - **A window switcher you can see:** held a moment, Mod+Tab or Alt+Tab shows the windows it
   goes through in the middle of the monitor, most recently used first: a live preview of each (a
   video keeps playing in it, minimized windows and those on another monitor too), with its
@@ -62,26 +48,9 @@
 - **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
   switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
   the one it's on, at each step, and null when it ends: for a program that shows it.
-- **A tray in `pila-bar`:** the icons apps put in the tray (StatusNotifierItem: fcitx5, network
-  and Bluetooth applets, Steam, Discord, ...), with their clicks, wheel and menus, the menus
-  opening below the bar. The bar is the session's StatusNotifierWatcher when nothing else is.
-  `--no-tray` leaves it out; `--clock ''` no longer leaves room for the clock.
-- **`pila-bar` and `pila-launcher` follow `[colors]`:** they take the colors of Pila's title bars
-  from the configuration, and change as soon as it's saved (they had the defaults whatever the
-  configuration said). `pila msg colors` lists them, and `pila msg subscribe colors` follows them
-  (a new request and event in the IPC).
-- **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an icon
-  of the level by tens (a bolt inside while charging) and the percentage, amber at 15% or less
-  while running down (a mouse's battery isn't counted); `--no-battery` leaves it out. The clock
-  has a clock icon before it. The icons of `pila-bar` and `pila-osd` are built in (Material
-  Design Icons, Apache License 2.0): no icon font to install.
-- **The clock is the time alone, the date in its tooltip:** `pila-bar`'s clock shows `%H:%M` by
-  default, and the date (`%A %e %B %Y`, in your language) shows below it while the pointer rests
-  on it; `--date FORMAT` sets it (`''` for none), and `--clock '%a %e %b  %H:%M'` puts the date
-  back in the bar.
-- **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
-  its text growing with it, and shown only on the monitors `--output NAME` names (once per
-  monitor), including when one is plugged in later.
+- **`pila msg colors`:** lists `[colors]`, and `pila msg subscribe colors` follows them as the
+  configuration is saved (a new request and event in the IPC), for programs that want to look
+  like Pila's title bars.
 - **Fix: a nested Pila quits when its host goes.** When the session it ran in as a window ended
   or crashed, it ran on with no window, printing `Io error: Broken pipe` nonstop; it now quits
   with "lost the host compositor".

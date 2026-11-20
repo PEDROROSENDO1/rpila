@@ -32,49 +32,6 @@ let
       "-Wl,--pop-state"
     ]
   );
-  # pila-launcher, pila-bar, pila-osd and pila-shot (launcher/, bar/, osd/, shot/): a cargo workspace of
-  # their own, rooted in launcher/, with its own lock. They load
-  # libwayland-client and libxkbcommon at runtime too.
-  clients = rustPlatform.buildRustPackage {
-    pname = "pila-clients";
-    inherit version;
-    src = lib.fileset.toSource {
-      root = ./.;
-      fileset = lib.fileset.unions [
-        ./launcher/Cargo.lock
-        ./launcher/Cargo.toml
-        ./launcher/src
-        ./bar/Cargo.toml
-        ./bar/src
-        ./bar/icons
-        ./osd/Cargo.toml
-        ./osd/src
-        ./shot/Cargo.toml
-        ./shot/src
-      ];
-    };
-    cargoLock.lockFile = ./launcher/Cargo.lock;
-    cargoRoot = "launcher";
-    # Its default members are all the clients; the target directory stays at the top.
-    buildAndTestSubdir = "launcher";
-    # smithay-client-toolkit (pila-bar's) finds libxkbcommon through it.
-    nativeBuildInputs = [ pkg-config ];
-    buildInputs = [
-      libxkbcommon
-      wayland
-    ];
-    env.RUSTFLAGS = toString (
-      map (arg: "-C link-arg=" + arg) [
-        "-Wl,--push-state,--no-as-needed"
-        "-lwayland-client"
-        "-lxkbcommon"
-        "-Wl,--pop-state"
-      ]
-    );
-    # CI runs its tests.
-    doCheck = false;
-    meta.mainProgram = "pila-bar";
-  };
 in
 rustPlatform.buildRustPackage {
   pname = "pila";
@@ -133,7 +90,6 @@ rustPlatform.buildRustPackage {
   doCheck = false;
 
   postInstall = ''
-    install -Dm755 ${clients}/bin/pila-launcher ${clients}/bin/pila-bar ${clients}/bin/pila-osd ${clients}/bin/pila-shot -t $out/bin
     install -Dm755 resources/session/pila-session $out/bin/pila-session
     install -Dm755 scripts/report $out/bin/pila-report
     # pila-check finds its helpers in share/pila/check next to its bin.
@@ -166,17 +122,12 @@ rustPlatform.buildRustPackage {
     providedSessions = [ "pila" ];
     # For the flake's devShell.
     inherit rustFlags;
-    inherit clients;
   };
 
   meta = {
     description = "A stacking Wayland compositor built on Smithay";
     homepage = "https://github.com/igalmarino/pila";
-    # Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
-    license = with lib.licenses; [
-      gpl3Plus
-      asl20
-    ];
+    license = lib.licenses.gpl3Plus;
     mainProgram = "pila";
     platforms = lib.platforms.linux;
   };

@@ -10,8 +10,7 @@ priority: optional
 maintainer: Ignacio Galmarino <igalmarino@gmail.com>
 description: A stacking Wayland compositor built on Smithay
 homepage: https://github.com/igalmarino/pila
-# Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
-license: GPL-3.0-or-later AND Apache-2.0
+license: GPL-3.0-or-later
 
 contents:
   - src: stage/usr/bin/*

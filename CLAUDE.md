@@ -46,14 +46,12 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`), `pila-osd` (`osd/`) and `pila-shot` (`shot/`) are a cargo workspace of their own,
-  rooted in `launcher/`, with its own `Cargo.lock` (Smithay and iced_layershell need different
-  winit betas): the same commands with `--manifest-path launcher/Cargo.toml` (or run from
-  `launcher/`; `cargo fmt --all`); the binaries land in `launcher/target/`. CI, the packages
-  and `scripts/install` build them with Pila; a release bumps their versions with Pila's.
-  Pila's own UI pieces are iced clients there, never GTK or drawn inside the compositor (the
-  wallpaper and the window switcher aren't: Pila draws `[wallpaper]` and the switch's live
-  previews itself, `wallpaper.rs`, `switcher_view.rs`).
+- Pila ships no desktop programs of its own (no bar, launcher, on-screen display or
+  screenshot tool): its defaults are standard tools packaged by Arch, Debian and Fedora
+  (fuzzel, waybar, wpctl, brightnessctl, playerctl, grim, slurp, wl-copy), named in
+  `config.example.toml` alone. What a compositor does best itself, Pila draws: title bars,
+  `[wallpaper]` and the window switcher's live previews (`wallpaper.rs`, `switcher_view.rs`).
+  Programs an older install left are in `scripts/install-paths`' `removed_files`.
 
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,
   then clippy, a release build and the tests with `--locked` (a `Cargo.lock` out of date
@@ -80,7 +78,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
   `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default
-  `pila-bar`; no terminal starts by itself).
+  `waybar`; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -264,9 +262,6 @@ global that exposes or controls other clients, input or outputs must get it too.
 The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
-`launcher/` is `pila-launcher`, `bar/` is `pila-bar`, `osd/` is `pila-osd` and `shot/` is
-`pila-shot`, iced clients of their own that reach Pila only through Wayland and its IPC (see
-"Launcher", "Bar", "OSD" and "Screenshots" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature

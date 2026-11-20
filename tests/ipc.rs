@@ -993,7 +993,7 @@ fn keyboard_layouts_are_listed_switched_and_followed() {
 }
 
 /// `colors` gives `[colors]` as the config writes them, for clients that
-/// look like Pila (pila-bar, pila-launcher); subscribers hear of a change
+/// look like Pila (a bar's or launcher's theme); subscribers hear of a change
 /// when the config is saved, and of nothing else.
 #[test]
 fn colors_are_listed_and_followed() {

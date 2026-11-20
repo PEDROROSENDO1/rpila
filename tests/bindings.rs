@@ -898,7 +898,7 @@ fn bindings_ignore_unfocused_state_without_a_window() {
 #[test]
 fn the_screenshot_bindings_run_grim() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("pila-shots-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("pila-screenshots-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).unwrap();

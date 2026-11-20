@@ -5,7 +5,7 @@
     scripts/demo-scenes encode WORK OUT_DIR
 
 `play` runs inside the sealed headless Pila that scripts/demo-video starts:
-it sets the desktop up (pila-bar, swaybg on WORK/wallpaper.png, mako), then plays each
+it sets the desktop up (waybar, swaybg on WORK/wallpaper.png, mako), then plays each
 scene with real input, the pointer and Pila's bindings through the headless
 backend's control socket and text through wtype (virtual keyboard), waiting
 on Pila's state for what must happen and pausing for what must be seen.
@@ -471,11 +471,11 @@ def play(record):
     # Apps write what they like where they start (Print Editor its settings).
     os.chdir(os.path.expanduser("~"))
     spawn(["swaybg", "-m", "fill", "-i", os.path.join(WORK, "wallpaper.png")])
-    spawn(["pila-bar"])
+    spawn(["waybar"])
     spawn(["mako"])
     wait("the wallpaper", lambda s: any(l["namespace"] == "wallpaper" for l in s["layers"]),
          timeout=20)
-    wait("pila-bar", lambda s: any(l["namespace"] == "pila-bar" for l in s["layers"]),
+    wait("waybar", lambda s: any(l["namespace"] == "waybar" for l in s["layers"]),
          timeout=20)
     # The bar and the wallpaper fade in.
     pause(1.5)

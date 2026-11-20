@@ -26,10 +26,6 @@ CHECKDIR="$(dirname "$BINDIR")/share/pila/check"
 # source in the repository : installed path (before DESTDIR) : mode
 install_files=(
     "target/release/pila:$BINDIR/pila:755"
-    "launcher/target/release/pila-launcher:$BINDIR/pila-launcher:755"
-    "launcher/target/release/pila-bar:$BINDIR/pila-bar:755"
-    "launcher/target/release/pila-osd:$BINDIR/pila-osd:755"
-    "launcher/target/release/pila-shot:$BINDIR/pila-shot:755"
     "resources/session/pila-session:$BINDIR/pila-session:755"
     "scripts/report:$BINDIR/pila-report:755"
     "scripts/check:$BINDIR/pila-check:755"
@@ -43,6 +39,17 @@ install_files=(
     "resources/icons/pila.svg:$DATADIR/icons/hicolor/scalable/apps/pila.svg:644"
     "resources/xdg/xdg-desktop-portal/pila-portals.conf:$SYSCONFDIR/xdg/xdg-desktop-portal/pila-portals.conf:644"
     "resources/xdg/xdg-desktop-portal-wlr/pila:$SYSCONFDIR/xdg/xdg-desktop-portal-wlr/pila:644"
+)
+
+# What an older install put there and Pila no longer has: scripts/install and
+# scripts/uninstall remove them.
+removed_files=(
+    "$BINDIR/pila-launcher"
+    "$BINDIR/pila-bar"
+    "$BINDIR/pila-osd"
+    "$BINDIR/pila-shot"
+    "$BINDIR/pila-switcher"
+    "$BINDIR/pila-wallpaper"
 )
 
 # Directories that may be left empty by an uninstall.

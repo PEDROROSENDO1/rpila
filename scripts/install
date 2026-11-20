@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Install pila as a login session, on any distro and with any display manager
 # that reads wayland-sessions (GDM, SDDM, LightDM, greetd front ends, ...):
-# the release binary (and pila-launcher's, pila-bar's, pila-osd's and pila-shot's), the session wrapper, the session entry and its icon,
+# the release binary, the session wrapper, the session entry and its icon,
 # the systemd user units the wrapper runs it as where there's systemd, and the
 # portal configs for screen sharing. Run it from your desktop session; sudo
 # asks once if the targets aren't writable. Afterwards log out and pick "pila"
 # in the login screen's session menu. After changing pila: run it again, then
 # log out and back in.
 #
-#   scripts/install              build the release binaries, then install
-#   scripts/install --container  build them in the dev container (scripts/dev)
-#   scripts/install --no-build   install what's in target/release and
-#                                launcher/target/release
+#   scripts/install              build the release binary, then install
+#   scripts/install --container  build it in the dev container (scripts/dev)
+#   scripts/install --no-build   install what's in target/release
 #
 # The build uses the host's cargo if there is one: a binary built in the dev
 # container (Arch) needs Arch's glibc and libraries, which other distros may
@@ -48,7 +47,6 @@ fi
 case "$build" in
     native)
         cargo build --release
-        cargo build --release --manifest-path launcher/Cargo.toml
         ;;
     container)
         if [ -z "${DEVCONTAINER:-}" ]; then
@@ -57,20 +55,12 @@ case "$build" in
             echo "on the host instead, see docs/INSTALL.md)." >&2
         fi
         scripts/dev cargo build --release
-        scripts/dev cargo build --release --manifest-path launcher/Cargo.toml
         ;;
 esac
 if [ ! -x target/release/pila ]; then
     echo "target/release/pila not found; build it first (cargo build --release)" >&2
     exit 1
 fi
-for client in pila-launcher pila-bar pila-osd pila-shot; do
-    if [ ! -x "launcher/target/release/$client" ]; then
-        echo "launcher/target/release/$client not found; build it first" >&2
-        echo "(cargo build --release --manifest-path launcher/Cargo.toml)" >&2
-        exit 1
-    fi
-done
 
 if [ -z "$DESTDIR" ]; then
     # A binary that can't load here (e.g. built in the dev container against a
@@ -113,6 +103,14 @@ for entry in "${install_files[@]}"; do
     # binary of a running session is fine: it keeps its old inode.
     as_owner_of "$target" install -D -m "$mode" "$source" "$target"
     echo "installed $target"
+done
+# Programs an older install put there that Pila no longer has.
+for target in "${removed_files[@]}"; do
+    target="$DESTDIR$target"
+    if [ -e "$target" ]; then
+        as_owner_of "$target" rm -f "$target"
+        echo "removed  $target (no longer part of Pila)"
+    fi
 done
 
 echo

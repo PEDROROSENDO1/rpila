@@ -49,15 +49,7 @@ fn quoted(text: &str) -> Vec<&str> {
 fn the_docs_name_only_code_that_exists() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut sources = Vec::new();
-    for dir in [
-        "src",
-        "tests",
-        "fuzz/fuzz_targets",
-        "launcher/src",
-        "bar/src",
-        "osd/src",
-        "shot/src",
-    ] {
+    for dir in ["src", "tests", "fuzz/fuzz_targets"] {
         files_under(&root.join(dir), &mut sources);
     }
     sources.push(root.join("build.rs"));

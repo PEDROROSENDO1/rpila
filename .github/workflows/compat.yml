@@ -13,11 +13,6 @@ on:
       - Cargo.toml
       - Cargo.lock
       - build.rs
-      - launcher/Cargo.toml
-      - launcher/Cargo.lock
-      - bar/Cargo.toml
-      - osd/Cargo.toml
-      - shot/Cargo.toml
       - package.nix
       - flake.nix
       - flake.lock
@@ -30,11 +25,6 @@ on:
       - Cargo.toml
       - Cargo.lock
       - build.rs
-      - launcher/Cargo.toml
-      - launcher/Cargo.lock
-      - bar/Cargo.toml
-      - osd/Cargo.toml
-      - shot/Cargo.toml
       - package.nix
       - flake.nix
       - flake.lock
@@ -73,10 +63,7 @@ jobs:
         with:
           workspaces: |
             . -> target
-            launcher -> target
       - run: cargo build --locked
-      # pila-launcher, pila-bar, pila-osd and pila-shot have the same rust-version.
-      - run: cargo build --locked --manifest-path launcher/Cargo.toml
 
   distros:
     name: Build on ${{ matrix.image }}
@@ -120,14 +107,8 @@ jobs:
           key: ${{ matrix.image }}
           workspaces: |
             . -> target
-            launcher -> target
       - run: cargo build --locked
       - run: ./target/debug/pila --version
-      - run: cargo build --locked --manifest-path launcher/Cargo.toml
-      - run: ./launcher/target/debug/pila-launcher --version
-      - run: ./launcher/target/debug/pila-bar --version
-      - run: ./launcher/target/debug/pila-osd --version
-      - run: ./launcher/target/debug/pila-shot --version
 
   nix:
     name: Nix (package, smoke test)
@@ -140,10 +121,6 @@ jobs:
       - name: The package says which commit it is
         run: ./result/bin/pila --version | tee /dev/stderr | grep -F "$(git rev-parse --short=7 HEAD)"
       - run: ./result/bin/pila-report --help
-      - run: ./result/bin/pila-launcher --version
-      - run: ./result/bin/pila-bar --version
-      - run: ./result/bin/pila-osd --version
-      - run: ./result/bin/pila-shot --version
       - run: ./result/bin/pila-check --help && test -f result/share/pila/check/capture-stream
       - run: nix develop --command cargo --version
       # EGL's drivers, which a NixOS system provides, come from Mesa here. If
@@ -180,4 +157,3 @@ jobs:
         run: pacman -Syu --noconfirm --needed git rust cargo-audit
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - run: cargo audit
-      - run: cargo audit --file launcher/Cargo.lock

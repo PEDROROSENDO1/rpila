@@ -56,34 +56,6 @@ with the GTK-like client of `tests/common/client.rs` where it helps). Run it aft
 grabs, decorations, fill states or input, and before a release; a behavior that only real apps
 show gets a step. Standard-library Python, like the other helpers.
 
-`launcher` drives `pila-launcher` (`run_launcher`; skipped where it isn't built in
-`launcher/target/release`, or `PILA_LAUNCHER_BIN`): the sealed config sets `launcher =
-"pila-launcher --terminal foot"`; Mod+D opens it with the keyboard, hides it and shows it again
-twice (each later run hands its request to the one in the background: one process left), Escape
-hides it, and apps of its own in the sealed `XDG_DATA_HOME` (`LAUNCHER_APPS`, which write a file
-when they run) are found by typing and started with Return, in foot for `Terminal=true`, and
-with a click on a row. `fcitx5-launcher` types `nihao` into its search field through fcitx5,
-as below: the candidate window is the launcher's, by its search field, and a space puts 你好
-there. Run them after changing the launcher, the layer shell or input methods.
-
-`bar` drives `pila-bar` (`run_bar`; skipped where it isn't built in `launcher/target/release`,
-or `PILA_BAR_BIN`), started by the workload: its layer surface lies along the top edge, as wide
-as the output, with its exclusive zone (the output's `usable` area) and no keyboard, and a
-maximized foot fills the rest; the pointer resting on the clock shows its tooltip, a layer surface
-(`pila-bar-tooltip`) below the bar, inside the output, with no grab or keyboard (`tooltip.png`),
-gone when the pointer leaves; a click on the second workspace's button goes there, the wheel
-over the bar goes on from where a binding of Pila's left the workspace (so the bar followed
-ext-workspace) and stops at the last; an output added gets a bar of its own as wide as it, one
-removed takes its bar along with the process still running; `--bottom` puts it along the
-bottom edge; `--height 40 --output HDMI-A-1` opens nothing until that output comes, then a bar
-40 high on it alone, again after it's removed and added back. Then, where fcitx5 and `busctl`
-are, the tray (`bar_tray`, a bar with `--no-battery --clock ''` so that the item is the last
-block): the bar owns `org.kde.StatusNotifierWatcher`, fcitx5's item registers with it, the
-pointer resting on it shows its tooltip below the bar, under the pointer (`tray-tooltip.png`),
-gone when it leaves, a right
-click on it opens its menu with a grab (`tray.png`), a click elsewhere closes it with no grab
-left, and the item leaves when fcitx5 quits. `bar.png` shows the bar. Run it after changing the bar, the layer shell or ext-workspace.
-
 `switcher` drives the window switcher Pila draws (`run_switcher`) with three foot windows
 (`--app-id switch-a` ...), reading it from the state (`switcher_view`): a quick Super+Tab, there
 and back, shows nothing; Super held with a tap of Tab shows it, centered on the output, a tile per
@@ -92,28 +64,6 @@ previews, shrunk whole); another Tab steps on with it shown; letting go of Super
 away, on the window switched to; and with Alt+Tab held (Alt isn't Mod there), a click on the last
 tile switches to the least recent window and takes it away, with no grab left. Run it after
 changing the switcher, `switcher.rs` or `switcher_view.rs`.
-
-`osd` drives `pila-osd` (`run_osd`; skipped where it isn't built in `launcher/target/release`,
-or `PILA_OSD_BIN`) over a maximized foot, with a `wpctl` of the run's own that prints a volume
-from a file: `pila-osd volume` maps a `pila-osd` layer, an Overlay at the bottom center, its
-margin above the edge, with no keyboard, and the pointer over it is on foot (clicks go
-through: an empty input region) (`osd.png`); a second run, muted, goes to the first (one
-process) and it's still shown (`osd-muted.png`); it goes away on its own; `pila-osd brightness`
-shows the backlight's where `/sys/class/backlight` has one, and exits 1 with nothing shown where
-it hasn't; so does `pila-osd volume` with no wpctl; `pila-osd play-pause` on a dbus-daemon of
-its own with no player shows that there's none (`osd-media.png`; players themselves are
-`osd/src/media.rs`' tests). Run it after changing pila-osd or the layer shell.
-
-`shot` drives `pila-shot` (`run_shot`; skipped where it isn't built in `launcher/target/release`,
-or `PILA_SHOT_BIN`) over a maximized foot: `pila-shot output --file` writes a PNG of the whole
-output (1920x1080), and with no `--file` one into the sealed `~/Pictures`, whose path it prints;
-`pila-shot region` maps a `pila-shot` layer, an Overlay over the whole output with the keyboard
-(exclusive), and a real drag on it ends it (exit 0, the layer gone) with a PNG of the dragged
-size on the clipboard as `image/png` (`wl-paste`, where it's installed; `region.png`, taken by
-pila-shot mid-drag, shows the selection), served by one `pila-shot` process until `wl-copy`
-copies something else; Escape cancels (exit 1, no layer, the keyboard back on foot); and
-`pila-shot pick-output` prints `Monitor: eDP-1` after a click. Run it after changing pila-shot,
-the layer shell, captures or data-control.
 
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
@@ -132,8 +82,8 @@ has CJK fonts (wqy-microhei, noto-fonts-cjk): `candidates.png` shows the candida
 # scripts/demo-video
 
 `scripts/demo-video` makes a demo video on a sealed headless Pila (as `scripts/apps`: one
-1920x1080 output at scale 1.5, default looks, `pila-bar`, `swaybg` on a generated gradient,
-`mako`, UTC; `pila-bar` and `pila-launcher` come from `launcher/target/release`):
+1920x1080 output at scale 1.5, default looks, `waybar` (a config of its own: workspaces and a
+clock), `swaybg` on a generated gradient, `mako`, `fuzzel` as the launcher, UTC):
 `scripts/demo-scenes` plays captioned scenes with real input (pointer and Pila's bindings
 through the control socket, text through `wtype`), waiting on Pila's state, never on fixed
 sleeps for something to happen; `scripts/demo-record` records the output at a constant 60 fps

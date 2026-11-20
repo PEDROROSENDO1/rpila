@@ -198,7 +198,7 @@ impl Pila {
         if old.idle != self.config.idle {
             self.idle_config_changed();
         }
-        // pila-bar and pila-launcher take them up.
+        // Clients that look like Pila take them up (`pila msg subscribe colors`).
         if old.colors != self.config.colors {
             self.send_colors_event();
         }
