@@ -1,5 +1,6 @@
 # Written by Pila (`tool-configs`): Pila's default colors, square corners.
-# Yours to change; Pila never writes over it.
+# Pila writes it at every start: to change it, copy it to ~/.config, which
+# the tool then reads instead.
 
 font=sans-serif 11
 background-color=#26272b

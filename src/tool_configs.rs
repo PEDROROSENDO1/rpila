@@ -301,6 +301,21 @@ mod tests {
         }
     }
 
+    /// fuzzel sizes its text by each monitor's DPI where every monitor's
+    /// scale is 1 (`dpi-aware=auto`, its default): bigger on a laptop's
+    /// dense panel than on a desktop monitor beside it. Pila's own drawing,
+    /// waybar's and mako's follow the scale alone, so fuzzel's must too.
+    #[test]
+    fn fuzzel_is_sized_by_the_scale_not_the_dpi() {
+        let ini = include_str!("../resources/tools/fuzzel/fuzzel.ini");
+        let (_, main) = ini.split_once("[main]\n").unwrap();
+        let main = main.split("\n[").next().unwrap();
+        assert!(
+            main.lines().any(|l| l.trim() == "dpi-aware=no"),
+            "no dpi-aware=no in [main]"
+        );
+    }
+
     #[test]
     fn waybars_configs_are_json_and_alike() {
         let text: serde_json::Value =

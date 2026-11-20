@@ -34,7 +34,8 @@
   battery and clock where Font Awesome is installed (`pila-desktop` brings it), words where it
   isn't. Pila writes nothing in `~/.config`: the files are in `$XDG_RUNTIME_DIR/pila-tools`
   and the default commands name them as they start (`waybar -c ...`), so the same tools in
-  another session keep their looks; copy one to `~/.config` to change it.
+  another session keep their looks; copy one to `~/.config` to change it. fuzzel is sized by the
+  monitor's scale, as Pila is, so it's the same size on a laptop's panel and a monitor beside it.
   `tool-configs = false` turns it off. mako, the notification daemon, joins waybar in the
   default `autostart`.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
