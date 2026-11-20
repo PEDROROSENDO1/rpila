@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A wallpaper of Pila's:** the default `autostart` runs `swaybg`, and Pila gives it its own
+  wallpaper: `[colors] background`, plain, with a small mark in the bottom-right corner (three
+  outlined rectangles piled like windows, in greys just above the background, the accent along
+  the front one's top edge), drawn in your `[colors]` (again when they change, for swaybg's next
+  start) and shown whole on any monitor's shape. For a picture of your own,
+  put `swaybg -i FILE -m fill` in its place. `pila-desktop` now brings swaybg.
 - **A welcome screen with the shortcuts:** the first time Pila starts, when it writes your
   configuration file, it shows a cheatsheet of the common shortcuts as they're bound (your Mod
   key, your own keys; an action you unbound isn't listed). Any key or click hides it, and a

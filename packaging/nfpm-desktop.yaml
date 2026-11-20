@@ -12,10 +12,11 @@ section: x11
 priority: optional
 maintainer: Ignacio Galmarino <igalmarino@gmail.com>
 description: |-
-  Pila with a desktop's tools: bar, launcher, notifications, lock
+  Pila with a desktop's tools: wallpaper, bar, launcher, notifications, lock
   The stacking Wayland compositor Pila with the programs its default
-  configuration runs: waybar, fuzzel, mako, swayidle and swaylock, kitty,
-  and what the volume, brightness, media and screenshot keys use.
+  configuration runs: swaybg (Pila's wallpaper), waybar, fuzzel, mako,
+  swayidle and swaylock, kitty, and what the volume, brightness, media and
+  screenshot keys use.
 homepage: https://github.com/igalmarino/pila
 license: GPL-3.0-or-later
 
@@ -23,7 +24,9 @@ overrides:
   deb:
     depends:
       - pila
-      # The terminal, bar, launcher and notifications.
+      # The wallpaper (Pila's, drawn by swaybg), terminal, bar, launcher and
+      # notifications.
+      - swaybg
       - kitty
       - waybar
       - fuzzel
@@ -40,12 +43,10 @@ overrides:
       - grim
       - slurp
       - wl-clipboard
-    # A wallpaper, which needs a picture: set in autostart.
-    suggests:
-      - swaybg
   rpm:
     depends:
       - pila
+      - swaybg
       - kitty
       - waybar
       - fuzzel
@@ -59,5 +60,3 @@ overrides:
       - grim
       - slurp
       - wl-clipboard
-    suggests:
-      - swaybg

@@ -239,8 +239,8 @@ same on most distros):
   `wpctl`, which the volume and mute keys use; `brightnessctl` for the brightness keys and
   `playerctl` for the media keys; without them the keys do nothing
 - `grim`, `slurp` and `wl-clipboard`: the screenshot keys
-- `swaybg`: a wallpaper (add it to `autostart`; without one, `[colors] background` shows);
-  `pila-desktop` only suggests it
+- `swaybg`: the wallpaper, Pila's in your `[colors]` or a picture of yours (without it,
+  `[colors] background` shows)
 
 Apps also want these in any session, so `pila` itself recommends them (Debian and Fedora
 install them with it unless recommends are off; on Arch they're optional dependencies):

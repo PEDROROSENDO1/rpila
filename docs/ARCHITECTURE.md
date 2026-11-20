@@ -33,7 +33,14 @@ Key flows and invariants:
   a reload changes them: `tool_configs::rewrite_in_background`, for each tool's next start),
   text at `text::FONT_SIZE` px in sans-serif, as the title bars, waybar's with
   Font Awesome symbols where a font file under fontconfig's default directories has "awesome"
-  in its path, `icon_font_installed`: nothing in the user's directories. `Pila::spawn` gives
+  in its path, `icon_font_installed`: nothing in the user's directories. With them goes
+  swaybg's wallpaper, which Pila draws (`wallpaper.rs`: `background` with a small mark in the
+  bottom-right corner, outlined rectangles piled like windows in greys between `background` and
+  `hover` and the accent, on a 1920x1080 grid drawn at 4K, a PNG of rows filtered `Up`, ~11 ms
+  in a release build, so it's paid at startup and on the rewrite's thread); swaybg reads no file
+  of the user's, so a bare `swaybg` always gets it, `-i ... -m fit -c <background>` (a tool's
+  arguments name `[colors]` keys as `@key@`, `fill`): the whole picture on any monitor's shape,
+  where `fill` would crop the corner's mark. `Pila::spawn` gives
   them to the example's own commands as written (`config::is_example_command`: its `launcher`
   and `autostart`), on their command line (`tool_configs::with_configs`: the tool's arguments
   after each word that is its name, swaylock inside the swayidle line too), for each tool with

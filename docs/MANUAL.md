@@ -211,24 +211,29 @@ windows without a wallpaper, and `snap-preview` the area a dragged window would 
 be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors. Pila's
 window switcher takes the same colors; other programs can read them with `pila msg colors`.
 
-**Wallpaper.** A wallpaper program draws it: swaybg (package swaybg), or a shell's. Add it to
-`autostart`, with `-m` for how the picture covers each monitor: `fill` (the whole monitor, the
-picture cropped to its shape), `fit` (the whole picture, `-c` color around it), `stretch`,
-`center` or `tile`:
+**Wallpaper.** A wallpaper program draws it: swaybg (package swaybg), or a shell's. The default
+`autostart` runs `swaybg` as it is, and Pila gives it its own wallpaper: `background`, plain,
+with a small mark in the bottom-right corner, three outlined rectangles piled like windows in
+greys between `background` and `hover`, the front one's top edge in the `snap-preview` color.
+It's drawn in your `[colors]` (and again when they change, for swaybg's next start), and shown
+whole on any monitor's shape (`-m fit`, `background` around it). For a picture of your own, give swaybg
+one, with `-m` for how it covers each monitor: `fill` (the whole monitor, the picture cropped to
+its shape), `fit` (the whole picture, `-c` color around it), `stretch`, `center` or `tile`:
 
 ```toml
 autostart = [
+    "swaybg -i ~/Pictures/wallpaper.jpg -m fill",
     "waybar",
     "mako",
     "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
-    "swaybg -i ~/Pictures/wallpaper.jpg -m fill",
 ]
 ```
 
 `autostart` runs at startup: to change the picture now, `pkill swaybg` and start it again
-(`swaybg -i FILE -m fill &` from a terminal). Without one, `[colors] background` shows. A
-configuration with `[wallpaper]`, which development builds read for a while, still loads, with
-a warning that gives the swaybg line doing the same.
+(`swaybg -i FILE -m fill &` from a terminal). Without swaybg (a list without it, or where it
+isn't installed), `[colors] background` shows. A configuration with `[wallpaper]`, which
+development builds read for a while, still loads, with a warning that gives the swaybg line
+doing the same.
 
 **Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
 64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
@@ -495,20 +500,21 @@ works the same with another in its place:
 | Default | Where it's set | Swap it for |
 |---|---|---|
 | `fuzzel` | `launcher` | any launcher (`wofi --show drun`, `rofi -show drun`, ...) |
-| `waybar`, `mako` | `autostart` | any other bar or notification daemon (a list without them) |
+| `swaybg` (Pila's wallpaper), `waybar`, `mako` | `autostart` | a picture of your own (`swaybg -i FILE -m fill`), any other bar or notification daemon (a list without them) |
 | `wpctl`, `brightnessctl`, `playerctl` | the volume, brightness and media keys' bindings | bindings of your own (`pactl`, `swayosd-client`, ...) |
 | `grim`, `slurp`, `wl-copy` | `Mod+Shift+S` and `Mod+Ctrl+S`; `slurp` picks the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own; `chooser_cmd` in those settings |
 
 **A look that matches Pila's.** The tools of the default configuration start with a
 configuration of Pila's where you have none of your own: your `[colors]`, the title bars' font
 (fontconfig's sans-serif, the one `fc-match sans-serif` names) at their size, and square
-corners. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
+corners; swaybg gets Pila's wallpaper. Its waybar has Pila's workspaces and windows (with the apps' own icons) on the
 left and the tray, the volume (a click mutes), the battery and the clock on the right, with
 symbols where Font Awesome is installed (package otf-font-awesome, fonts-font-awesome or
 fontawesome-6-free-fonts; `pila-desktop` brings it), words where it isn't. Pila writes nothing
 where the tools look for yours: the files are in `$XDG_RUNTIME_DIR/pila-tools` (written at each
 start, gone at logout), and the defaults' commands name them as they start (`waybar -c ... -s
-...`, `mako -c ...`, `fuzzel --config=...`, and `swaylock -C ...` in the swayidle line), so the
+...`, `mako -c ...`, `fuzzel --config=...`, `swaybg -i ... -m fit -c ...`, and `swaylock -C ...` in
+the swayidle line), so the
 same tools in another session look as before, and nothing is left behind.
 
 This is only for the default commands as written (`waybar`, not `waybar -l debug`) and only
@@ -516,8 +522,8 @@ for a tool with no configuration of yours anywhere it reads one (`~/.config/wayb
 `config.jsonc`, `~/.mako/config`, ...), checked each time it starts. To change one, copy it
 from `$XDG_RUNTIME_DIR/pila-tools` (e.g. `cp -r $XDG_RUNTIME_DIR/pila-tools/waybar ~/.config/`)
 and edit it there: from then on the tool reads yours. A change to `[colors]` writes the files
-again: each tool takes it the next time it starts (fuzzel at once, waybar and mako when you
-log in again or restart them). `tool-configs = false` starts the tools with their own looks.
+again: each tool takes it the next time it starts (fuzzel at once, swaybg, waybar and mako
+when you log in again or restart them). `tool-configs = false` starts the tools with their own looks.
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way

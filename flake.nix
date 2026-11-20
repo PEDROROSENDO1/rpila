@@ -27,6 +27,7 @@
             name = "pila-desktop-${pila.version}";
             paths = [
               pila
+              pkgs.swaybg
               pkgs.kitty
               pkgs.waybar
               pkgs.fuzzel
@@ -44,7 +45,7 @@
             # For `services.displayManager.sessionPackages`, as `pila`.
             passthru.providedSessions = [ "pila" ];
             meta = pila.meta // {
-              description = "Pila with the bar, launcher, notifications, lock and keys of its default configuration";
+              description = "Pila with the wallpaper, bar, launcher, notifications, lock and keys of its default configuration";
             };
           };
         }

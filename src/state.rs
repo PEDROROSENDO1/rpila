@@ -2221,8 +2221,12 @@ impl Pila {
         let Some(dir) = dir else {
             return command.to_string();
         };
-        let run =
-            crate::tool_configs::with_configs(command, dir, crate::tool_configs::user_has_config);
+        let run = crate::tool_configs::with_configs(
+            command,
+            dir,
+            &colors,
+            crate::tool_configs::user_has_config,
+        );
         if run != command {
             debug!(command = run.as_str(), "with Pila's tool configs");
         }

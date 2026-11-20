@@ -1,9 +1,10 @@
 //! Pila's configuration for the tools its defaults start (`tool_configs.rs`):
-//! the example's own commands (waybar, mako, the swayidle line's swaylock, the
-//! launcher fuzzel) get it by their command line, from files in the runtime
-//! directory, where the user has no configuration of their own for the tool.
-//! Nothing is written where the tools look for the user's. Their colors are
-//! the user's `[colors]`, written again when a reload changes them.
+//! the example's own commands (swaybg, waybar, mako, the swayidle line's
+//! swaylock, the launcher fuzzel) get it by their command line, from files in
+//! the runtime directory, where the user has no configuration of their own for
+//! the tool; swaybg gets Pila's wallpaper. Nothing is written where the tools
+//! look for the user's. Their colors, the wallpaper's too, are the user's
+//! `[colors]`, written again when a reload changes them.
 
 mod common;
 
@@ -19,7 +20,7 @@ const FUZZEL: &str = include_str!("../resources/tools/fuzzel/fuzzel.ini");
 const MAKO: &str = include_str!("../resources/tools/mako/config");
 const SWAYLOCK: &str = include_str!("../resources/tools/swaylock/config");
 
-const TOOLS: &[&str] = &["waybar", "fuzzel", "mako", "swayidle", "swaylock"];
+const TOOLS: &[&str] = &["swaybg", "waybar", "fuzzel", "mako", "swayidle", "swaylock"];
 
 /// A directory of its own for a test: `bin` with stand-ins for `TOOLS` (the
 /// whole `PATH`, so nothing else counts as installed) that write their
@@ -106,9 +107,9 @@ fn ran(pila: &TestPila, count: usize) -> Vec<String> {
 /// The example's commands, with the launcher (Mod+D) after autostart's.
 fn run_the_defaults(dir: &Path, config: &str) -> (TestPila, Vec<String>) {
     let mut pila = start(dir, &format!("{}{config}", example_autostart()));
-    ran(&pila, 3);
+    ran(&pila, 4);
     pila.combo("Super+d");
-    let lines = ran(&pila, 4);
+    let lines = ran(&pila, 5);
     (pila, lines)
 }
 
@@ -123,6 +124,7 @@ fn the_defaults_get_pilas_configuration_by_their_command_line() {
         [
             format!("fuzzel --config={t}/fuzzel/fuzzel.ini"),
             format!("mako -c {t}/mako/config"),
+            format!("swaybg -i {t}/swaybg/wallpaper.png -m fit -c 1f2126"),
             format!(
                 "swayidle -w timeout 300 swaylock -C {t}/swaylock/config -f timeout 600 \
                  pila msg action power-off-monitors before-sleep swaylock -C {t}/swaylock/config -f"
@@ -136,6 +138,13 @@ fn the_defaults_get_pilas_configuration_by_their_command_line() {
     assert_eq!(read("fuzzel/fuzzel.ini"), filled(FUZZEL));
     assert_eq!(read("mako/config"), filled(MAKO));
     assert_eq!(read("swaylock/config"), filled(SWAYLOCK));
+    let colors = pila::config::Config::from_toml("", &|_| None)
+        .unwrap()
+        .colors;
+    assert_eq!(
+        std::fs::read(tools.join("swaybg/wallpaper.png")).unwrap(),
+        pila::wallpaper::png(&colors).unwrap()
+    );
     // Nothing where the tools look for the user's.
     for tool in ["waybar", "fuzzel", "mako", "swaylock"] {
         assert!(!dir.join("config").join(tool).exists(), "{tool}");
@@ -161,15 +170,22 @@ fn a_tools_own_configuration_wins() {
         std::fs::create_dir_all(dir.join("home").join(own)).unwrap();
         std::fs::write(dir.join("home").join(own).join("config"), "").unwrap();
     }
-    let (_pila, lines) = run_the_defaults(&dir, "");
+    let (pila, lines) = run_the_defaults(&dir, "");
+    // swaybg reads no file of the user's: it always gets the wallpaper.
+    let t = pila.dir.join("pila-tools");
     assert_eq!(
         lines,
         [
-            "fuzzel",
-            "mako",
+            "fuzzel".to_string(),
+            "mako".to_string(),
+            format!(
+                "swaybg -i {}/swaybg/wallpaper.png -m fit -c 1f2126",
+                t.display()
+            ),
             "swayidle -w timeout 300 swaylock -f timeout 600 \
-             pila msg action power-off-monitors before-sleep swaylock -f",
-            "waybar",
+             pila msg action power-off-monitors before-sleep swaylock -f"
+                .to_string(),
+            "waybar".to_string(),
         ]
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -181,7 +197,8 @@ fn tool_configs_false_starts_them_as_written() {
     let (pila, lines) = run_the_defaults(&dir, "tool-configs = false\n");
     assert_eq!(lines[0], "fuzzel");
     assert_eq!(lines[1], "mako");
-    assert_eq!(lines[3], "waybar");
+    assert_eq!(lines[2], "swaybg");
+    assert_eq!(lines[4], "waybar");
     assert!(!pila.dir.join("pila-tools").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -211,7 +228,7 @@ fn waybar_gets_symbols_where_font_awesome_is_installed() {
     std::fs::create_dir_all(&fonts).unwrap();
     std::fs::write(fonts.join("Font Awesome 7 Free-Solid-900.otf"), "").unwrap();
     let pila = start(&dir, &example_autostart());
-    ran(&pila, 3);
+    ran(&pila, 4);
     let tools = pila.dir.join("pila-tools");
     assert_eq!(
         std::fs::read_to_string(tools.join("waybar/config.jsonc")).unwrap(),
@@ -224,40 +241,45 @@ fn waybar_gets_symbols_where_font_awesome_is_installed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The tools take the user's `[colors]`, and a reload that changes them
-/// writes the files again (for each tool's next start: fuzzel's at the next
-/// Mod+D).
+/// The tools take the user's `[colors]`, the wallpaper too, and a reload that
+/// changes them writes the files again (for each tool's next start: fuzzel's
+/// at the next Mod+D).
 #[test]
 fn the_tools_follow_the_users_colors() {
     let dir = sandbox("colors");
-    let mut pila = start(
-        &dir,
-        &format!(
-            "{}[colors]\nbar-inactive = \"#123456\"\n",
-            example_autostart()
-        ),
-    );
-    ran(&pila, 3);
+    let colors = |toml: &str| {
+        pila::config::Config::from_toml(toml, &|_| None)
+            .unwrap()
+            .colors
+    };
+    let first = "[colors]\nbar-inactive = \"#123456\"\nbackground = \"#101010\"\n";
+    let mut pila = start(&dir, &format!("{}{first}", example_autostart()));
+    ran(&pila, 4);
     let fuzzel = pila.dir.join("pila-tools/fuzzel/fuzzel.ini");
     let mako = pila.dir.join("pila-tools/mako/config");
+    let wallpaper = pila.dir.join("pila-tools/swaybg/wallpaper.png");
     let read = |path: &Path| std::fs::read_to_string(path).unwrap();
     assert!(read(&fuzzel).contains("\nbackground=123456ff\n"));
     assert!(read(&mako).contains("\nbackground-color=#123456\n"));
+    assert_eq!(
+        std::fs::read(&wallpaper).unwrap(),
+        pila::wallpaper::png(&colors(first)).unwrap()
+    );
 
-    pila.write_config(&format!(
-        "{}[colors]\nbar-inactive = \"#654321\"\n",
-        example_autostart()
-    ));
+    let second = "[colors]\nbar-inactive = \"#654321\"\nbackground = \"#202020\"\n";
+    pila.write_config(&format!("{}{second}", example_autostart()));
     pila.wait_log("config reloaded");
+    // The wallpaper is written last.
+    let expected = pila::wallpaper::png(&colors(second)).unwrap();
     let started = Instant::now();
-    while !read(&fuzzel).contains("\nbackground=654321ff\n") {
+    while std::fs::read(&wallpaper).unwrap() != expected {
         assert!(
             started.elapsed() < Duration::from_secs(10),
-            "not rewritten:\n{}",
-            read(&fuzzel)
+            "the wallpaper isn't rewritten"
         );
         std::thread::sleep(Duration::from_millis(10));
     }
+    assert!(read(&fuzzel).contains("\nbackground=654321ff\n"));
     assert!(read(&mako).contains("\nbackground-color=#654321\n"));
     let _ = std::fs::remove_dir_all(&dir);
 }

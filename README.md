@@ -12,8 +12,8 @@
 A stacking (not tiling) Wayland compositor written in Rust on [Smithay](https://github.com/Smithay/smithay).
 Windows float and overlap, with server-side title bars, like a classic desktop. Pila draws
 its window switcher itself; the bar, the launcher, notifications, the wallpaper and lock
-screens come from the usual Wayland tools (by default waybar, fuzzel, mako, swayidle and
-swaylock; swaybg, ...;
+screens come from the usual Wayland tools (by default swaybg, with Pila's wallpaper, waybar,
+fuzzel, mako, swayidle and swaylock;
 [which ones work](https://github.com/igalmarino/pila/blob/main/docs/MANUAL.md#building-your-desktop)).
 
 Why Pila: desktops built on layer shell (a bar, launcher and notifications such as waybar,

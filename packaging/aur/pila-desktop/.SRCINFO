@@ -1,11 +1,12 @@
 pkgbase = pila-desktop
-	pkgdesc = Pila with a desktop: its default bar, launcher, notifications, lock and keys
-	pkgver = 1
+	pkgdesc = Pila with a desktop: its default wallpaper, bar, launcher, notifications, lock and keys
+	pkgver = 2
 	pkgrel = 1
 	url = https://github.com/igalmarino/pila
 	arch = any
 	license = GPL-3.0-or-later
 	depends = pila
+	depends = swaybg
 	depends = kitty
 	depends = waybar
 	depends = fuzzel
@@ -19,6 +20,5 @@ pkgbase = pila-desktop
 	depends = grim
 	depends = slurp
 	depends = wl-clipboard
-	optdepends = swaybg: a wallpaper (set in autostart)
 
 pkgname = pila-desktop

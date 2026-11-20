@@ -1,5 +1,6 @@
 //! A configuration of Pila's own for the standard tools its defaults start
-//! (waybar, mako, the launcher fuzzel, and swaylock from the swayidle line),
+//! (waybar, mako, the launcher fuzzel, swaylock from the swayidle line, and
+//! swaybg, which gets Pila's wallpaper: `wallpaper.rs`),
 //! so that a session looks like one desktop: the user's `[colors]` (the
 //! templates in `resources/tools/` name them `@key@`, `fill`), the title
 //! bars' sans-serif at their size (`text::FONT_SIZE`), square corners. waybar
@@ -14,10 +15,11 @@
 //! is left behind: the files go to `$XDG_RUNTIME_DIR/pila-tools` (`prepare`),
 //! and the example's own commands (`config::is_example_command`, as written)
 //! name them on their command line (`with_configs`: `waybar -c ... -s ...`,
-//! `swaylock -C ...` inside the swayidle line). Only for a tool with no
+//! `swaylock -C ...` inside the swayidle line, `swaybg -i ... -m fit -c ...`). Only
+//! for a tool with no
 //! configuration of the user's (`user_has_config`: any file it reads, a
-//! broken link too), checked at each start of it, so one copied into place
-//! takes over. A command written otherwise is the user's and runs as written.
+//! broken link too; swaybg reads none), checked at each start of it, so one
+//! copied into place takes over. A command written otherwise is the user's and runs as written.
 //! `tool-configs = false` turns it off.
 
 use std::path::{Path, PathBuf};
@@ -31,7 +33,8 @@ pub struct Tool {
     /// The program, as the example's commands run it.
     program: &'static str,
     /// The arguments that point it at Pila's files, inserted after the
-    /// program's name; `{dir}` is `prepare`'s directory.
+    /// program's name; `{dir}` is `prepare`'s directory, and `@key@` a
+    /// `[colors]` key's `rrggbb` (`fill`).
     args: &'static str,
     /// Files the tool reads, relative to the config directory, or to the home
     /// directory when they start with `~/`: any of them there means the user
@@ -90,6 +93,18 @@ const TOOLS: &[Tool] = &[
         with_icons: &[],
     },
     Tool {
+        // No file of its own: `prepare` draws the wallpaper (`wallpaper.rs`).
+        // `fit`, not `fill`: the whole picture on any monitor's shape (its
+        // mark is in a corner, which `fill` would crop), the rest in
+        // `background`, the picture's own. A color without `#`, which the
+        // shell would take for a comment.
+        program: "swaybg",
+        args: "-i {dir}/swaybg/wallpaper.png -m fit -c @background@",
+        existing: &[],
+        files: &[],
+        with_icons: &[],
+    },
+    Tool {
         program: "swaylock",
         args: "-C {dir}/swaylock/config",
         existing: &["swaylock/config", "~/.swaylock/config"],
@@ -126,12 +141,25 @@ fn palette(colors: &Colors) -> [(&'static str, [f32; 4]); 11] {
 
 /// A premultiplied color's `rrggbb`, its alpha left out (the tools draw
 /// these opaque: `snap-preview` is the accent).
-fn rgb_hex([r, g, b, a]: [f32; 4]) -> String {
-    let channel = |c: f32| {
-        let c = if a > 0.0 { c / a } else { c };
-        (c.clamp(0.0, 1.0) * 255.0).round() as u8
-    };
-    format!("{:02x}{:02x}{:02x}", channel(r), channel(g), channel(b))
+fn rgb_hex(color: [f32; 4]) -> String {
+    let [r, g, b] = crate::wallpaper::rgb8(color);
+    format!("{r:02x}{g:02x}{b:02x}")
+}
+
+/// Where swaybg's wallpaper goes, relative to `prepare`'s directory (its
+/// `args` name it).
+const WALLPAPER: &str = "swaybg/wallpaper.png";
+
+/// Write `contents` to `relative` in `dir`: to a file of its own, renamed
+/// into place.
+fn write_into(dir: &Path, relative: &str, contents: &[u8]) -> std::io::Result<()> {
+    let path = dir.join(relative);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let partial = path.with_extension(format!("partial-{}", std::process::id()));
+    std::fs::write(&partial, contents)?;
+    std::fs::rename(&partial, &path)
 }
 
 /// `template` with each `@key@` of `[colors]` replaced by its `rrggbb`.
@@ -144,9 +172,9 @@ pub fn fill(template: &str, colors: &Colors) -> String {
 }
 
 /// Write every tool's files into `dir` in `colors`, waybar's with symbols if
-/// `icon_font`. Each is written to a file of its own and renamed into place,
-/// so a tool starting meanwhile, or another Pila of the same user (nested),
-/// never reads one half written.
+/// `icon_font`, and the wallpaper. Each is written to a file of its own and
+/// renamed into place, so a tool starting meanwhile, or another Pila of the
+/// same user (nested), never reads one half written.
 pub fn prepare(dir: &Path, icon_font: bool, colors: &Colors) -> std::io::Result<()> {
     for tool in TOOLS {
         let files = if icon_font && !tool.with_icons.is_empty() {
@@ -155,16 +183,11 @@ pub fn prepare(dir: &Path, icon_font: bool, colors: &Colors) -> std::io::Result<
             tool.files
         };
         for (relative, contents) in files {
-            let path = dir.join(relative);
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let partial = path.with_extension(format!("partial-{}", std::process::id()));
-            std::fs::write(&partial, fill(contents, colors))?;
-            std::fs::rename(&partial, &path)?;
+            write_into(dir, relative, fill(contents, colors).as_bytes())?;
         }
     }
-    Ok(())
+    let wallpaper = crate::wallpaper::png(colors).map_err(std::io::Error::other)?;
+    write_into(dir, WALLPAPER, &wallpaper)
 }
 
 /// `prepare` in `$XDG_RUNTIME_DIR` (a session's own, gone at logout), with
@@ -231,12 +254,18 @@ pub fn user_has_config(tool: &Tool) -> bool {
 }
 
 /// `command` with `args` after each tool it runs that `configured` says has
-/// no configuration of the user's, pointing it at `dir`'s files: a tool is
+/// no configuration of the user's, pointing it at `dir`'s files (and naming
+/// `colors` where they say so): a tool is
 /// its name as a word of its own (between the start or end, blanks, quotes
 /// and the shell's `;&|()`), so `'swaylock -f'` inside swayidle's line counts.
 /// A `dir` the shell would need quoted (blanks, quotes, `$`) is left out, and
 /// the command runs as written.
-pub fn with_configs(command: &str, dir: &Path, configured: impl Fn(&Tool) -> bool) -> String {
+pub fn with_configs(
+    command: &str,
+    dir: &Path,
+    colors: &Colors,
+    configured: impl Fn(&Tool) -> bool,
+) -> String {
     let Some(dir) = dir.to_str().filter(|dir| {
         dir.chars()
             .all(|c| c.is_ascii_alphanumeric() || "/._-+@:,=".contains(c))
@@ -250,7 +279,7 @@ pub fn with_configs(command: &str, dir: &Path, configured: impl Fn(&Tool) -> boo
         if configured(tool) {
             continue;
         }
-        let args = tool.args.replace("{dir}", dir);
+        let args = fill(&tool.args.replace("{dir}", dir), colors);
         let mut from = 0;
         while let Some(at) = result[from..].find(tool.program).map(|at| at + from) {
             let end = at + tool.program.len();
@@ -517,20 +546,35 @@ mod tests {
         let dir = Path::new("/run/user/1000/pila-tools");
         let none = |_: &Tool| false;
         assert_eq!(
-            with_configs("mako", dir, none),
+            with_configs("mako", dir, &colors(""), none),
             "mako -c /run/user/1000/pila-tools/mako/config"
         );
         assert_eq!(
-            with_configs("swayidle timeout 5 'swaylock -f'", dir, none),
+            with_configs("swayidle timeout 5 'swaylock -f'", dir, &colors(""), none),
             "swayidle timeout 5 'swaylock -C /run/user/1000/pila-tools/swaylock/config -f'"
         );
         // Not part of another word, not a tool the user configured.
-        assert_eq!(with_configs("makoctl reload", dir, none), "makoctl reload");
-        assert_eq!(with_configs("my-waybar", dir, none), "my-waybar");
-        assert_eq!(with_configs("waybar", dir, |_| true), "waybar");
+        assert_eq!(
+            with_configs("makoctl reload", dir, &colors(""), none),
+            "makoctl reload"
+        );
+        assert_eq!(
+            with_configs("my-waybar", dir, &colors(""), none),
+            "my-waybar"
+        );
+        assert_eq!(with_configs("waybar", dir, &colors(""), |_| true), "waybar");
+        // swaybg's arguments name `[colors] background`, as the shell takes it.
+        let dark = colors("[colors]\nbackground = \"#101112\"\n");
+        assert_eq!(
+            with_configs("swaybg", dir, &dark, none),
+            format!(
+                "swaybg -i {}/swaybg/wallpaper.png -m fit -c 101112",
+                dir.display()
+            )
+        );
         // A directory the shell would split: the command as written.
         let spaced = Path::new("/run/my user/pila-tools");
-        assert_eq!(with_configs("waybar", spaced, none), "waybar");
+        assert_eq!(with_configs("waybar", spaced, &colors(""), none), "waybar");
     }
 
     #[test]
@@ -548,7 +592,7 @@ mod tests {
         }
         // Nothing half written left behind.
         let mut partial = Vec::new();
-        for tool in ["waybar", "fuzzel", "mako", "swaylock"] {
+        for tool in ["waybar", "fuzzel", "mako", "swaylock", "swaybg"] {
             for entry in std::fs::read_dir(dir.join(tool)).unwrap() {
                 let name = entry.unwrap().file_name().to_string_lossy().into_owned();
                 if name.contains("partial") {

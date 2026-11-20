@@ -10,15 +10,17 @@
 # docs/INSTALL.md. pkgver goes up when the list changes.
 
 pkgname=pila-desktop
-pkgver=1
+pkgver=2
 pkgrel=1
-pkgdesc='Pila with a desktop: its default bar, launcher, notifications, lock and keys'
+pkgdesc='Pila with a desktop: its default wallpaper, bar, launcher, notifications, lock and keys'
 arch=(any)
 url='https://github.com/igalmarino/pila'
 license=(GPL-3.0-or-later)
 depends=(
     pila
-    # The terminal, bar, launcher and notifications.
+    # The wallpaper (Pila's, drawn by swaybg), terminal, bar, launcher and
+    # notifications.
+    swaybg
     kitty
     waybar
     fuzzel
@@ -36,4 +38,3 @@ depends=(
     slurp
     wl-clipboard
 )
-optdepends=('swaybg: a wallpaper (set in autostart)')

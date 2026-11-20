@@ -50,9 +50,10 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   screenshot tool): its defaults are standard tools packaged by Arch, Debian and Fedora
   (fuzzel, waybar, wpctl, brightnessctl, playerctl, grim, slurp, wl-copy), named in
   `config.example.toml` alone (swayidle and swaylock to lock and turn the monitors off,
-  swaybg for a wallpaper). Where a packaged tool does a job well, Pila uses it rather than
-  growing the feature; what only a compositor can do, Pila draws: title bars and the window
-  switcher's live previews (`switcher_view.rs`).
+  swaybg for the wallpaper, which Pila draws as a PNG in `[colors]`: `wallpaper.rs`). Where
+  a packaged tool does a job well, Pila uses it rather than growing the feature; what only a
+  compositor can do, Pila draws: title bars and the window switcher's live previews
+  (`switcher_view.rs`).
   Programs an older install left are in `scripts/install-paths`' `removed_files`.
 
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,

@@ -2417,8 +2417,8 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: fuzzel, waybar, mako and swayidle come from
-        // config.example.toml, not the code.
+        // As every setting: fuzzel, swaybg, waybar, mako and swayidle come
+        // from config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
         assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
         let programs: Vec<_> = config
@@ -2426,9 +2426,11 @@ mod tests {
             .iter()
             .filter_map(|command| command.split_whitespace().next())
             .collect();
-        assert_eq!(programs, ["waybar", "mako", "swayidle"]);
-        assert!(config.autostart[2].contains("'swaylock -f'"));
-        assert!(config.autostart[2].contains("'pila msg action power-off-monitors'"));
+        assert_eq!(programs, ["swaybg", "waybar", "mako", "swayidle"]);
+        // swaybg alone: Pila gives it its wallpaper (`tool_configs.rs`).
+        assert_eq!(config.autostart[0], "swaybg");
+        assert!(config.autostart[3].contains("'swaylock -f'"));
+        assert!(config.autostart[3].contains("'pila msg action power-off-monitors'"));
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
