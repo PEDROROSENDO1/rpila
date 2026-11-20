@@ -782,8 +782,9 @@ Key flows and invariants:
   size of the panel, drawn on a thread (`Pila::draw_shortcuts_text`: ~30 lines shaped and
   uploaded one by one cost a 7 ms frame; as one image drawn off the loop, 2 ms), asked for again
   from `after_frames` while it's shown whenever what it says changes (an output, the fonts, a
-  reloaded config); the panel is drawn only once its text is there, never empty. The image and
-  the solid buffers are kept in `Buffers` while it's shown. The state dump has it
+  reloaded config); the panel is drawn only once its text is there, never empty. Its background and border
+  have the windows' corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the border's a
+  pixel wider). The image and the solid buffers are kept in `Buffers` while it's shown. The state dump has it
   (`shortcuts_view_json`).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler

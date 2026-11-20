@@ -193,3 +193,33 @@ fn locking_hides_it_and_it_doesnt_show_while_locked() {
         !shown(s)
     });
 }
+
+/// The panel has the windows' corners: by default the top two rounded, as
+/// GTK's; all four with `rounded-corners = "all"`; square with no radius.
+#[test]
+fn the_panel_has_the_windows_corners() {
+    for (config, top_cut, bottom_cut) in [
+        ("corner-radius = 8\n", true, false),
+        ("corner-radius = 8\nrounded-corners = \"all\"\n", true, true),
+        ("", false, false),
+    ] {
+        let mut pila = TestPila::with_config(config);
+        pila.combo("Super+Shift+slash");
+        let state = pila.wait("shown", shown);
+        let (x, y, w, h) = rect(&state["shortcuts_view"]["rect"]);
+        let desktop = pila.pixel(5.0, 5.0);
+        // The band under the heading line, drawn: the text came.
+        pila.wait_pixel_is((x + w - 5) as f64, (y + 28) as f64, "drawn", |p| {
+            p != desktop
+        });
+        // The panel's very corners, its 1 px border just outside.
+        let top = pila.pixel((x - 1) as f64, (y - 1) as f64);
+        let bottom = pila.pixel((x - 1) as f64, (y + h) as f64);
+        assert_eq!(top == desktop, top_cut, "{config:?}: top corner {top:?}");
+        assert_eq!(
+            bottom == desktop,
+            bottom_cut,
+            "{config:?}: bottom corner {bottom:?}"
+        );
+    }
+}

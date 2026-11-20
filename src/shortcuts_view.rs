@@ -202,6 +202,9 @@ pub struct SceneShortcuts {
     pub rows: Vec<(String, &'static str)>,
     /// The lines under the rows.
     pub notes: Vec<String>,
+    /// Its corners, the windows' (`corner-radius`, `rounded-corners`);
+    /// `None`: square.
+    pub rounding: Option<(f64, crate::rounded::Corners)>,
     buffers: Rc<RefCell<Buffers>>,
 }
 
@@ -571,6 +574,10 @@ impl Pila {
             heading,
             rows,
             notes,
+            rounding: (self.config.corner_radius > 0).then_some((
+                f64::from(self.config.corner_radius),
+                self.config.rounded_corners,
+            )),
             buffers: self.shortcuts_view.buffers.clone(),
         })
     }
@@ -650,37 +657,56 @@ pub fn elements(
         Size::from((view.rect.size.w, ROW)),
     );
 
-    let mut solid =
-        |slot: &mut Option<SolidColorBuffer>, rect: Rectangle<i32, Logical>, color: [f32; 4]| {
-            let buffer = slot.get_or_insert_with(|| SolidColorBuffer::new(rect.size, color));
-            buffer.update(rect.size, color);
-            elements.push(PilaRenderElement::Solid(
-                SolidColorRenderElement::from_buffer(
-                    buffer,
-                    physical(rect.loc),
-                    scale,
-                    1.0,
-                    Kind::Unspecified,
-                ),
-            ));
-        };
+    // The windows' corners, if their shaders compiled; else square.
+    let shaders = view
+        .rounding
+        .and_then(|_| crate::rounded::Shaders::get(renderer));
+    let mut solid = |slot: &mut Option<SolidColorBuffer>,
+                     rect: Rectangle<i32, Logical>,
+                     color: [f32; 4],
+                     rounding: Option<(f64, crate::rounded::Corners)>| {
+        let buffer = slot.get_or_insert_with(|| SolidColorBuffer::new(rect.size, color));
+        buffer.update(rect.size, color);
+        let element = SolidColorRenderElement::from_buffer(
+            buffer,
+            physical(rect.loc),
+            scale,
+            1.0,
+            Kind::Unspecified,
+        );
+        elements.push(match (rounding, &shaders) {
+            (Some((radius, corners)), Some(shaders)) => PilaRenderElement::RoundedSolid(
+                crate::rounded::RoundedSolid::new(element, shaders, radius, corners, scale),
+            ),
+            _ => PilaRenderElement::Solid(element),
+        });
+    };
+    // Away from the corners: square.
     solid(
         &mut buffers.heading,
         heading_rect,
         crate::switcher_view::opaque(colors.snap_preview),
+        None,
     );
     solid(
         &mut buffers.background,
         view.rect,
         crate::switcher_view::opaque(colors.bar_inactive),
+        view.rounding,
     );
-    // Square, one pixel around it.
+    // One pixel around it, its corners a pixel wider to follow the curve.
     let outer = Rectangle::new(
         view.rect.loc - Point::from((BORDER, BORDER)),
         view.rect.size + Size::from((2 * BORDER, 2 * BORDER)),
     );
     let [r, g, b] = colors.hover;
-    solid(&mut buffers.border, outer, [r, g, b, 1.0]);
+    solid(
+        &mut buffers.border,
+        outer,
+        [r, g, b, 1.0],
+        view.rounding
+            .map(|(radius, corners)| (radius + f64::from(BORDER), corners)),
+    );
     elements
 }
 
