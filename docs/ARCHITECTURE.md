@@ -771,7 +771,8 @@ Key flows and invariants:
 - **Overview** (`overview.rs`, the `overview` action, Mod+W): while `Pila::overview` is open the
   active workspace's windows (no override-redirect ones; minimized ones too) are laid out per
   output (`Pila::overview_slots`: each window on `window_output`, a minimized one where it'd come
-  back) in the output's usable area less `MARGIN`, in rows, one scale for all, never grown
+  back) in the output's usable area less `MARGIN` and the workspace strip (`strip`, a pure
+  function: with more than one workspace, a row of thumbnails of the output's shape on top), in rows, one scale for all, never grown
   (`arrange`, a pure function: the row count that shows them largest). The places are computed
   from the windows as they are each time they're asked for, so opening, closing, resizing and
   minimizing meanwhile need nothing of their own; `overview_laid_out` (from `after_frames`)
@@ -793,7 +794,17 @@ Key flows and invariants:
   action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the
   window there, the keyboard layout). Picking is `activate_toplevel` (raised, focused, restored).
   A workspace switch while it's open shows the new windows in their places without a slide
-  (`show_workspace`). Opening and closing glide (`[animations] overview`, `Overview::glide`, from
+  (`show_workspace`). The strip (`Pila::overview_strip`) shows each workspace's part of the
+  output, live: `scene_thumbs` gives each thumbnail its windows as they are (the active
+  workspace's from the `Space`, the others' with `scene_window_at` at their parked place; those
+  on all workspaces in every one) and the output's Bottom and Background layer surfaces, and
+  `overview_elements` draws each into a texture of its own (`render::draw_thumbnail`: at the
+  output's scale times the thumbnail's, no blur), kept by output and workspace from one opening to
+  the next (`Overview::thumbnails`) with its own damage tracker, so a quiet workspace costs
+  nothing; their windows get frame callbacks from the output (`frame::send_frames`, as the
+  switcher's), and a commit of one redraws its thumbnail (`overview_committed`). The active
+  workspace's is bordered in the accent color, the one under the pointer in `hover`; a press on
+  one switches there and it stays open. The strip glides down from above the output and fades. Opening and closing glide (`[animations] overview`, `Overview::glide`, from
   where a glide the other way is): each window's `FrameMap` goes `overview_shown` of the way
   from its frame as it is to its place (minimized ones fading with it), and the dimming and
   outline fade. Closing, it's closed to input at once and the windows glide back from the places

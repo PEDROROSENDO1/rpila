@@ -40,7 +40,7 @@ use smithay::{
 use crate::{
     animation::{lerp_rect, Animation, FrameMap, Transform, WindowEffect},
     config::{Action, AnimationKind, Colors, OverviewAction},
-    render::{PilaRenderElement, SceneWindow},
+    render::{OffscreenWindow, PilaRenderElement, SceneWindow},
     snap::Direction,
     Pila,
 };
@@ -51,6 +51,14 @@ const MARGIN: i32 = 48;
 const GAP: i32 = 32;
 /// The selected window's outline, around its frame.
 const OUTLINE: i32 = 4;
+/// The workspace strip: its thumbnails' height, a share of the output's
+/// usable height; between them; above them.
+const STRIP_SHARE: f64 = 0.12;
+const STRIP_GAP: i32 = 16;
+const STRIP_TOP: i32 = 24;
+/// A thumbnail's border, and the active or hovered one's.
+const THUMB_BORDER: i32 = 1;
+const THUMB_BORDER_MARKED: i32 = 3;
 /// What the wallpaper is dimmed with (premultiplied black).
 const DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.45];
 
@@ -63,6 +71,41 @@ pub struct Overview {
     /// Closing: the places the windows glide back from.
     closing: Option<Vec<Slot>>,
     buffers: Rc<RefCell<Buffers>>,
+    /// The workspace thumbnails' textures, by output and workspace: kept
+    /// from one opening to the next, so opening makes none (each has its
+    /// own damage tracker: only what changed meanwhile is drawn again).
+    thumbnails: Rc<RefCell<Thumbnails>>,
+}
+
+/// Each workspace thumbnail's texture, by output name and workspace, with
+/// the size it was made for.
+type Thumbnails = HashMap<(String, usize), (Size<i32, smithay::utils::Physical>, OffscreenWindow)>;
+
+/// A workspace's thumbnail in the strip on top of an output.
+#[derive(Clone)]
+pub struct Thumb {
+    pub output: Output,
+    pub workspace: usize,
+    pub rect: Rectangle<i32, Logical>,
+}
+
+/// A thumbnail as the renderer gets it: what to draw in it, as the output
+/// shows it, and where.
+#[derive(Clone)]
+pub struct SceneThumb {
+    pub output: String,
+    /// The output's place and size: the thumbnail shows all of it.
+    pub output_geo: Rectangle<i32, Logical>,
+    pub workspace: usize,
+    pub rect: Rectangle<i32, Logical>,
+    /// The active workspace's, bordered in the accent color.
+    pub active: bool,
+    /// Under the pointer.
+    pub hovered: bool,
+    /// The workspace's windows on that output, front to back, as they are.
+    pub windows: Vec<SceneWindow>,
+    /// The output's wallpaper (Bottom and Background layer surfaces).
+    pub layers: Vec<crate::render::SceneLayer>,
 }
 
 #[derive(Default)]
@@ -72,6 +115,8 @@ struct Open {
     selected: Option<Window>,
     /// The places last laid out, to redraw the outputs when they change.
     laid_out: Vec<(Window, Rectangle<i32, Logical>)>,
+    /// The workspace thumbnail under the pointer.
+    hovered: Option<Rectangle<i32, Logical>>,
 }
 
 /// Kept between frames while it's open: an unchanged overview adds no
@@ -81,6 +126,9 @@ struct Buffers {
     /// Each output's dimming, by name.
     dim: HashMap<String, SolidColorBuffer>,
     outline: Option<SolidColorBuffer>,
+    /// Each thumbnail's border, and what's under its windows.
+    thumb_borders: HashMap<(String, usize), SolidColorBuffer>,
+    thumb_background: Option<SolidColorBuffer>,
 }
 
 /// A window's place in the overview.
@@ -106,7 +154,61 @@ pub struct SceneOverview {
     pub rounding: Option<(f64, crate::rounded::Corners)>,
     /// How far it's shown (0 to 1): the dimming and outline fade with it.
     pub shown: f32,
+    /// The workspace strips.
+    pub thumbs: Vec<SceneThumb>,
     buffers: Rc<RefCell<Buffers>>,
+    thumbnails: Rc<RefCell<Thumbnails>>,
+}
+
+impl SceneOverview {
+    /// The windows its thumbnails on `output` show, which get frame
+    /// callbacks from it.
+    pub fn thumb_windows<'a>(&'a self, output: &'a str) -> impl Iterator<Item = &'a Window> {
+        self.thumbs
+            .iter()
+            .filter(move |thumb| thumb.output == output)
+            .flat_map(|thumb| thumb.windows.iter().map(|entry| &entry.window))
+    }
+}
+
+/// An output's usable `area` (of an output of `size`) shared between the
+/// strip of `count` workspace thumbnails on top (none for one workspace) and
+/// the windows below: the thumbnails, of the output's shape, centered in a
+/// row, and the windows' area inside `MARGIN`.
+pub fn strip(
+    area: Rectangle<i32, Logical>,
+    size: Size<i32, Logical>,
+    count: usize,
+) -> (Vec<Rectangle<i32, Logical>>, Rectangle<i32, Logical>) {
+    let inner = |top: i32| {
+        Rectangle::new(
+            (area.loc.x + MARGIN, top).into(),
+            (
+                area.size.w - 2 * MARGIN,
+                area.loc.y + area.size.h - MARGIN - top,
+            )
+                .into(),
+        )
+    };
+    if count < 2 || size.w <= 0 || size.h <= 0 {
+        return (Vec::new(), inner(area.loc.y + MARGIN));
+    }
+    let n = count as f64;
+    let mut h = f64::from(area.size.h) * STRIP_SHARE;
+    let mut w = h * f64::from(size.w) / f64::from(size.h);
+    let room = f64::from(area.size.w - 2 * MARGIN) - f64::from(STRIP_GAP) * (n - 1.0);
+    if w * n > room {
+        let fit = (room / (w * n)).max(0.0);
+        (w, h) = (w * fit, h * fit);
+    }
+    let (w, h) = ((w.floor() as i32).max(1), (h.floor() as i32).max(1));
+    let total = w * count as i32 + STRIP_GAP * (count as i32 - 1);
+    let x = area.loc.x + (area.size.w - total) / 2;
+    let y = area.loc.y + STRIP_TOP;
+    let thumbs = (0..count as i32)
+        .map(|i| Rectangle::new((x + i * (w + STRIP_GAP), y).into(), (w, h).into()))
+        .collect();
+    (thumbs, inner(y + h + MARGIN))
 }
 
 /// Places for frames of `sizes` in `area`, in rows, none over another: each
@@ -269,6 +371,7 @@ impl Pila {
         self.overview.open = Some(Open {
             selected: self.focused_window(),
             laid_out: Vec::new(),
+            hovered: None,
         });
         self.overview_laid_out();
         // Every output: windows move, and a fullscreen window's panels show.
@@ -421,6 +524,16 @@ impl Pila {
         if let Some(window) = self.overview_window_at(location) {
             self.select_in_overview(Some(window));
         }
+        let hovered = self.overview_thumb_at(location).map(|thumb| thumb.rect);
+        let Some(open) = self.overview.open.as_mut() else {
+            return;
+        };
+        let before = std::mem::replace(&mut open.hovered, hovered);
+        if before != hovered {
+            for rect in [before, hovered].into_iter().flatten() {
+                self.queue_redraw_rect(thumb_border_rect(rect, THUMB_BORDER_MARKED));
+            }
+        }
     }
 
     /// A press while it's open: on a window it picks that one; beside the
@@ -429,6 +542,11 @@ impl Pila {
     pub(crate) fn overview_press(&mut self, location: Point<f64, Logical>) -> bool {
         if !self.overview_open() {
             return false;
+        }
+        // A workspace's thumbnail goes there, and it stays open.
+        if let Some(thumb) = self.overview_thumb_at(location) {
+            self.switch_workspace(thumb.workspace);
+            return true;
         }
         if let Some(window) = self.overview_window_at(location) {
             self.pick_in_overview(&window);
@@ -466,6 +584,28 @@ impl Pila {
             .map(|slot| slot.output);
         if let Some(output) = output {
             self.queue_redraw_output(&output);
+        }
+        // Its thumbnail: a window on another workspace has no place of its
+        // own on the `Space`.
+        let workspace = self.workspace_of(window);
+        let at = match self.space.element_geometry(window) {
+            Some(geo) => geo,
+            None => frame_at(window, crate::workspaces::space_location(window)),
+        };
+        let rects: Vec<_> = self
+            .overview_strip()
+            .into_iter()
+            .filter(|thumb| {
+                (thumb.workspace == workspace || crate::stacking::is_on_all_workspaces(window))
+                    && self
+                        .space
+                        .output_geometry(&thumb.output)
+                        .is_some_and(|geo| geo.overlaps(at))
+            })
+            .map(|thumb| thumb.rect)
+            .collect();
+        for rect in rects {
+            self.queue_redraw_rect(rect);
         }
     }
 
@@ -516,6 +656,47 @@ impl Pila {
         });
     }
 
+    /// `output`'s workspace strip and the area its windows are laid out in.
+    fn overview_areas(&self, output: &Output) -> Option<(Vec<Thumb>, Rectangle<i32, Logical>)> {
+        let area = self.output_area(output, true)?;
+        let size = self.space.output_geometry(output)?.size;
+        let (rects, windows) = strip(area, size, self.config.workspaces);
+        let thumbs = rects
+            .into_iter()
+            .enumerate()
+            .map(|(workspace, rect)| Thumb {
+                output: output.clone(),
+                workspace,
+                rect,
+            })
+            .collect();
+        Some((thumbs, windows))
+    }
+
+    /// Every output's workspace thumbnails, while it's open.
+    pub fn overview_strip(&self) -> Vec<Thumb> {
+        if !self.overview_open() {
+            return Vec::new();
+        }
+        self.overview_strips()
+    }
+
+    /// Every output's workspace thumbnails, open or not.
+    fn overview_strips(&self) -> Vec<Thumb> {
+        self.space
+            .outputs()
+            .filter_map(|output| self.overview_areas(output))
+            .flat_map(|(thumbs, _)| thumbs)
+            .collect()
+    }
+
+    /// The workspace thumbnail at `location` (global), while it's open.
+    fn overview_thumb_at(&self, location: Point<f64, Logical>) -> Option<Thumb> {
+        self.overview_strip()
+            .into_iter()
+            .find(|thumb| thumb.rect.to_f64().contains(location))
+    }
+
     /// The windows it shows, each with its place: per output, the active
     /// workspace's windows on it (the minimized ones too), laid out in the
     /// part panels leave, in the order they're on screen.
@@ -549,7 +730,7 @@ impl Pila {
             mapped.chain(minimized).collect();
         let mut slots = Vec::new();
         for output in self.space.outputs() {
-            let Some(area) = self.output_area(output, true) else {
+            let Some((_, inner)) = self.overview_areas(output) else {
                 continue;
             };
             let mut here: Vec<&(Window, Output, Rectangle<i32, Logical>)> =
@@ -559,10 +740,6 @@ impl Pila {
                 let center = crate::animation::center(*frame);
                 (center.y as i32, center.x as i32)
             });
-            let inner = Rectangle::new(
-                area.loc + Point::from((MARGIN, MARGIN)),
-                (area.size.w - 2 * MARGIN, area.size.h - 2 * MARGIN).into(),
-            );
             let sizes: Vec<_> = here.iter().map(|(_, _, frame)| frame.size).collect();
             let places = arrange(inner, &sizes);
             slots.extend(
@@ -634,6 +811,69 @@ impl Pila {
         drawn
     }
 
+    /// The workspace strips as `Pila::scene` gives them: each thumbnail
+    /// with the windows of its workspace on its output and the output's
+    /// wallpaper.
+    fn scene_thumbs(&self) -> Vec<SceneThumb> {
+        use smithay::wayland::shell::wlr_layer::Layer;
+        let focused = self.focused_window();
+        let hovered = self.overview.open.as_ref().and_then(|open| open.hovered);
+        let active = self.workspaces.active;
+        let layers = self.layer_surfaces(&[Layer::Bottom, Layer::Background]);
+        // Front to back, each with its workspace (`None`: all of them).
+        let mut windows: Vec<(Option<usize>, SceneWindow)> = self
+            .space
+            .elements()
+            .rev()
+            .filter(|w| !crate::workspaces::is_override_redirect(w))
+            .filter_map(|w| {
+                let workspace = (!crate::stacking::is_on_all_workspaces(w)).then_some(active);
+                Some((
+                    workspace,
+                    self.scene_window(w, focused.as_ref(), None, None)?,
+                ))
+            })
+            .collect();
+        windows.extend(self.workspaces.parked.iter().rev().filter_map(|w| {
+            let loc = crate::workspaces::space_location(w);
+            let entry = self.scene_window_at(w, loc, focused.as_ref(), None, None)?;
+            Some((Some(self.workspace_of(w)), entry))
+        }));
+        self.overview_strips()
+            .into_iter()
+            .filter_map(|thumb| {
+                let output_geo = self.space.output_geometry(&thumb.output)?;
+                Some(SceneThumb {
+                    output: thumb.output.name(),
+                    output_geo,
+                    workspace: thumb.workspace,
+                    rect: thumb.rect,
+                    active: thumb.workspace == active,
+                    hovered: hovered == Some(thumb.rect),
+                    windows: windows
+                        .iter()
+                        .filter(|(workspace, entry)| {
+                            workspace.is_none_or(|w| w == thumb.workspace)
+                                && entry.bounds.overlaps(output_geo)
+                        })
+                        .map(|(_, entry)| entry.clone())
+                        .collect(),
+                    layers: layers
+                        .iter()
+                        .filter(|(_, location)| output_geo.contains(*location))
+                        .map(|(layer, location)| crate::render::SceneLayer {
+                            layer: layer.clone(),
+                            location: *location,
+                            blur: Vec::new(),
+                            popup_blur: Vec::new(),
+                            effect: None,
+                        })
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
     /// The overview for `Pila::scene`, while it's open or gliding closed.
     pub(crate) fn scene_overview(&self) -> Option<SceneOverview> {
         if !self.overview_open() && self.overview.closing.is_none() {
@@ -658,7 +898,9 @@ impl Pila {
                 self.config.rounded_corners,
             )),
             shown: self.overview_shown(self.animation_time()) as f32,
+            thumbs: self.scene_thumbs(),
             buffers: self.overview.buffers.clone(),
+            thumbnails: self.overview.thumbnails.clone(),
         })
     }
 
@@ -679,6 +921,12 @@ impl Pila {
                 "output": slot.output.name(),
                 "rect": rect(slot.rect),
             })).collect::<Vec<_>>(),
+            "strip": self.overview_strip().iter().map(|thumb| serde_json::json!({
+                "output": thumb.output.name(),
+                "workspace": thumb.workspace + 1,
+                "rect": rect(thumb.rect),
+                "active": thumb.workspace == self.workspaces.active,
+            })).collect::<Vec<_>>(),
         })
     }
 }
@@ -687,6 +935,14 @@ impl Pila {
 fn frame_at(window: &Window, loc: Point<i32, Logical>) -> Rectangle<i32, Logical> {
     let geo = Rectangle::new(loc, window.geometry().size);
     crate::decoration::title_bar_rect(window, loc).map_or(geo, |bar| bar.merge(geo))
+}
+
+/// A thumbnail's border around it, `width` wide.
+fn thumb_border_rect(rect: Rectangle<i32, Logical>, width: i32) -> Rectangle<i32, Logical> {
+    Rectangle::new(
+        rect.loc - Point::from((width, width)),
+        rect.size + Size::from((2 * width, 2 * width)),
+    )
 }
 
 /// The selected window's outline around its place.
@@ -738,6 +994,40 @@ pub fn overview_elements(
             _ => PilaRenderElement::Solid(solid),
         });
     }
+    let mut thumbnails = view.thumbnails.borrow_mut();
+    for thumb in view.thumbs.iter().filter(|thumb| shows(thumb.rect)) {
+        // Gliding in from above the output.
+        let rise = (1.0 - f64::from(view.shown))
+            * f64::from(thumb.rect.loc.y + thumb.rect.size.h - thumb.output_geo.loc.y);
+        let rect = thumb.rect.to_f64();
+        let dst = Rectangle::new((rect.loc.x, rect.loc.y - rise).into(), rect.size);
+        if let Some(element) = thumbnail(renderer, &mut thumbnails, buffers, thumb, colors, scale)
+            .map(|(buffer, size)| {
+                crate::render::texture_element(&buffer, size, dst, view.shown, origin, scale)
+            })
+        {
+            elements.push(element);
+        }
+        let (width, color) = if thumb.active {
+            (
+                THUMB_BORDER_MARKED,
+                crate::switcher_view::opaque(colors.snap_preview),
+            )
+        } else if thumb.hovered {
+            (THUMB_BORDER_MARKED, opaque_rgb(colors.hover))
+        } else {
+            (THUMB_BORDER, opaque_rgb(colors.hover))
+        };
+        let border = thumb_border_rect(thumb.rect, width);
+        let buffer = buffers
+            .thumb_borders
+            .entry((thumb.output.clone(), thumb.workspace))
+            .or_insert_with(|| SolidColorBuffer::new(border.size, color));
+        buffer.update(border.size, color);
+        let loc = border.loc - Point::from((0, rise.round() as i32));
+        elements.push(PilaRenderElement::Solid(element(buffer, loc)));
+    }
+    drop(thumbnails);
     for (name, geo) in view.outputs.iter().filter(|(_, geo)| shows(*geo)) {
         let buffer = buffers
             .dim
@@ -747,6 +1037,55 @@ pub fn overview_elements(
         elements.push(PilaRenderElement::Solid(element(buffer, geo.loc)));
     }
     elements
+}
+
+/// An opaque color from an RGB one.
+fn opaque_rgb([r, g, b]: [f32; 3]) -> [f32; 4] {
+    [r, g, b, 1.0]
+}
+
+/// `thumb`'s texture, drawn as its workspace is now, and its size; made
+/// (or made again, for a new size) as needed.
+fn thumbnail(
+    renderer: &mut GlesRenderer,
+    thumbnails: &mut Thumbnails,
+    buffers: &mut Buffers,
+    thumb: &SceneThumb,
+    colors: &Colors,
+    scale: Scale<f64>,
+) -> Option<(
+    smithay::backend::renderer::element::texture::TextureRenderBuffer<
+        smithay::backend::renderer::gles::GlesTexture,
+    >,
+    Size<i32, smithay::utils::Physical>,
+)> {
+    let fit = f64::from(thumb.rect.size.w) / f64::from(thumb.output_geo.size.w.max(1));
+    let inner = Scale::from((scale.x * fit, scale.y * fit));
+    let size = crate::render::texture_size(thumb.rect, scale);
+    let key = (thumb.output.clone(), thumb.workspace);
+    if thumbnails.get(&key).is_none_or(|(made, _)| *made != size) {
+        thumbnails.insert(
+            key.clone(),
+            (size, OffscreenWindow::new(renderer, size, inner)?),
+        );
+    }
+    let (_, target) = thumbnails.get_mut(&key)?;
+    let background = buffers
+        .thumb_background
+        .get_or_insert_with(|| SolidColorBuffer::new(thumb.output_geo.size, colors.background));
+    background.update(thumb.output_geo.size, colors.background);
+    if !crate::render::draw_thumbnail(
+        renderer,
+        target,
+        &thumb.windows,
+        &thumb.layers,
+        background,
+        thumb.output_geo,
+        inner,
+    ) {
+        return None;
+    }
+    Some((target.buffer().clone(), size))
 }
 
 #[cfg(test)]
@@ -808,6 +1147,46 @@ mod tests {
         assert_eq!(places[0].loc.y, places[1].loc.y);
         assert!(places[2].loc.y > places[0].loc.y);
         assert_eq!(places[2].loc.y, places[3].loc.y);
+    }
+
+    #[test]
+    fn the_strip_is_a_row_of_thumbnails_of_the_outputs_shape_above_the_windows() {
+        let area = rect(0, 30, 1920, 1050);
+        let (thumbs, windows) = strip(area, size(1920, 1080), 4);
+        assert_eq!(thumbs.len(), 4);
+        let h = (1050.0 * STRIP_SHARE).floor() as i32;
+        for (i, thumb) in thumbs.iter().enumerate() {
+            assert_eq!(thumb.size.h, h);
+            assert_eq!(
+                thumb.size.w,
+                (f64::from(h) * 1920.0 / 1080.0).floor() as i32
+            );
+            assert_eq!(thumb.loc.y, 30 + STRIP_TOP);
+            if i > 0 {
+                assert_eq!(thumb.loc.x, thumbs[i - 1].loc.x + thumb.size.w + STRIP_GAP);
+            }
+        }
+        // Centered.
+        let (left, right) = (thumbs[0].loc.x, 1920 - (thumbs[3].loc.x + thumbs[3].size.w));
+        assert!((left - right).abs() <= 1, "{left} {right}");
+        // The windows below, inside the margin.
+        assert_eq!(windows.loc.y, 30 + STRIP_TOP + h + MARGIN);
+        assert_eq!(windows.loc.y + windows.size.h, 30 + 1050 - MARGIN);
+        assert_eq!((windows.loc.x, windows.size.w), (MARGIN, 1920 - 2 * MARGIN));
+    }
+
+    #[test]
+    fn many_thumbnails_shrink_to_fit_and_one_workspace_has_none() {
+        let area = rect(0, 0, 1000, 800);
+        let (thumbs, _) = strip(area, size(1000, 800), 9);
+        let last = thumbs.last().unwrap();
+        assert!(thumbs[0].loc.x >= MARGIN && last.loc.x + last.size.w <= 1000 - MARGIN);
+        let (thumbs, windows) = strip(area, size(1000, 800), 1);
+        assert!(thumbs.is_empty());
+        assert_eq!(
+            windows,
+            rect(MARGIN, MARGIN, 1000 - 2 * MARGIN, 800 - 2 * MARGIN)
+        );
     }
 
     #[test]

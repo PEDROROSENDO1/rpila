@@ -195,6 +195,16 @@ pub fn send_frames(scene: &Scene, cursor: Option<&WlSurface>, output: &Output, t
     {
         window.send_frame(output, time, None, |_, _| Some(output.clone()));
     }
+    // So are the overview's workspace thumbnails: the windows of the other
+    // workspaces draw for their output too while it's shown.
+    let name = output.name();
+    for window in scene
+        .overview
+        .iter()
+        .flat_map(|view| view.thumb_windows(&name))
+    {
+        window.send_frame(output, time, None, |_, _| Some(output.clone()));
+    }
     for surface in other_trees(scene, cursor) {
         send_frames_surface_tree(
             surface,

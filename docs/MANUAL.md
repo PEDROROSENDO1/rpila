@@ -185,7 +185,9 @@ another, shrunk where they don't fit, live, over the dimmed wallpaper; minimized
 them, and your bar stays where it is. Click a window to go to it, or move with the arrows (the
 pointer selects too) and press Enter; Escape, `Mod+W` again or a click beside the windows close
 it. Any other binding closes it and does its job, but going to another workspace
-(`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it.
+(`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it. With more than one workspace, a
+strip on top of each monitor shows them all, live, the one you're on in the accent color: click
+one to go there.
 
 **Windows asking for attention.** An app can ask for your attention without taking the focus
 (a chat message, a finished download): its title bar turns amber (`[colors] bar-urgent`), and

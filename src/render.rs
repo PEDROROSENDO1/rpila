@@ -269,6 +269,7 @@ pub struct PopupBlur {
 }
 
 /// A layer surface and where it's drawn, in space coordinates.
+#[derive(Clone)]
 pub struct SceneLayer {
     pub layer: LayerSurface,
     pub location: Point<i32, Logical>,
@@ -796,6 +797,48 @@ fn window_elements(
     }
     elements.extend(ghosts_before(windows.len()));
     elements
+}
+
+/// A workspace's thumbnail for the overview's strip (`overview.rs`): the
+/// output at `output` with `windows` (front to back) over `layers` (its
+/// wallpaper) and `background`, drawn into `target` at `scale` (the output's,
+/// times how much smaller the thumbnail is). Its own damage tracker redraws
+/// only what changed. No blur behind them: a thumbnail is small.
+pub(crate) fn draw_thumbnail(
+    renderer: &mut GlesRenderer,
+    target: &mut OffscreenWindow,
+    windows: &[SceneWindow],
+    layers: &[SceneLayer],
+    background: &SolidColorBuffer,
+    output: Rectangle<i32, Logical>,
+    scale: Scale<f64>,
+) -> bool {
+    let mut elements = window_elements(
+        renderer,
+        windows,
+        &[],
+        output.loc,
+        scale,
+        &mut |_, _, _, _| None,
+        Some(output),
+    );
+    elements.extend(layer_elements(
+        renderer,
+        layers,
+        output.loc,
+        scale,
+        Some(output),
+        None,
+    ));
+    elements.push(solid_element(
+        renderer,
+        background,
+        Point::default(),
+        None,
+        1.0,
+        scale,
+    ));
+    target.draw(renderer, &elements)
 }
 
 /// Where a window's surface elements come from.

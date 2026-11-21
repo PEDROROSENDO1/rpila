@@ -5,6 +5,7 @@
 - **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`
   do only one) spreads the workspace's windows out on their monitors, none over another, shrunk
   where they don't fit, live, over the dimmed wallpaper, minimized ones included; the bar stays.
+  A strip on top shows every workspace, live; click one to go there.
   Click a window to go to it, or select one with the arrows (or the pointer) and press Enter;
   Escape, Mod+W again or a click beside the windows close it. Going to another workspace shows
   that one's windows in it; any other binding closes it first. The cheatsheet lists it. The

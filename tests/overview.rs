@@ -359,3 +359,122 @@ fn opening_it_again_on_its_way_back_turns_it_around() {
     );
     pila.wait("all the way", |s| s["overview"]["shown"] == 1.0);
 }
+
+fn strip(state: &Value) -> Vec<Value> {
+    state["overview"]["strip"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// The accent color, `[colors] snap-preview` made opaque.
+const ACCENT: [u8; 4] = [68, 119, 204, 255];
+
+fn near(a: [u8; 4], b: [u8; 4]) -> bool {
+    (0..3).all(|i| (a[i] as i32 - b[i] as i32).abs() <= 3)
+}
+
+#[test]
+fn the_strip_has_a_thumbnail_per_workspace_above_the_windows_the_active_one_marked() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a", "b"]);
+    let state = open(&mut pila);
+    let thumbs = strip(&state);
+    assert_eq!(thumbs.len() as u64, state["workspaces"].as_u64().unwrap());
+    let active: Vec<_> = thumbs.iter().filter(|t| t["active"] == true).collect();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0]["workspace"], 1);
+    let lowest = thumbs.iter().map(|t| {
+        let (_, y, _, h) = rect(&t["rect"]);
+        y + h
+    });
+    let lowest = lowest.max().unwrap();
+    for app in ["a", "b"] {
+        assert!(slot(&state, app).1 > lowest, "{app} under the strip");
+    }
+    // The active one's border is in the accent color.
+    let (x, y, _, h) = rect(&active[0]["rect"]);
+    pila.wait_pixel_is(
+        (x - 2) as f64,
+        (y + h / 2) as f64,
+        "the accent border",
+        |px| near(px, ACCENT),
+    );
+}
+
+#[test]
+fn one_workspace_has_no_strip() {
+    let mut pila = TestPila::with_config("workspaces = 1\n");
+    let _client = windows(&mut pila, &["a"]);
+    let state = open(&mut pila);
+    assert!(strip(&state).is_empty(), "{}", state["overview"]);
+}
+
+#[test]
+fn a_click_on_a_thumbnail_goes_to_that_workspace_and_stays_open() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+2");
+    pila.wait("workspace 2", |s| s["workspace"] == 2);
+    client.window("b").create();
+    pila.wait_focus("b");
+    pila.combo("Super+1");
+    pila.wait_focus("a");
+    let state = open(&mut pila);
+    let second = strip(&state)
+        .into_iter()
+        .find(|t| t["workspace"] == 2)
+        .unwrap();
+    let (x, y) = center(rect(&second["rect"]));
+    client.roundtrip();
+    let buttons = client.buttons().len();
+    pila.click_at(x, y);
+    let state = pila.wait("on workspace 2, still open", |s| {
+        s["workspace"] == 2 && slots(s).iter().any(|s| s["app_id"] == "b")
+    });
+    assert_eq!(state["overview"]["open"], true);
+    assert!(!slots(&state).iter().any(|s| s["app_id"] == "a"));
+    let active: Vec<_> = strip(&state)
+        .into_iter()
+        .filter(|t| t["active"] == true)
+        .collect();
+    assert_eq!(active[0]["workspace"], 2);
+    client.roundtrip();
+    assert_eq!(client.buttons().len(), buttons);
+}
+
+#[test]
+fn a_thumbnail_shows_its_workspaces_windows_live() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+2");
+    pila.wait("workspace 2", |s| s["workspace"] == 2);
+    let b = client.window("b").color([255, 200, 30, 30]).create();
+    let state = pila.wait_focus("b");
+    let (bx, by, bw, bh) = rect(&window_in(&state, "b").unwrap()["geometry"]);
+    pila.combo("Super+1");
+    pila.wait_focus("a");
+    let state = open(&mut pila);
+    let output = rect(&state["outputs"][0]["geometry"]);
+    let second = strip(&state)
+        .into_iter()
+        .find(|t| t["workspace"] == 2)
+        .unwrap();
+    let (tx, ty, tw, _) = rect(&second["rect"]);
+    let fit = tw as f64 / output.2 as f64;
+    let (x, y) = (
+        tx as f64 + (bx - output.0 + bw / 2) as f64 * fit,
+        ty as f64 + (by - output.1 + bh / 2) as f64 * fit,
+    );
+    pila.wait_pixel_is(x, y, "b in workspace 2's thumbnail", |px| {
+        px[0] > 150 && px[2] < 80
+    });
+    // A new picture on another workspace shows there too.
+    client.with_window(b, |w| w.color = [255, 30, 30, 200]);
+    client.draw(b, None);
+    pila.wait_pixel_is(x, y, "b's new picture", |px| px[2] > 150 && px[0] < 80);
+}
