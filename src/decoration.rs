@@ -652,7 +652,6 @@ mod tests {
         // A fourth look drops the one used longest ago.
         get(&mut slot, 4);
         assert_eq!(slot, [2, 1, 4]);
-        drop(get);
         assert_eq!(made, 4);
         // One that can't be made yet (no fonts) leaves the others.
         assert!(variant(&mut slot, |t| *t == 5, 3, || None).is_none());
