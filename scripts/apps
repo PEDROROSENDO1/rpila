@@ -38,19 +38,31 @@ And the window switcher Pila draws (switcher), with three foot windows:
   - a click on a tile while Alt+Tab is held switches to that window and takes
     it away, leaving no grab.
 
+And the overview Pila draws (overview), with two foot windows and GTK 4's
+widget factory (if installed):
+
+  - Super+w spreads them out, none over another, inside the output, under
+    a strip of a thumbnail per workspace (the windows glide in: animations
+    are on);
+  - a click on one picks it: closed, that window focused with the keyboard,
+    no grab left;
+  - a window dragged onto workspace 2's thumbnail goes there, the overview
+    staying open; Escape closes it;
+  - the pointer pushed into the top-left corner opens it, and again closes it.
+
 Then it judges Pila's log (no panic, no client disconnected for a protocol
 error) and prints PASS/FAIL per check; exits 1 if any failed.
 
   scripts/apps                       every app that's installed
   scripts/apps gtk4 foot ...         some of them (gtk4, foot, kitty,
-                                     weston-terminal, xterm, switcher,
+                                     weston-terminal, xterm, switcher, overview,
                                      fcitx5-foot, fcitx5-gtk4)
 
 Results go to pila-apps/<app>/: Pila's log (pila.log), the app's
 (app.log) and a screenshot at the end (grim, if installed). Uses
 target/release/pila, or PILA_BIN. Needs python3 and dbus-run-session
 (package dbus); xterm needs Xwayland; fcitx5-gtk4 reads the text back with
-wl-paste (package wl-clipboard); switcher needs foot. Standard
+wl-paste (package wl-clipboard); switcher and overview need foot. Standard
 library only.
 """
 
@@ -419,9 +431,106 @@ class Workload:
         self.ctl(cmd="key", key="Alt_L", state="release")
         return self.finish()
 
+    # --- the overview Pila draws ---
+
+    def overview_open(self, state):
+        return state["overview"]["open"]
+
+    def run_overview(self):
+        """The overview Pila draws (module docs)."""
+        self.mark(f"{self.app} begin")
+        log = open(os.path.join(self.out, "app.log"), "a")
+        apps = [("ov-a", ["foot", "--app-id", "ov-a"]), ("ov-b", ["foot", "--app-id", "ov-b"])]
+        if shutil.which("gtk4-widget-factory"):
+            apps.append(("org.gtk.WidgetFactory4", ["gtk4-widget-factory"]))
+        for app_id, command in apps:
+            subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
+            if not self.check(f"{app_id} opens", self.wait(lambda s: s["focused"] == app_id, 20) is not None):
+                return self.finish()
+        time.sleep(1.0)
+        names = [app_id for app_id, _ in apps]
+
+        def rect(r):
+            return r["x"], r["y"], r["w"], r["h"]
+
+        def overlap(a, b):
+            return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+        def center(r):
+            return r["x"] + r["w"] // 2, r["y"] + r["h"] // 2
+
+        # Opened: every window in a place of its own, under the strip.
+        self.ctl(cmd="key", key="Super_L", state="press")
+        self.ctl(cmd="key", key="w", state="tap")
+        self.ctl(cmd="key", key="Super_L", state="release")
+        state = self.wait(lambda s: self.overview_open(s) and s["overview"]["shown"] == 1.0, 5)
+        if not self.check("Super+w opens it", state is not None, "not within 5 s"):
+            return self.finish()
+        view = state["overview"]
+        places = [rect(s["rect"]) for s in view["slots"]]
+        inside = all(0 <= x and 0 <= y and x + w <= 1920 and y + h <= 1080 for x, y, w, h in places)
+        apart = not any(overlap(a, b) for i, a in enumerate(places) for b in places[i + 1:])
+        strip_bottom = max((t["rect"]["y"] + t["rect"]["h"] for t in view["strip"]), default=0)
+        below = all(y > strip_bottom for _, y, _, _ in places)
+        self.check("every window has a place, none over another, inside the output, under the strip",
+                   sorted(s["app_id"] for s in view["slots"]) == sorted(names) and inside and apart and below,
+                   f"{view}")
+        self.check("a thumbnail per workspace", len(view["strip"]) == state["workspaces"], f"{view['strip']}")
+        if shutil.which("grim"):
+            time.sleep(0.3)
+            subprocess.run(["grim", os.path.join(self.out, "overview.png")], check=False)
+
+        # A click picks a window.
+        pick = next(s for s in view["slots"] if s["app_id"] != state["focused"])
+        self.move(*center(pick["rect"]))
+        time.sleep(0.1)
+        self.ctl(cmd="button", button="left", state="click")
+        state = self.wait(lambda s: not self.overview_open(s) and s["focused"] == pick["app_id"]
+                          and s["overview"]["shown"] == 0.0, 5)
+        now = self.state()
+        self.check("a click on a window picks it: closed, focused, no grab left",
+                   state is not None and not now["pointer"]["grabbed"]
+                   and now["keyboard_focus"] == pick["app_id"],
+                   f"open {now['overview']['open']}, focused {now['focused']}, "
+                   f"keyboard {now['keyboard_focus']}, grab {now['pointer']['grab']}")
+
+        # A window dragged onto workspace 2's thumbnail goes there.
+        self.ctl(cmd="key", key="Super_L", state="press")
+        self.ctl(cmd="key", key="w", state="tap")
+        self.ctl(cmd="key", key="Super_L", state="release")
+        state = self.wait(lambda s: self.overview_open(s) and s["overview"]["shown"] == 1.0, 5)
+        if self.check("Super+w opens it again", state is not None):
+            moved = state["overview"]["slots"][0]
+            thumb = next(t for t in state["overview"]["strip"] if t["workspace"] == 2)
+            start = center(moved["rect"])
+            end = center(thumb["rect"])
+            self.drag(start, (end[0] - start[0], end[1] - start[1]))
+            state = self.wait(lambda s: next(w for w in s["windows"] if w["app_id"] == moved["app_id"])
+                              ["workspace"] == 2, 3)
+            now = self.state()
+            self.check("dragged onto workspace 2's thumbnail, it goes there, still open, no grab left",
+                       state is not None and self.overview_open(now) and not now["pointer"]["grabbed"],
+                       f"open {now['overview']['open']}, grab {now['pointer']['grab']}")
+            self.ctl(cmd="key", key="Escape", state="tap")
+            state = self.wait(lambda s: not self.overview_open(s) and s["overview"]["shown"] == 0.0, 5)
+            self.check("Escape closes it", state is not None)
+
+        # The hot corner, there and back.
+        self.move(500, 500)
+        self.move(0, 0)
+        opened = self.wait(self.overview_open, 3)
+        self.move(500, 500)
+        self.move(0, 0)
+        closed = self.wait(lambda s: not self.overview_open(s), 3)
+        self.check("the top-left corner opens it, and again closes it",
+                   opened is not None and closed is not None)
+        return self.finish()
+
     def run(self):
         if self.app == "switcher":
             return self.run_switcher()
+        if self.app == "overview":
+            return self.run_overview()
         if self.app in IME_APPS:
             return self.run_ime()
         command, _ = APPS[self.app]
@@ -548,7 +657,7 @@ def missing_for(app):
     if app in APPS:
         command = APPS[app][0]
         return "" if shutil.which(command[0]) else f"{command[0]} not installed"
-    if app == "switcher":
+    if app in ("switcher", "overview"):
         return "" if shutil.which("foot") else "foot not installed"
     command, how = IME_APPS[app]
     tools = [command("")[0], "fcitx5"]
@@ -568,7 +677,7 @@ def main(argv):
     if argv and argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0
-    names = list(APPS) + ["switcher"] + list(IME_APPS)
+    names = list(APPS) + ["switcher", "overview"] + list(IME_APPS)
     unknown = [a for a in argv if a not in names]
     if unknown:
         print(f"unknown app {unknown[0]!r}: one of {', '.join(names)}", file=sys.stderr)

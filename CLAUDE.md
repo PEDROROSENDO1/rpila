@@ -103,7 +103,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `pila-check.log`) is for you: run it before asking the user to check anything; the user
   runs plain `scripts/check` from a TTY (log in `pila-tty.log`) for bare metal. What it
   checks and when a feature adds a scenario: `scripts/CLAUDE.md`.
-- Real apps: `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm ...]` drags, clicks,
+- Real apps: `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm|switcher|overview ...]` drags, clicks,
   maximizes and snaps real apps' windows with real input on a sealed headless Pila and checks
   they follow the pointer and leave no grab; `fcitx5-foot` and `fcitx5-gtk4` type Chinese
   through fcitx5 into a terminal and a GTK text field (`scripts/CLAUDE.md`): after changing

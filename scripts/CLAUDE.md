@@ -66,6 +66,15 @@ away, on the window switched to; and with Alt+Tab held (Alt isn't Mod there), a 
 tile switches to the least recent window and takes it away, with no grab left. Run it after
 changing the switcher, `switcher.rs` or `switcher_view.rs`.
 
+`overview` drives the overview Pila draws (`run_overview`) with two foot windows and GTK 4's
+widget factory (if installed), animations on, reading it from the state (`overview`): Super+w
+opens it, every window in a place of its own inside the output, none over another, under the
+strip, a thumbnail per workspace (`overview.png`: real apps in their places); a click on one picks
+it, closed with that window focused and holding the keyboard, no grab left; opened again, a window
+dragged onto workspace 2's thumbnail goes there with the overview still open and no grab left, and
+Escape closes it; the pointer pushed into the top-left corner opens it and, back again, closes it.
+Run it after changing `overview.rs` or the input paths it takes.
+
 `fcitx5-foot` and `fcitx5-gtk4` type through a real input method instead (`run_ime`; skipped
 where fcitx5 or Rime's `luna_pinyin` isn't installed): fcitx5 starts in the sealed HOME with Rime
 as its input method, on from the start, and that one schema (deploying all of Rime's takes
