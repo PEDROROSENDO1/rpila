@@ -660,7 +660,7 @@ fn an_output_placed_right_of_a_scaled_one_doesnt_overlap_it() {
 
 // --- Monitors (`edid.rs`) ---------------------------------------------------------
 
-const MONITOR: &str = "=LEN/P27h-30/ABC";
+const MONITOR: &str = "=GSM/27GL850/ABC";
 
 fn scale_of(state: &Value, output: &str) -> f64 {
     let outputs = state["outputs"].as_array().unwrap();
@@ -684,7 +684,7 @@ fn a_section_naming_a_model_follows_the_monitor_to_any_connector() {
     for connector in ["B", "C"] {
         let mut pila = with_monitor_on(
             connector,
-            "[[output]]\nname = \"LEN P27h-30\"\nscale = 2.0\n",
+            "[[output]]\nname = \"GSM 27GL850\"\nscale = 2.0\n",
         );
         let state = pila.wait("the monitor at 2", |s| scale_of(s, connector) == 2.0);
         assert_eq!(scale_of(&state, "A"), 1.0);
@@ -696,8 +696,8 @@ fn a_section_naming_the_monitor_itself_wins_over_its_model_and_connector() {
     let mut pila = with_monitor_on(
         "B",
         "[[output]]\nname = \"B\"\nscale = 1.25\n\
-         [[output]]\nname = \"LEN P27h-30\"\nscale = 1.5\n\
-         [[output]]\nname = \"LEN P27h-30 ABC\"\nscale = 2.0\n",
+         [[output]]\nname = \"GSM 27GL850\"\nscale = 1.5\n\
+         [[output]]\nname = \"GSM 27GL850 ABC\"\nscale = 2.0\n",
     );
     pila.wait("the monitor's section", |s| scale_of(s, "B") == 2.0);
 }
@@ -706,15 +706,15 @@ fn a_section_naming_the_monitor_itself_wins_over_its_model_and_connector() {
 fn a_section_for_another_monitor_doesnt_apply() {
     let mut pila = with_monitor_on(
         "B",
-        "[[output]]\nname = \"LEN Other\"\nscale = 2.0\n\
-         [[output]]\nname = \"LEN P27h-30 XYZ\"\nscale = 2.0\n",
+        "[[output]]\nname = \"GSM Other\"\nscale = 2.0\n\
+         [[output]]\nname = \"GSM 27GL850 XYZ\"\nscale = 2.0\n",
     );
     assert_eq!(scale_of(&pila.settle(), "B"), 1.0);
 }
 
 #[test]
 fn a_monitor_going_away_takes_its_section_with_it() {
-    let mut pila = with_monitor_on("B", "[[output]]\nname = \"LEN P27h-30\"\nscale = 2.0\n");
+    let mut pila = with_monitor_on("B", "[[output]]\nname = \"GSM 27GL850\"\nscale = 2.0\n");
     pila.wait("the monitor at 2", |s| scale_of(s, "B") == 2.0);
     pila.request(json!({ "cmd": "output_remove", "name": "B" }));
     pila.wait("gone", |s| s["outputs"].as_array().unwrap().len() == 1);
@@ -727,7 +727,7 @@ fn a_monitor_going_away_takes_its_section_with_it() {
 
 #[test]
 fn a_tools_setting_stays_until_the_monitors_section_is_edited() {
-    let mut pila = with_monitor_on("B", "[[output]]\nname = \"LEN P27h-30\"\nscale = 2.0\n");
+    let mut pila = with_monitor_on("B", "[[output]]\nname = \"GSM 27GL850\"\nscale = 2.0\n");
     pila.wait("the monitor at 2", |s| scale_of(s, "B") == 2.0);
     let (client, manager) = manager(&pila);
     let configuration = configuration(&client, &manager);
@@ -739,7 +739,7 @@ fn a_tools_setting_stays_until_the_monitors_section_is_edited() {
     client.wait_logged("config", "Succeeded");
     pila.wait("B at 1.5", |s| scale_of(s, "B") == 1.5);
     // Its section edited: the file takes over again.
-    pila.write_config("[[output]]\nname = \"LEN P27h-30\"\nscale = 1.25\n");
+    pila.write_config("[[output]]\nname = \"GSM 27GL850\"\nscale = 1.25\n");
     pila.wait("B at 1.25", |s| scale_of(s, "B") == 1.25);
 }
 
@@ -751,12 +751,12 @@ fn clients_get_the_monitors_make_model_and_serial() {
     });
     let state = pila.state();
     let outputs = state["outputs"].as_array().unwrap();
-    assert_eq!(outputs[1]["make"], "LEN");
-    assert_eq!(outputs[1]["model"], "P27h-30");
+    assert_eq!(outputs[1]["make"], "GSM");
+    assert_eq!(outputs[1]["model"], "27GL850");
     assert_eq!(outputs[0]["make"], "pila");
     let (client, _manager) = manager(&pila);
-    client.wait_logged("head", "Make { make: \"LEN\" }");
-    client.wait_logged("head", "Model { model: \"P27h-30\" }");
+    client.wait_logged("head", "Make { make: \"GSM\" }");
+    client.wait_logged("head", "Model { model: \"27GL850\" }");
     client.wait_logged("head", "SerialNumber { serial_number: \"ABC\" }");
     client.wait_logged("head", "Make { make: \"pila\" }");
 }

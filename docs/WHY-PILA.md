@@ -119,7 +119,7 @@ nothing changed.
   window or layer surface appears or a window changes size (apps busy on the GPU then), nor
   with tearing or adaptive sync; a held frame is let go at once if the scene stops being
   steady, and one that still comes late turns it off on that output for two seconds. On the
-  author's laptop: 25.8 to 21.3 ms and 28.5 to 21.7 ms from a redraw asked for to the vblank
+  development laptop: 25.8 to 21.3 ms and 28.5 to 21.7 ms from a redraw asked for to the vblank
   that showed it, no refresh missed with two monitors or the laptop's screen alone on battery.
   `render-late = false` turns it off.
 - **Measured, not assumed:** `RUST_LOG=pila::frames=debug` logs, per output every 5 s, frame

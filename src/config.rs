@@ -1013,7 +1013,7 @@ const MAX_WHEEL_BINDING_COOLDOWN: u32 = 1000;
 
 /// `[[output]]`: settings for one monitor, matched by connector name
 /// (`eDP-1`, `DP-1`, `HDMI-A-1`, ...; `winit` is the nested window) or by the
-/// monitor's make and model, with or without its serial (`LEN P27h-30`).
+/// monitor's make and model, with or without its serial (`GSM 27GL850`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputConfig {
     pub name: String,
@@ -3494,18 +3494,18 @@ mod tests {
             name = "DP-1"
             scale = 1.25
             [[output]]
-            name = "LEN P27h-30"
+            name = "GSM 27GL850"
             scale = 1.5
             [[output]]
-            name = "LEN P27h-30 ABC"
+            name = "GSM 27GL850 ABC"
             scale = 2.0
             "#,
             &no_env,
         )
         .unwrap();
         let monitor = |serial: Option<&str>| Monitor {
-            make: "LEN".into(),
-            model: "P27h-30".into(),
+            make: "GSM".into(),
+            model: "27GL850".into(),
             serial: serial.map(str::to_string),
         };
         let scale = |name: &str, monitor: Option<&Monitor>| {

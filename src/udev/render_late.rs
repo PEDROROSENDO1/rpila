@@ -36,8 +36,8 @@
 //! before the vblank it aimed at it was ready (`spare`), both in the frame
 //! statistics (`frame_stats.rs`).
 //!
-//! Why the margin is what it is, from TTY runs on the author's laptop (AMD
-//! Renoir, 60 Hz): counted from when a held frame was meant to be drawn and
+//! Why the margin is what it is, from TTY runs on an AMD Renoir laptop
+//! (60 Hz): counted from when a held frame was meant to be drawn and
 //! without the other outputs' worst, it left 1-3 ms instead of 3-8 and saved
 //! 0.7-1.8 ms of latency, but an app starting up on the same GPU made a held
 //! frame late twice in three runs. With the laptop's screen alone on battery
@@ -66,7 +66,7 @@ const SETTLING: Duration = Duration::from_millis(300);
 
 /// The margin is never less than the period divided by this: half a period.
 /// With one output, the worst of its own recent frames plus `SLACK` (4-5 ms
-/// on the author's laptop) let apps busy on the GPU in a steady scene (a
+/// on an AMD Renoir laptop) let apps busy on the GPU in a steady scene (a
 /// shell's panel animating itself, its new blurred popup) make a held frame
 /// late on battery; two outputs had 7.7-8.3 ms and none. Half a period keeps
 /// that, and the latency it gained.

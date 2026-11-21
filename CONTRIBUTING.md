@@ -87,7 +87,7 @@ by hand) runs every target for a few minutes and keeps what crashed.
 
 Pila is developed in a dev container on any Linux host with Docker, from inside Pila itself
 (or another desktop, kept as a fallback session), with **Claude Code** running inside the
-container. (The author's host is Arch, with Pila as its only desktop.)
+container.
 
 - An Arch Linux image with Rust stable (rust-analyzer, clippy, rustfmt), mold, gdb, and
   every library Pila needs (winit, DRM/KMS, libinput)

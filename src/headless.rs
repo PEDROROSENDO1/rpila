@@ -1347,20 +1347,20 @@ mod tests {
             ]
         );
         assert!(parse_output_spec("A").is_err());
-        let monitor = parse_output_spec("A:800x600=LEN/P27h 30/ABC")
+        let monitor = parse_output_spec("A:800x600=GSM/27GL 850/ABC")
             .unwrap()
             .monitor;
         assert_eq!(
             monitor,
             Some(Monitor {
-                make: "LEN".into(),
-                model: "P27h 30".into(),
+                make: "GSM".into(),
+                model: "27GL 850".into(),
                 serial: Some("ABC".into()),
             })
         );
-        let monitor = parse_output_spec("A:800x600=LEN/P27h").unwrap().monitor;
+        let monitor = parse_output_spec("A:800x600=GSM/27GL").unwrap().monitor;
         assert_eq!(monitor.unwrap().serial, None);
-        assert!(parse_output_spec("A:800x600=LEN").is_err());
+        assert!(parse_output_spec("A:800x600=GSM").is_err());
         assert!(parse_output_spec(":800x600").is_err());
         assert!(parse_output_spec("A:800").is_err());
         assert!(parse_output_spec("A:0x600").is_err());

@@ -4,7 +4,7 @@
 //!
 //! Only the 128-byte base block is read: it has all of this, so pila needs no
 //! EDID library (`smithay-drm-extras`' binds an old libdisplay-info). The make
-//! stays the three-letter PNP code (`LEN`): the full name would take a table.
+//! stays the three-letter PNP code (`GSM`): the full name would take a table.
 //! Serials identify a person's hardware: they aren't logged.
 
 /// The EDID's base block.
@@ -103,12 +103,12 @@ pub fn parse(edid: &[u8]) -> Option<Monitor> {
 mod tests {
     use super::*;
 
-    /// An EDID from make LEN, product 0x63A1, with these display descriptors.
+    /// An EDID from make GSM, product 0x63A1, with these display descriptors.
     fn edid(number: u32, descriptors: &[(u8, &str)]) -> Vec<u8> {
         let mut edid = vec![0; BLOCK];
         edid[..8].copy_from_slice(&HEADER);
-        // L, E, N.
-        edid[8..10].copy_from_slice(&((12u16 << 10) | (5 << 5) | 14).to_be_bytes());
+        // G, S, M.
+        edid[8..10].copy_from_slice(&((7u16 << 10) | (19 << 5) | 13).to_be_bytes());
         edid[10..12].copy_from_slice(&0x63a1u16.to_le_bytes());
         edid[12..16].copy_from_slice(&number.to_le_bytes());
         // The first descriptor is a timing: a non-zero pixel clock.
@@ -128,12 +128,12 @@ mod tests {
 
     #[test]
     fn a_monitor_gives_its_make_name_and_serial() {
-        let monitor = parse(&edid(7, &[(TAG_SERIAL, "ABC123"), (TAG_NAME, "P27h-30")])).unwrap();
+        let monitor = parse(&edid(7, &[(TAG_SERIAL, "ABC123"), (TAG_NAME, "27GL850")])).unwrap();
         assert_eq!(
             monitor,
             Monitor {
-                make: "LEN".into(),
-                model: "P27h-30".into(),
+                make: "GSM".into(),
+                model: "27GL850".into(),
                 serial: Some("ABC123".into()),
             }
         );
@@ -207,13 +207,13 @@ mod tests {
     #[test]
     fn a_monitor_answers_to_its_model_and_to_itself() {
         let monitor = Monitor {
-            make: "LEN".into(),
-            model: "P27h-30".into(),
+            make: "GSM".into(),
+            model: "27GL850".into(),
             serial: Some("ABC".into()),
         };
-        assert!(monitor.is_model("LEN P27h-30"));
-        assert!(!monitor.is_model("LEN P27h-31"));
-        assert!(monitor.is_exactly("LEN P27h-30 ABC"));
-        assert!(!monitor.is_exactly("LEN P27h-30"));
+        assert!(monitor.is_model("GSM 27GL850"));
+        assert!(!monitor.is_model("GSM 27GL851"));
+        assert!(monitor.is_exactly("GSM 27GL850 ABC"));
+        assert!(!monitor.is_exactly("GSM 27GL850"));
     }
 }

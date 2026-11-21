@@ -47,8 +47,8 @@ Pila needs no systemd: logind, elogind or seatd will do.
 
 ## Status
 
-Pila is **alpha**. Its author uses it as their only desktop, but it has been developed on one
-machine: an AMD laptop with an external monitor, on Arch Linux. Testers report it working on
+Pila is **alpha**. It's usable day to day, but it has been developed on one machine: an AMD
+laptop with an external monitor, on Arch Linux. Testers report it working on
 Intel GPUs, on Debian, NixOS, and on one NVIDIA card (a GTX 1060).
 
 Known gaps: touchscreens and drawing tablets. Monitors wired to a second GPU are off by
@@ -91,8 +91,7 @@ into English. The commits it worked on carry a `Co-Authored-By` trailer, and the
 instructions it works under are public, in [CLAUDE.md](https://github.com/igalmarino/pila/blob/main/CLAUDE.md).
 
 The AI doesn't make the decisions. The important ones, on technology, architecture,
-security, testing and more, are mine; I'm a software developer with over 30 years of
-experience. I review the code that goes in and I answer for it, and every feature has
+security, testing and more, are mine. I review the code that goes in and I answer for it, and every feature has
 integration tests that CI runs on every push. In other projects, I follow their rules on
 AI. More about how that works, and what has gone wrong so far, in
 [How Pila is made](https://github.com/igalmarino/pila/blob/main/docs/HOW-PILA-IS-MADE.md).

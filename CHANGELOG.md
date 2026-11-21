@@ -205,7 +205,7 @@
   the last few seconds of frames took, CPU and GPU, and is never under half a refresh; a frame
   that comes late anyway makes Pila draw at once on that monitor for two seconds. Not during
   Pila's animations, nor for a moment after a window or panel opens or a window changes size (its
-  app is busy on the GPU then), nor while a game tears or with adaptive sync. On the author's
+  app is busy on the GPU then), nor while a game tears or with adaptive sync. On an AMD
   laptop with an external monitor, from a redraw asked for to the refresh that showed it: 25.8 to
   21.3 ms on the laptop's screen, 28.5 to 21.7 ms on the monitor, no refresh missed.
   `render-late = false` turns it off.
@@ -770,7 +770,7 @@ All of this was tried on one AMD laptop with an external monitor; other GPUs are
 - **Windows:** dialogs and other transient windows stay above their parent and follow
   it to other workspaces.
 - **Monitors:** make, model and serial come from the monitor's EDID, for clients and for
-  `[[output]]` sections that name a monitor (`name = "LEN P27h-30"`) instead of a
+  `[[output]]` sections that name a monitor (`name = "GSM 27GL850"`) instead of a
   connector. A monitor plugged in while on another VT comes on when you're back.
 - **Security:** sandboxed apps (Flatpak) no longer see ext-workspace,
   keyboard-shortcuts-inhibit or ext-idle-notify: they can't switch workspaces, take
