@@ -1345,6 +1345,7 @@ struct ConfigFile {
     animations: AnimationsFile,
     cursor: CursorFile,
     xwayland: XwaylandFile,
+    overview: OverviewFile,
     idle: IdleFile,
     wallpaper: WallpaperFile,
     environment: BTreeMap<String, EnvFile>,
@@ -1591,6 +1592,33 @@ impl XwaylandFile {
     }
 }
 
+/// `[overview]` (`overview.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OverviewConfig {
+    /// The pointer pushed into an output's top-left corner opens it (or
+    /// closes it).
+    pub hot_corner: bool,
+}
+
+/// `[overview]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct OverviewFile {
+    hot_corner: Option<bool>,
+}
+
+impl OverviewFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(self, example, OverviewFile { hot_corner })
+    }
+
+    fn validate(self) -> Result<OverviewConfig, String> {
+        Ok(OverviewConfig {
+            hot_corner: need(self.hot_corner, "overview.hot-corner")?,
+        })
+    }
+}
+
 /// A time in seconds as written, or `false` for never.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(
@@ -1787,6 +1815,8 @@ pub struct Config {
     pub cursor: CursorConfig,
     /// `[xwayland]`: stopping it when unused.
     pub xwayland: XwaylandConfig,
+    /// `[overview]`: how it opens besides its binding (`overview.rs`).
+    pub overview: OverviewConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -2044,6 +2074,7 @@ impl Config {
         let animations = file.animations.or_example(example.animations).validate()?;
         let cursor = file.cursor.or_example(example.cursor).validate()?;
         let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
+        let overview = file.overview.or_example(example.overview).validate()?;
         let idle_warning = file.idle.warning();
         let wallpaper_warning = file.wallpaper.warning();
         let window_rules = file
@@ -2199,6 +2230,7 @@ impl Config {
             animations,
             cursor,
             xwayland,
+            overview,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -3676,7 +3708,7 @@ mod tests {
             .bindings
             .iter()
             .any(|b| b.action == Action::Spawn("kitty -e htop".into())));
-        let text = uncomment(r#"# "swipe-4-up" = "snap-left""#);
+        let text = uncomment(r#"# "swipe-5-left" = "snap-left""#);
         if let Err(err) = Config::from_toml(&text, &no_env) {
             panic!("an example gesture uncommented: {err}");
         }

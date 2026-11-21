@@ -579,3 +579,102 @@ fn a_minimized_window_dragged_to_a_workspace_stays_minimized_there() {
     let state = pila.wait("workspace 2", |s| s["workspace"] == 2);
     assert_eq!(window_in(&state, "b").unwrap()["minimized"], true);
 }
+
+#[test]
+fn the_hot_corner_opens_it_and_again_closes_it_once_each_time() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a"]);
+    pila.move_to(100.0, 100.0);
+    pila.move_to(0.0, 0.0);
+    pila.wait("opened", |s| s["overview"]["open"] == true);
+    // Still in the corner: nothing more.
+    pila.move_to(0.5, 0.5);
+    pila.stays("still open", Duration::from_millis(200), |s| {
+        s["overview"]["open"] == true
+    });
+    pila.move_to(60.0, 60.0);
+    pila.move_to(0.0, 0.0);
+    pila.wait("closed", |s| s["overview"]["open"] == false);
+}
+
+#[test]
+fn the_hot_corner_can_be_turned_off() {
+    let mut pila = TestPila::with_config("[overview]\nhot-corner = false\n");
+    let _client = windows(&mut pila, &["a"]);
+    pila.move_to(100.0, 100.0);
+    pila.move_to(0.0, 0.0);
+    pila.stays("closed", Duration::from_millis(300), |s| {
+        s["overview"]["open"] == false
+    });
+}
+
+#[test]
+fn the_hot_corner_does_nothing_over_a_fullscreen_window_or_with_a_button_held() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a"]);
+    pila.combo("Super+f");
+    pila.wait("fullscreen", |s| {
+        window_in(s, "a").unwrap()["fullscreen"] == true
+    });
+    pila.move_to(300.0, 300.0);
+    pila.move_to(0.0, 0.0);
+    pila.stays(
+        "closed: a fullscreen window",
+        Duration::from_millis(300),
+        |s| s["overview"]["open"] == false,
+    );
+    pila.combo("Super+f");
+    let state = pila.wait("back", |s| {
+        window_in(s, "a").unwrap()["fullscreen"] == false
+    });
+    let (x, y) = center(rect(&window_in(&state, "a").unwrap()["geometry"]));
+    pila.move_to(x, y);
+    pila.press("left");
+    pila.move_to(0.0, 0.0);
+    pila.release("left");
+    pila.stays(
+        "closed: a button was held",
+        Duration::from_millis(300),
+        |s| s["overview"]["open"] == false,
+    );
+}
+
+#[test]
+fn only_a_corner_of_the_whole_layout_is_hot() {
+    let mut pila = TestPila::start_with(Options {
+        outputs: Some("A:1280x800,B:1024x768".into()),
+        ..Options::default()
+    });
+    let _client = windows(&mut pila, &["a"]);
+    // B's top-left touches A: the pointer goes through it.
+    pila.move_to(1300.0, 100.0);
+    pila.move_to(1280.0, 0.0);
+    pila.stays("closed", Duration::from_millis(300), |s| {
+        s["overview"]["open"] == false
+    });
+    pila.move_to(0.0, 0.0);
+    pila.wait("A's corner opens it", |s| s["overview"]["open"] == true);
+}
+
+fn swipe(pila: &mut TestPila, fingers: u32, steps: &[(f64, f64)]) {
+    pila.gesture(json!({ "kind": "swipe", "phase": "begin", "fingers": fingers }));
+    for (dx, dy) in steps {
+        pila.gesture(json!({ "kind": "swipe", "phase": "update", "dx": dx, "dy": dy }));
+    }
+    pila.gesture(json!({ "kind": "swipe", "phase": "end" }));
+}
+
+#[test]
+fn a_four_finger_swipe_up_opens_it_and_down_closes_it() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a"]);
+    swipe(&mut pila, 4, &[(0.0, -40.0), (0.0, -40.0)]);
+    pila.wait("opened", |s| s["overview"]["open"] == true);
+    // Up again: it stays open.
+    swipe(&mut pila, 4, &[(0.0, -40.0), (0.0, -40.0)]);
+    pila.stays("still open", Duration::from_millis(200), |s| {
+        s["overview"]["open"] == true
+    });
+    swipe(&mut pila, 4, &[(0.0, 40.0), (0.0, 40.0)]);
+    pila.wait("closed", |s| s["overview"]["open"] == false);
+}

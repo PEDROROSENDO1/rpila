@@ -801,6 +801,12 @@ Key flows and invariants:
   (`overview_key`: Escape, the arrows through `step`, Enter); `run_action` closes it before any
   action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the
   window there, the keyboard layout). Picking is `activate_toplevel` (raised, focused, restored).
+  Besides its binding, `hot_corner` (from `pointer_motion`) opens or closes it when the pointer
+  reaches an output's top-left pixel that's a corner of the whole layout (no output left of it or
+  above it), once until the pointer leaves it (`Overview::in_corner`); not with a button held or a
+  grab running (`is_grabbed`), over a fullscreen window, while locked, or with `[overview]
+  hot-corner = false`; and `[gestures]` binds `overview open`/`overview close` to 4-finger swipes
+  up and down.
   A workspace switch while it's open shows the new windows in their places without a slide
   (`show_workspace`). The strip (`Pila::overview_strip`) shows each workspace's part of the
   output, live: `scene_thumbs` gives each thumbnail its windows as they are (the active

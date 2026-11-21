@@ -180,11 +180,13 @@ no longer get them; `"Alt+Tab" = "none"` and `"Alt+Shift+Tab" = "none"` in `[bin
 them back. Clicking a
 window, or a taskbar entry in your bar, focuses it too.
 
-**The overview.** `Mod+W` spreads the workspace's windows out, each on its own monitor, none over
+**The overview.** `Mod+W`, pushing the pointer into the top-left corner of the screen (not
+over a fullscreen window; `[overview] hot-corner = false` turns it off) or a 4-finger swipe up
+spreads the workspace's windows out, each on its own monitor, none over
 another, shrunk where they don't fit, live, over the dimmed wallpaper; minimized ones are among
 them, and your bar stays where it is. Click a window to go to it, or move with the arrows (the
-pointer selects too) and press Enter; Escape, `Mod+W` again or a click beside the windows close
-it. Any other binding closes it and does its job, but going to another workspace
+pointer selects too) and press Enter; Escape, `Mod+W` again, the corner again, a 4-finger swipe
+down or a click beside the windows close it. Any other binding closes it and does its job, but going to another workspace
 (`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it. With more than one workspace, a
 strip on top of each monitor shows them all, live, the one you're on in the accent color: click
 one to go there, or drag a window onto one to send it there (it shrinks as you drag it, to aim
@@ -386,6 +388,7 @@ turn of the wheel one (`wheel-binding-cooldown` under `[input]`, see [Workspaces
 | `swipe-3-up` | Maximize, or restore |
 | `swipe-3-down` | Restore a snapped or maximized window |
 | `swipe-4-left`, `swipe-4-right` | Next, previous workspace |
+| `swipe-4-up`, `swipe-4-down` | Open the overview, close it |
 
 `[gestures]` changes them, with any action a key binding can have, for 3, 4 or 5 fingers. Other
 gestures (pinching, finger counts Pila doesn't use) reach the apps.

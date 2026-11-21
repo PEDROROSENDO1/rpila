@@ -191,6 +191,13 @@ overview = 250                   # windows glide to their places and back
 shake-to-find = true             # false: never grow it
 shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 
+# The overview (the `overview` action, Mod+W): the workspace's windows spread
+# out under a strip of every workspace. hot-corner: pushing the pointer into
+# the top-left corner of a monitor opens it, or closes it (not over a
+# fullscreen window).
+[overview]
+hot-corner = true
+
 # X11 apps run through Xwayland, which Pila starts when the first one
 # connects. Unset, it then runs until Pila exits; with idle-timeout, it stops
 # that many seconds (1 to 3600) after its last X11 client leaves, and starts
@@ -367,8 +374,8 @@ tap = true                       # tap to click
 #
 # Examples:
 # "swipe-3-down" = "minimize"
-# "swipe-4-up" = "snap-left"
-# "swipe-4-down" = "snap-right"
+# "swipe-5-left" = "snap-left"
+# "swipe-5-right" = "snap-right"
 #
 "swipe-3-left" = "cycle-focus"
 "swipe-3-right" = "cycle-focus-back"
@@ -376,6 +383,8 @@ tap = true                       # tap to click
 "swipe-3-down" = "restore"
 "swipe-4-left" = "workspace-next"
 "swipe-4-right" = "workspace-prev"
+"swipe-4-up" = "overview open"
+"swipe-4-down" = "overview close"
 
 # Monitors, matched by connector name (shown in the log as "output connected",
 # e.g. eDP-1, DP-1, HDMI-A-1). Without an entry, a monitor uses its preferred

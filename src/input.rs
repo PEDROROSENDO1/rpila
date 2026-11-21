@@ -652,6 +652,7 @@ impl Pila {
         pointer.frame(self);
         self.shake_cursor_motion(location);
         self.overview_pointer_moved(location);
+        self.hot_corner(location, pointer.is_grabbed());
 
         if !pointer.is_grabbed() {
             // Over pila's own decorations no client sets the cursor, so pila does.

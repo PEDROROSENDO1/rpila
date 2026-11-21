@@ -3,7 +3,8 @@
 ## Unreleased
 
 - **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`
-  do only one) spreads the workspace's windows out on their monitors, none over another, shrunk
+  do only one), the top-left corner of the screen (`[overview] hot-corner`) or a 4-finger swipe
+  up (down closes it) spreads the workspace's windows out on their monitors, none over another, shrunk
   where they don't fit, live, over the dimmed wallpaper, minimized ones included; the bar stays.
   A strip on top shows every workspace, live; click one to go there, or drag a window onto one
   to send it there.
