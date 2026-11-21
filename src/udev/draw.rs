@@ -492,7 +492,11 @@ fn draw(
                         surface.queued_request =
                             request.filter(|_| !surface.first_frame).map(|r| Request {
                                 drawn: Some(now),
-                                after: surface.last_vblank_time.filter(|_| r.in_flight),
+                                after: in_flight_shown(
+                                    surface.last_vblank_time,
+                                    r.in_flight,
+                                    surface.torn,
+                                ),
                                 ..r
                             });
                         if scene.locked {
@@ -854,6 +858,16 @@ fn back_to_back_after_held(back_to_back: bool, queued: bool) -> bool {
     back_to_back && queued
 }
 
+/// The vblank that showed the frame in flight when the one being drawn was
+/// asked for, which that one is due a period after
+/// (`frame_stats::late_refreshes`): `last`, the last vblank shown. Unless
+/// that frame was `torn`: shown at once, at no vblank, it left `last` where
+/// it was, maybe seconds before (`frame_finish`), and the frame after it is
+/// due as if none had been in flight.
+fn in_flight_shown(last: Option<Duration>, in_flight: bool, torn: bool) -> Option<Duration> {
+    last.filter(|_| in_flight && !torn)
+}
+
 /// Refreshes missed from the vblank `last` that showed a frame to `seq` that
 /// shows the next: all but one, if they were meant to be back to back.
 fn missed_refreshes(last: u64, seq: u64, back_to_back: bool) -> u64 {
@@ -1037,5 +1051,26 @@ mod tests {
         assert_eq!(missed_refreshes(1000, 1003, back_to_back(true, true)), 2);
         // With no animation the pause is meant.
         assert_eq!(missed_refreshes(1000, 1003, back_to_back(false, true)), 0);
+    }
+
+    #[test]
+    fn a_frame_after_a_torn_one_isnt_late_by_the_time_the_game_tore() {
+        use crate::frame_stats::late_refreshes;
+        // A game tore for 167 refreshes (a TTY run, 60.01 Hz): torn frames
+        // leave the last vblank shown where it was before.
+        let period = Duration::from_micros(16_664);
+        let before_tearing = Duration::from_secs(100);
+        let vblank = before_tearing + period * 167;
+        // Asked for just after a vblank, with a torn frame in flight, and
+        // shown at the next vblank: in time.
+        let at = vblank + Duration::from_micros(280);
+        let shown = vblank + period;
+        let after = in_flight_shown(Some(before_tearing), true, true);
+        assert_eq!(late_refreshes(at, after, before_tearing, shown, period), 0);
+        // A frame in flight that was shown at a vblank is still the one the
+        // next is due after: shown a vblank later, it's late.
+        let after = in_flight_shown(Some(vblank), true, false);
+        assert_eq!(after, Some(vblank));
+        assert_eq!(late_refreshes(at, after, vblank, shown + period, period), 1);
     }
 }

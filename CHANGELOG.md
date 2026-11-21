@@ -12,6 +12,10 @@
   Escape, Mod+W again or a click beside the windows close it. Going to another workspace shows
   that one's windows in it; any other binding closes it first. The cheatsheet lists it. The
   windows glide to their places and back (`[animations] overview`, 250 ms).
+- **Fixed:** on bare metal, a game that tore (vsync off, fullscreen) and then left fullscreen
+  made the frame statistics count as many missed refreshes as it had torn frames' vblanks
+  (`scripts/check` and `pila::frames`): the frame after the last torn one was judged against
+  the vblank before tearing started.
 
 ## 0.8.0 (2026-11-20)
 

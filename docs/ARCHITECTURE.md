@@ -514,7 +514,8 @@ Key flows and invariants:
   one; a composited frame tears too, not only direct scanout. In `frame_finish` a torn frame
   (`with_pending_frame`'s mode) misses no refresh and isn't late, its presentation feedback has
   no `Vsync`, and it leaves `last_vblank_time`, the grid the next vblank is reckoned from, as it
-  was; the frame statistics count it apart (`torn`). The headless backend can't tear: the state
+  was (so a frame asked for while a torn one was in flight is due as if none had been, not a
+  period after that vblank: `draw::in_flight_shown`); the frame statistics count it apart (`torn`). The headless backend can't tear: the state
   tells what the DRM backend would ask (`tears` per output).
 - **Frame statistics** (`frame_stats.rs`, `RUST_LOG=pila::frames=debug`): every backend calls
   `Pila::record_frame` with a frame's CPU time (logged per output every 5 s: frames, average
