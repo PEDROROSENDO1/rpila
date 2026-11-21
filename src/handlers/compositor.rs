@@ -76,6 +76,7 @@ impl CompositorHandler for Pila {
         self.redraw_committed(surface, before);
         if let Some(window) = self.window_for_surface(&crate::redraw::root_surface(surface)) {
             self.switcher_view_committed(&window);
+            self.overview_committed(&window);
         }
     }
 

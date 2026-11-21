@@ -317,6 +317,8 @@ pub enum Action {
     ShowDesktop,
     /// Show Pila's shortcuts cheatsheet, or hide it (`shortcuts_view.rs`).
     ShowShortcuts,
+    /// Open or close the overview (`overview.rs`).
+    Overview(OverviewAction),
     /// Go to another output, or send the focused window there (`stacking.rs`).
     FocusOutput(OutputTarget),
     MoveToOutput(OutputTarget),
@@ -328,6 +330,15 @@ pub enum Action {
     PowerOnMonitors,
     /// Switch to virtual terminal N (Ctrl+Alt+F<N> on a TTY; not configurable).
     ChangeVt(i32),
+}
+
+/// What `overview` does: open it if it's closed and close it if it's open,
+/// or only one of them (`overview open`, `overview close`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverviewAction {
+    Toggle,
+    Open,
+    Close,
 }
 
 /// Which output an output action goes to: by position, around the end.
@@ -441,6 +452,14 @@ impl Action {
                 };
             }
         }
+        // "overview open", "overview close" ("overview" toggles).
+        if let Some(what) = text.strip_prefix("overview ") {
+            return match what.trim() {
+                "open" => Ok(Some(Action::Overview(OverviewAction::Open))),
+                "close" => Ok(Some(Action::Overview(OverviewAction::Close))),
+                other => Err(format!("overview {other:?}: must be open or close")),
+            };
+        }
         if text == "none" {
             return Ok(None);
         }
@@ -486,6 +505,7 @@ const NAMED_ACTIONS: &[(&str, Action)] = &[
     ("toggle-all-workspaces", Action::ToggleAllWorkspaces),
     ("show-desktop", Action::ShowDesktop),
     ("show-shortcuts", Action::ShowShortcuts),
+    ("overview", Action::Overview(OverviewAction::Toggle)),
     ("power-off-monitors", Action::PowerOffMonitors),
     ("power-on-monitors", Action::PowerOnMonitors),
     ("quit", Action::Quit),
@@ -501,6 +521,7 @@ const ACTIONS_WITH_ARGUMENT: &[&str] = &[
     "move-to-workspace <n|next|prev>",
     "switch-layout <n|next|prev>",
     "snap <left|right|up|down>",
+    "overview <open|close>",
 ];
 
 /// Every action as a config may write it, for messages.
@@ -564,6 +585,7 @@ action_examples! {
     Action::ToggleAllWorkspaces => Action::ToggleAllWorkspaces,
     Action::ShowDesktop => Action::ShowDesktop,
     Action::ShowShortcuts => Action::ShowShortcuts,
+    Action::Overview(_) => Action::Overview(OverviewAction::Toggle),
     Action::FocusOutput(_) => Action::FocusOutput(OutputTarget::Next),
     Action::MoveToOutput(_) => Action::MoveToOutput(OutputTarget::Next),
     Action::SwitchLayout(_) => Action::SwitchLayout(LayoutTarget::Next),
@@ -2359,7 +2381,7 @@ mod tests {
         }
         assert_eq!(Action::parse("none"), Ok(None));
         let err = Action::parse("explode").unwrap_err();
-        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev>, snap <left|right|up|down> or none)"), "{err}");
+        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev>, snap <left|right|up|down>, overview <open|close> or none)"), "{err}");
         assert_eq!(
             Action::parse("snap up"),
             Ok(Some(Action::SnapToward(Direction::Up)))

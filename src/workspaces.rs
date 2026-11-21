@@ -201,8 +201,11 @@ impl Pila {
             .filter(|w| is_on_all_workspaces(w) || Some(*w) == grabbed.as_ref())
             .cloned()
             .collect();
-        // Each output's picture of the windows leaving, for the slide.
-        self.start_workspace_slide(index, staying.clone());
+        // Each output's picture of the windows leaving, for the slide; the
+        // overview shows the new ones in their places at once.
+        if !self.overview_open() {
+            self.start_workspace_slide(index, staying.clone());
+        }
         let from = self.workspaces.active;
         let shown: Vec<Window> = self
             .space

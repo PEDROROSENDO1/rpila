@@ -81,6 +81,7 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Tab`, `Mod+J` | Switch to the previous window; keep Mod held and press again for older ones |
 | `Mod+Shift+Tab` | The same, the other way |
 | `Alt+Tab`, `Alt+Shift+Tab` | The same as `Mod+Tab` and `Mod+Shift+Tab`, whatever Mod is |
+| `Mod+W` | The overview: the workspace's windows spread out; click one, or pick it with the arrows and Enter; Escape closes it |
 | `Mod+M` | Maximize; again, restore |
 | `Mod+N` | Minimize |
 | `Mod+F` | Fullscreen, or leave it |
@@ -178,6 +179,13 @@ way. `Alt+Tab` and `Alt+Shift+Tab` do the same whatever Mod is, as on other desk
 no longer get them; `"Alt+Tab" = "none"` and `"Alt+Shift+Tab" = "none"` in `[bindings]` give
 them back. Clicking a
 window, or a taskbar entry in your bar, focuses it too.
+
+**The overview.** `Mod+W` spreads the workspace's windows out, each on its own monitor, none over
+another, shrunk where they don't fit, live, over the dimmed wallpaper; minimized ones are among
+them, and your bar stays where it is. Click a window to go to it, or move with the arrows (the
+pointer selects too) and press Enter; Escape, `Mod+W` again or a click beside the windows close
+it. Any other binding closes it and does its job, but going to another workspace
+(`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it.
 
 **Windows asking for attention.** An app can ask for your attention without taking the focus
 (a chat message, a finished download): its title bar turns amber (`[colors] bar-urgent`), and

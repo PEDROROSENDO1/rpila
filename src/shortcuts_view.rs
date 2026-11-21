@@ -515,6 +515,9 @@ const SECTIONS: &[(&str, &[(&str, Matches)])] = &[
             ("Terminal", |a| *a == Action::Terminal),
             ("Launcher", |a| *a == Action::Launcher),
             ("Switch windows", |a| *a == Action::CycleFocus),
+            ("Overview", |a| {
+                *a == Action::Overview(crate::config::OverviewAction::Toggle)
+            }),
             ("Close", |a| *a == Action::CloseFocused),
             ("Maximize", |a| *a == Action::ToggleMaximize),
             ("Fullscreen", |a| *a == Action::ToggleFullscreen),
@@ -1222,6 +1225,7 @@ mod tests {
         let all: Vec<&Row> = rows.collect();
         let find = |what| find(all.iter().copied(), what);
         assert_eq!(find("Terminal").as_deref(), Some("Super+Return"));
+        assert_eq!(find("Overview").as_deref(), Some("Super+W"));
         assert_eq!(find("Snap to halves").as_deref(), Some("Super+← → ↑ ↓"));
         assert_eq!(find("Go to one").as_deref(), Some("Super+1…4"));
         assert_eq!(

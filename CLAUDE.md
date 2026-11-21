@@ -52,7 +52,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `config.example.toml` alone (swayidle and swaylock to lock and turn the monitors off,
   swaybg for the wallpaper, which Pila draws as a PNG in `[colors]`: `wallpaper.rs`). Where
   a packaged tool does a job well, Pila uses it rather than growing the feature; what only a
-  compositor can do, Pila draws: title bars and the window switcher's live previews
+  compositor can do, Pila draws: title bars, the window switcher's live previews and the overview
   (`switcher_view.rs`).
   Programs an older install left are in `scripts/install-paths`' `removed_files`.
 

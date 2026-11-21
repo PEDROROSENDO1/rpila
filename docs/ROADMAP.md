@@ -57,7 +57,7 @@ to say so.
 
 - A bar, launcher, on-screen display or screenshot tool of Pila's own: standard tools (waybar,
   fuzzel, swayosd, grim and slurp, ...) do those jobs, and Pila is the compositor alone. Pila
-  draws what a compositor must or does best itself: title bars and the window switcher. Idle
+  draws what a compositor must or does best itself: title bars, the window switcher and the overview. Idle
   (swayidle) and the wallpaper (swaybg) are standard tools' too.
 - Vendor protocols (KDE, GNOME, Hyprland, …), even when Smithay implements them; wlroots ones only
   as the protocol policy in

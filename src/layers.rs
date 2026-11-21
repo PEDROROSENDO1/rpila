@@ -60,6 +60,10 @@ impl Pila {
     /// layer. A Top surface that takes the keyboard (a launcher) stays above
     /// it, so what gets the keys is shown.
     pub fn top_layer_covered(&self, output: &Output) -> bool {
+        // The overview shrinks the fullscreen window.
+        if self.overview_open() {
+            return false;
+        }
         let top = self
             .space
             .elements()

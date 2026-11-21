@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`
+  do only one) spreads the workspace's windows out on their monitors, none over another, shrunk
+  where they don't fit, live, over the dimmed wallpaper, minimized ones included; the bar stays.
+  Click a window to go to it, or select one with the arrows (or the pointer) and press Enter;
+  Escape, Mod+W again or a click beside the windows close it. Going to another workspace shows
+  that one's windows in it; any other binding closes it first. The cheatsheet lists it.
+
 ## 0.8.0 (2026-11-20)
 
 - **Rounded corners as GTK's:** windows Pila decorates now have their top corners rounded by

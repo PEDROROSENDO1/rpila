@@ -223,6 +223,8 @@ pub struct Pila {
     pub switcher_view: crate::switcher_view::SwitcherView,
     /// The shortcuts cheatsheet Pila draws (`shortcuts_view.rs`).
     pub shortcuts_view: crate::shortcuts_view::ShortcutsView,
+    /// The overview Pila draws (`overview.rs`).
+    pub overview: crate::overview::Overview,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -599,6 +601,7 @@ impl Pila {
             idle_inhibitors: IdleInhibitors::default(),
             switcher_view: Default::default(),
             shortcuts_view: Default::default(),
+            overview: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -688,6 +691,10 @@ impl Pila {
             crate::layers::layer_surface_under(layers, pos)
                 .map(|(layer, surface, origin)| Under::Layer(layer, surface, origin))
         };
+        // The overview's windows are its own: only panels above it are hit.
+        if self.overview_open() {
+            return layer(self.upper_layers());
+        }
         layer(self.upper_layers())
             .or_else(|| {
                 self.window_under(pos)
@@ -771,6 +778,10 @@ impl Pila {
         }
         let now = self.animation_time();
         let (mut windows, ghosts) = self.scene_windows(now);
+        let overview = self.scene_overview();
+        if overview.is_some() {
+            windows = self.overview_scene_windows(windows, self.focused_window().as_ref());
+        }
         let slide = self.scene_slide(now);
         if let Some(slide) = &slide {
             for entry in &mut windows {
@@ -819,6 +830,7 @@ impl Pila {
             rounded_corners: self.config.rounded_corners,
             switcher: self.scene_switcher(),
             shortcuts: self.scene_shortcuts(),
+            overview,
             ..Scene::blank(self.config.colors)
         }
     }
@@ -864,6 +876,19 @@ impl Pila {
         now: Option<std::time::Duration>,
     ) -> Option<SceneWindow> {
         let loc = self.space.element_location(window)?;
+        self.scene_window_at(window, loc, focused, hovered, now)
+    }
+
+    /// `scene_window` for a window whose geometry is at `loc`, on the
+    /// `Space` or not (a minimized one the overview shows).
+    pub(crate) fn scene_window_at(
+        &self,
+        window: &Window,
+        loc: Point<i32, Logical>,
+        focused: Option<&Window>,
+        hovered: Option<&(Window, TitleBarPart)>,
+        now: Option<std::time::Duration>,
+    ) -> Option<SceneWindow> {
         let bar_rect = decoration::title_bar_rect(window, loc);
         let (maximized, fullscreen) = fill_state(window);
         // Past its geometry a client draws what a shadow would be (GTK), and
@@ -1835,6 +1860,7 @@ impl Pila {
         self.update_idle_inhibit();
         self.popups.cleanup();
         self.step_animations();
+        self.overview_laid_out();
         self.schedule_hidden_frames();
         self.prepare_slide_textures();
         (true, captures)
@@ -1863,6 +1889,9 @@ impl Pila {
         if self.is_locked() && !allowed {
             debug!(?action, "refused while locked");
             return;
+        }
+        if !action.keeps_overview() {
+            self.close_overview();
         }
         match action {
             Action::Spawn(command) => self.spawn(&command),
@@ -1923,6 +1952,7 @@ impl Pila {
             }
             Action::ShowDesktop => self.show_desktop(),
             Action::ShowShortcuts => self.toggle_shortcuts(),
+            Action::Overview(what) => self.overview_action(what),
             Action::FocusOutput(target) => self.focus_output(target),
             Action::MoveToOutput(target) => self.move_focused_to_output(target),
             Action::SwitchLayout(target) => self.switch_layout(target),

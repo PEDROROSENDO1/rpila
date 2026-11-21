@@ -768,6 +768,33 @@ Key flows and invariants:
   that window, which ends the switch on it, and the press and its release go nowhere else. The
   state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
   real apps on a headless Pila.
+- **Overview** (`overview.rs`, the `overview` action, Mod+W): while `Pila::overview` is open the
+  active workspace's windows (no override-redirect ones; minimized ones too) are laid out per
+  output (`Pila::overview_slots`: each window on `window_output`, a minimized one where it'd come
+  back) in the output's usable area less `MARGIN`, in rows, one scale for all, never grown
+  (`arrange`, a pure function: the row count that shows them largest). The places are computed
+  from the windows as they are each time they're asked for, so opening, closing, resizing and
+  minimizing meanwhile need nothing of their own; `overview_laid_out` (from `after_frames`)
+  redraws the outputs whose places changed (`defer_redraws`) and drops a selection that's gone.
+  Nothing is drawn anew: `Pila::scene` gives each shown window a `WindowEffect` whose `FrameMap`
+  maps its frame onto its place (`overview_scene_windows`, minimized ones built with
+  `scene_window_at` at their remembered place), so it's drawn as an animating window is, with its
+  title bar, corners and shadow, and paced by its place's output (`frame::send_frames`); windows
+  it doesn't show are left out of the scene. Behind them, above the lower layers,
+  `overview_elements` draws the selected window's outline (`snap-preview`) and the dimming; panels
+  above the windows stay, and a fullscreen window doesn't cover the Top layer while it's open
+  (`top_layer_covered`). Every commit of a shown window redraws its output
+  (`overview_committed`: a minimized one has no place of its own on the `Space`). Input:
+  `Pila::under` hits only the upper layers while it's open, so no window gets the pointer;
+  `pointer_button` gives it the press first (`overview_press`: a window's place picks it, a panel
+  keeps its click, anywhere else closes it; the press and release reach no app), pointer motion
+  selects the window under it, and the keyboard filter gives it every key that's no binding
+  (`overview_key`: Escape, the arrows through `step`, Enter); `run_action` closes it before any
+  action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the
+  window there, the keyboard layout). Picking is `activate_toplevel` (raised, focused, restored).
+  A workspace switch while it's open shows the new windows in their places without a slide
+  (`show_workspace`). The lock closes it, and it doesn't open while locked. The state dump has
+  it (`overview_json`).
 - **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws with the bindings as
   they're bound: a fixed list of actions looked up in `config.bindings` (`keys_for`: the
   combination to name first, or a run of numbers or arrows as one key, `merged`), an unbound one

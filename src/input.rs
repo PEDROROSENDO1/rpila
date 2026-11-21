@@ -213,6 +213,7 @@ impl Pila {
         let mut menu_key = None;
         // A key that hides the shortcuts cheatsheet (`shortcuts_view.rs`).
         let mut hide_shortcuts = false;
+        let mut overview_key = None;
         let mut repeat_next = None;
         let mut tap_action = None;
         // `input_from_source`, but while locked a key that isn't Pila's goes
@@ -302,6 +303,16 @@ impl Pila {
                                 return FilterResult::Intercept(None);
                             }
                         }
+                        // The overview takes every key that's no binding
+                        // (bindings close it or work in it: `run_action`).
+                        if action.is_none()
+                            && state.overview_open()
+                            && !handle.modified_sym().is_modifier_key()
+                        {
+                            state.input.suppressed_keys.insert(keycode);
+                            overview_key = Some(handle.modified_sym());
+                            return FilterResult::Intercept(None);
+                        }
                         if let Some(action) = action {
                             state.input.suppressed_keys.insert(keycode);
                             if sym.is_some_and(|sym| state.config.repeats(sym, mods)) {
@@ -351,6 +362,9 @@ impl Pila {
         }
         if hide_shortcuts {
             self.hide_shortcuts();
+        }
+        if let Some(sym) = overview_key {
+            self.overview_key(sym);
         }
         if let Some(action) = action.flatten() {
             self.run_action(action, serial);
@@ -637,6 +651,7 @@ impl Pila {
         );
         pointer.frame(self);
         self.shake_cursor_motion(location);
+        self.overview_pointer_moved(location);
 
         if !pointer.is_grabbed() {
             // Over pila's own decorations no client sets the cursor, so pila does.
@@ -796,6 +811,15 @@ impl Pila {
         // A click picks the window itself; a Mod+Tab in progress is over.
         if button_state == ButtonState::Pressed {
             self.end_switch();
+        }
+        // The overview takes a click on a window or beside them, and its
+        // release.
+        if button_state == ButtonState::Pressed
+            && !self.is_locked()
+            && self.overview_press(pointer.current_location())
+        {
+            self.input.suppressed_buttons.insert(button);
+            return;
         }
 
         if button_state == ButtonState::Pressed && self.is_locked() {

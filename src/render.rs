@@ -199,6 +199,9 @@ pub struct Scene {
     /// The shortcuts cheatsheet, in front of the switcher
     /// (`shortcuts_view.rs`).
     pub shortcuts: Option<crate::shortcuts_view::SceneShortcuts>,
+    /// The overview: its windows are among `windows`, mapped onto their
+    /// places; what it draws behind them is below them (`overview.rs`).
+    pub overview: Option<crate::overview::SceneOverview>,
     pub colors: Colors,
 }
 
@@ -222,6 +225,7 @@ impl Scene {
             rounded_corners: rounded::Corners::All,
             switcher: None,
             shortcuts: None,
+            overview: None,
             colors,
         }
     }
@@ -235,6 +239,7 @@ impl Scene {
             || self.window_menu.is_some()
             || self.switcher.is_some()
             || self.shortcuts.is_some()
+            || self.overview.is_some()
         {
             return false;
         }
@@ -588,6 +593,16 @@ fn scene_elements_from(
                 visible,
             ));
         }
+    }
+    if let Some(view) = &scene.overview {
+        elements.extend(crate::overview::overview_elements(
+            renderer,
+            view,
+            &scene.colors,
+            visible,
+            output_location,
+            scale,
+        ));
     }
     elements.extend(layer_elements(
         renderer,

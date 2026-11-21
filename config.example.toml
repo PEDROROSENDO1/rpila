@@ -264,6 +264,9 @@ tap = true                       # tap to click
 # show-desktop (minimize the workspace's windows; again, bring them back),
 # show-shortcuts (all the shortcuts, in sections; on its first run Pila
 # shows the few to get going; any key or click hides it),
+# overview (the workspace's windows spread out, none over another: click one,
+# or pick it with the arrows and Enter; Escape closes it; again, close it),
+# overview <open|close> (only open it, only close it),
 # focus-output <next|prev>, move-to-output <next|prev>,
 # workspace <n|next|prev> (go to a workspace; next/prev don't wrap around),
 # move-to-workspace <n|next|prev> (move the window there; "workspace-next" and
@@ -293,6 +296,7 @@ tap = true                       # tap to click
 "Mod+Shift+Tab" = "cycle-focus-back"
 "Alt+Tab" = "cycle-focus"          # as on other desktops, whatever Mod is
 "Alt+Shift+Tab" = "cycle-focus-back"
+"Mod+W" = "overview"
 "Mod+M" = "maximize"
 "Mod+N" = "minimize"
 "Mod+F" = "fullscreen"
