@@ -49,6 +49,13 @@ use crate::{
 const MARGIN: i32 = 48;
 /// Between two windows, across and down.
 const GAP: i32 = 32;
+/// How far a press on a window moves before it's a drag.
+const DRAG_THRESHOLD: f64 = 8.0;
+/// A dragged window shrinks to fit this square (never grown), over the
+/// first `SHRINK_DISTANCE` of the drag: small enough to aim at a
+/// workspace's thumbnail.
+const DRAGGED_MAX: f64 = 240.0;
+const SHRINK_DISTANCE: f64 = 120.0;
 /// The selected window's outline, around its frame.
 const OUTLINE: i32 = 4;
 /// The workspace strip: its thumbnails' height, a share of the output's
@@ -117,6 +124,57 @@ struct Open {
     laid_out: Vec<(Window, Rectangle<i32, Logical>)>,
     /// The workspace thumbnail under the pointer.
     hovered: Option<Rectangle<i32, Logical>>,
+    /// A button held down on a window: its release picks it, or drops it
+    /// on a workspace once it's dragged.
+    press: Option<Press>,
+}
+
+/// A press on a window in the overview.
+struct Press {
+    window: Window,
+    button: u32,
+    /// Where it was pressed, and where the pointer was last (global).
+    at: Point<f64, Logical>,
+    last: Point<f64, Logical>,
+    /// From the window's place to the pointer, and its place's size: it's
+    /// drawn there under the pointer while it's dragged.
+    grip: Point<f64, Logical>,
+    size: Size<i32, Logical>,
+    dragging: bool,
+}
+
+impl Press {
+    /// Where the window is drawn while dragged, the pointer at `pointer`:
+    /// shrunk as the drag goes on, the point it was taken by kept under
+    /// the pointer.
+    fn rect(&self, pointer: Point<f64, Logical>) -> Rectangle<i32, Logical> {
+        dragged_rect(self.size, self.grip, self.at, pointer)
+    }
+}
+
+/// Where a window's place of `size`, taken at `grip` from its top-left
+/// where the pointer was `at`, is drawn with the pointer at `pointer`.
+fn dragged_rect(
+    size: Size<i32, Logical>,
+    grip: Point<f64, Logical>,
+    at: Point<f64, Logical>,
+    pointer: Point<f64, Logical>,
+) -> Rectangle<i32, Logical> {
+    let scale = dragged_scale(size, pointer - at);
+    let shrunk = size.to_f64().upscale(scale);
+    Rectangle::new(
+        (pointer - grip.upscale(scale)).to_i32_round(),
+        (shrunk.w.round() as i32, shrunk.h.round() as i32).into(),
+    )
+}
+
+/// How much smaller a window of `size` is drawn once dragged by `moved`:
+/// from 1 to what fits `DRAGGED_MAX`, over `SHRINK_DISTANCE`.
+fn dragged_scale(size: Size<i32, Logical>, moved: Point<f64, Logical>) -> f64 {
+    let largest = f64::from(size.w.max(size.h).max(1));
+    let small = (DRAGGED_MAX / largest).min(1.0);
+    let t = (moved.x.hypot(moved.y) / SHRINK_DISTANCE).min(1.0);
+    1.0 + (small - 1.0) * t
 }
 
 /// Kept between frames while it's open: an unchanged overview adds no
@@ -372,6 +430,7 @@ impl Pila {
             selected: self.focused_window(),
             laid_out: Vec::new(),
             hovered: None,
+            press: None,
         });
         self.overview_laid_out();
         // Every output: windows move, and a fullscreen window's panels show.
@@ -521,6 +580,7 @@ impl Pila {
         if !self.overview_open() {
             return;
         }
+        self.overview_drag(location);
         if let Some(window) = self.overview_window_at(location) {
             self.select_in_overview(Some(window));
         }
@@ -536,20 +596,44 @@ impl Pila {
         }
     }
 
-    /// A press while it's open: on a window it picks that one; beside the
-    /// windows (not on a panel) it closes it. `true` if it took the press,
-    /// which then goes nowhere else (its release neither).
-    pub(crate) fn overview_press(&mut self, location: Point<f64, Logical>) -> bool {
+    /// A press while it's open: on a workspace's thumbnail it goes there;
+    /// on a window it's held (`overview_release` picks it or drops it on a
+    /// workspace); beside the windows (not on a panel) it closes it. `true`
+    /// if it took the press, which then goes nowhere else (its release
+    /// neither).
+    pub(crate) fn overview_press(&mut self, location: Point<f64, Logical>, button: u32) -> bool {
         if !self.overview_open() {
             return false;
+        }
+        if self
+            .overview
+            .open
+            .as_ref()
+            .is_some_and(|o| o.press.is_some())
+        {
+            return true;
         }
         // A workspace's thumbnail goes there, and it stays open.
         if let Some(thumb) = self.overview_thumb_at(location) {
             self.switch_workspace(thumb.workspace);
             return true;
         }
-        if let Some(window) = self.overview_window_at(location) {
-            self.pick_in_overview(&window);
+        let slot = self
+            .overview_slots()
+            .into_iter()
+            .find(|slot| slot.rect.to_f64().contains(location));
+        if let Some(slot) = slot {
+            if let Some(open) = self.overview.open.as_mut() {
+                open.press = Some(Press {
+                    window: slot.window,
+                    button,
+                    at: location,
+                    last: location,
+                    grip: location - slot.rect.loc.to_f64(),
+                    size: slot.rect.size,
+                    dragging: false,
+                });
+            }
             return true;
         }
         // Panels above it still take their clicks.
@@ -558,6 +642,61 @@ impl Pila {
         }
         self.close_overview();
         true
+    }
+
+    /// A button released while it's open: the one held on a window picks
+    /// it, or, dragged, drops it: on another workspace's thumbnail it goes
+    /// there, anywhere else back to its place. `true` if it was that one.
+    pub(crate) fn overview_release(&mut self, location: Point<f64, Logical>, button: u32) -> bool {
+        let Some(open) = self.overview.open.as_mut() else {
+            return false;
+        };
+        if open
+            .press
+            .as_ref()
+            .is_none_or(|press| press.button != button)
+        {
+            return false;
+        }
+        let Some(press) = open.press.take() else {
+            return false;
+        };
+        if !press.dragging {
+            self.pick_in_overview(&press.window);
+            return true;
+        }
+        self.queue_redraw_rect(self.grown_by_shadow(press.rect(press.last)));
+        if let Some(thumb) = self.overview_thumb_at(location) {
+            self.move_window_to_workspace(&press.window, thumb.workspace);
+        }
+        // Wherever it went, the places changed (`overview_laid_out`).
+        self.queue_redraw();
+        true
+    }
+
+    /// The pointer moved with a window held: past `DRAG_THRESHOLD` it's
+    /// dragged, drawn under the pointer.
+    fn overview_drag(&mut self, location: Point<f64, Logical>) {
+        let Some(press) = self.overview.open.as_mut().and_then(|o| o.press.as_mut()) else {
+            return;
+        };
+        let moved = location - press.at;
+        if !press.dragging && moved.x.hypot(moved.y) < DRAG_THRESHOLD {
+            return;
+        }
+        press.dragging = true;
+        // Where it was drawn last (its place, the first time) and now.
+        let before = press.rect(press.last);
+        press.last = location;
+        let now = press.rect(location);
+        for rect in [before, now] {
+            self.queue_redraw_rect(self.grown_by_shadow(rect));
+        }
+    }
+
+    /// `rect` grown by a window's shadow, for redraws.
+    fn grown_by_shadow(&self, rect: Rectangle<i32, Logical>) -> Rectangle<i32, Logical> {
+        crate::redraw::grown(rect, self.shadow_margin())
     }
 
     /// The window shown at `location` (global), while it's open.
@@ -808,6 +947,26 @@ impl Pila {
                 drawn.push(entry);
             }
         }
+        // A window dragged is under the pointer, in front of the others.
+        let dragged = self
+            .overview
+            .open
+            .as_ref()
+            .and_then(|open| open.press.as_ref())
+            .filter(|press| press.dragging);
+        if let Some(press) = dragged {
+            if let Some(index) = drawn.iter().position(|e| e.window == press.window) {
+                let mut entry = drawn.remove(index);
+                let rect = press.rect(press.last);
+                if let Some(frame) = entry.effect.as_mut().and_then(|e| e.frame.as_mut()) {
+                    frame.to = rect.to_f64();
+                }
+                if let Some(effect) = entry.effect.as_mut() {
+                    effect.center = crate::animation::center(rect);
+                }
+                drawn.insert(0, entry);
+            }
+        }
         drawn
     }
 
@@ -916,6 +1075,8 @@ impl Pila {
             "open": true,
             "shown": shown,
             "selected": open.selected.as_ref().map(crate::foreign_toplevel::app_id),
+            "dragging": open.press.as_ref().filter(|p| p.dragging).map(|p| crate::foreign_toplevel::app_id(&p.window)),
+            "dragged": open.press.as_ref().filter(|p| p.dragging).map(|p| rect(p.rect(p.last))),
             "slots": self.overview_slots().iter().map(|slot| serde_json::json!({
                 "app_id": crate::foreign_toplevel::app_id(&slot.window),
                 "output": slot.output.name(),
@@ -1187,6 +1348,28 @@ mod tests {
             windows,
             rect(MARGIN, MARGIN, 1000 - 2 * MARGIN, 800 - 2 * MARGIN)
         );
+    }
+
+    #[test]
+    fn a_dragged_window_shrinks_as_it_goes_keeping_its_grip() {
+        let size = size(800, 400);
+        assert_eq!(dragged_scale(size, (0.0, 0.0).into()), 1.0);
+        let half = dragged_scale(size, (SHRINK_DISTANCE / 2.0, 0.0).into());
+        assert!((half - (1.0 + 0.3) / 2.0).abs() < 1e-9, "{half}");
+        assert!((dragged_scale(size, (0.0, 500.0).into()) - 0.3).abs() < 1e-9);
+        // A small one isn't grown.
+        assert_eq!(
+            dragged_scale(super::Size::from((100, 80)), (500.0, 0.0).into()),
+            1.0
+        );
+        // Taken by its middle, it shrinks about the pointer.
+        let rect = dragged_rect(
+            size,
+            (400.0, 200.0).into(),
+            (0.0, 0.0).into(),
+            (500.0, 0.0).into(),
+        );
+        assert_eq!(rect, Rectangle::new((380, -60).into(), (240, 120).into()));
     }
 
     #[test]

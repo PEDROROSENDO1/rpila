@@ -763,6 +763,14 @@ impl Pila {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
+        // The release of a press the overview took on a window picks or
+        // drops it, and goes nowhere else.
+        if button_state == ButtonState::Released
+            && self.overview_release(pointer.current_location(), button)
+        {
+            self.input.suppressed_buttons.remove(&button);
+            return;
+        }
         // A click that wakes the monitors does only that, release included.
         match button_state {
             ButtonState::Pressed if self.wake_monitors() => {
@@ -816,7 +824,7 @@ impl Pila {
         // release.
         if button_state == ButtonState::Pressed
             && !self.is_locked()
-            && self.overview_press(pointer.current_location())
+            && self.overview_press(pointer.current_location(), button)
         {
             self.input.suppressed_buttons.insert(button);
             return;

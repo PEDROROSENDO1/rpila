@@ -187,7 +187,8 @@ pointer selects too) and press Enter; Escape, `Mod+W` again or a click beside th
 it. Any other binding closes it and does its job, but going to another workspace
 (`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it. With more than one workspace, a
 strip on top of each monitor shows them all, live, the one you're on in the accent color: click
-one to go there.
+one to go there, or drag a window onto one to send it there (it shrinks as you drag it, to aim
+easily; dropped anywhere else, it goes back to its place).
 
 **Windows asking for attention.** An app can ask for your attention without taking the focus
 (a chat message, a finished download): its title bar turns amber (`[colors] bar-urgent`), and

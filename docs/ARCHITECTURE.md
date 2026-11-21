@@ -787,8 +787,16 @@ Key flows and invariants:
   (`top_layer_covered`). Every commit of a shown window redraws its output
   (`overview_committed`: a minimized one has no place of its own on the `Space`). Input:
   `Pila::under` hits only the upper layers while it's open, so no window gets the pointer;
-  `pointer_button` gives it the press first (`overview_press`: a window's place picks it, a panel
-  keeps its click, anywhere else closes it; the press and release reach no app), pointer motion
+  `pointer_button` gives it the press first (`overview_press`: a thumbnail switches there, a
+  window's place is held as a `Press`, a panel keeps its click, anywhere else closes it; the press
+  and release reach no app) and the release of a held one (`overview_release`, before the
+  suppressed buttons: it picks the window, or, once the pointer went past `DRAG_THRESHOLD`
+  (`overview_drag`), drops it: on another workspace's thumbnail `move_window_to_workspace`, the
+  path of `move-to-workspace`, takes it there with its transient family, a minimized one staying
+  minimized; anywhere else it goes back to its place). A dragged window's `FrameMap` maps it under
+  the pointer, in front of the others, shrinking as the drag goes on to fit `DRAGGED_MAX`
+  (`dragged_rect`: over `SHRINK_DISTANCE`, by the distance, not by a timer; the point it was taken
+  by stays under the pointer); pointer motion
   selects the window under it, and the keyboard filter gives it every key that's no binding
   (`overview_key`: Escape, the arrows through `step`, Enter); `run_action` closes it before any
   action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the

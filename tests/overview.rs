@@ -478,3 +478,104 @@ fn a_thumbnail_shows_its_workspaces_windows_live() {
     client.draw(b, None);
     pila.wait_pixel_is(x, y, "b's new picture", |px| px[2] > 150 && px[0] < 80);
 }
+
+/// Drag what's at `from` to `to` with the left button, in steps.
+fn drag(pila: &mut TestPila, from: (f64, f64), to: (f64, f64)) {
+    pila.move_to(from.0, from.1);
+    pila.press("left");
+    for step in 1..=5 {
+        let t = step as f64 / 5.0;
+        pila.move_to(from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+    }
+}
+
+fn thumb_center(state: &Value, workspace: u64) -> (f64, f64) {
+    let thumb = strip(state)
+        .into_iter()
+        .find(|t| t["workspace"] == workspace)
+        .unwrap();
+    center(rect(&thumb["rect"]))
+}
+
+#[test]
+fn dragging_a_window_onto_a_thumbnail_moves_it_to_that_workspace() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").color([255, 200, 30, 30]).create();
+    pila.wait_focus("a");
+    client.window("b").create();
+    pila.wait_focus("b");
+    let state = open(&mut pila);
+    let (to_x, to_y) = thumb_center(&state, 3);
+    client.roundtrip();
+    let buttons = client.buttons().len();
+    drag(&mut pila, center(slot(&state, "a")), (to_x, to_y));
+    let state = pila.wait("a dragged", |s| s["overview"]["dragging"] == "a");
+    // Shrunk to aim at a thumbnail (at most 240 across), under the pointer.
+    let (dx, dy, dw, dh) = rect(&state["overview"]["dragged"]);
+    assert!(dw <= 240 && dh <= 240, "{dw}x{dh}");
+    assert!(
+        (dx as f64) <= to_x
+            && to_x <= (dx + dw) as f64
+            && (dy as f64) <= to_y
+            && to_y <= (dy + dh) as f64,
+        "{:?} not under the pointer",
+        (dx, dy, dw, dh)
+    );
+    // Drawn under the pointer, over the strip.
+    pila.wait_pixel_is(to_x, to_y, "a under the pointer", |px| {
+        px[0] > 150 && px[2] < 80
+    });
+    assert_eq!(state["workspace"], 1);
+    pila.release("left");
+    let state = pila.wait("a on workspace 3", |s| {
+        window_in(s, "a").unwrap()["workspace"] == 3
+    });
+    assert_eq!(state["overview"]["open"], true, "still open");
+    assert_eq!(state["workspace"], 1);
+    assert!(!slots(&state).iter().any(|s| s["app_id"] == "a"));
+    assert_eq!(state["focused"], "b");
+    client.roundtrip();
+    assert_eq!(client.buttons().len(), buttons, "{:?}", client.buttons());
+}
+
+#[test]
+fn a_window_dropped_anywhere_else_goes_back_to_its_place() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a", "b"]);
+    let state = open(&mut pila);
+    let place = slot(&state, "a");
+    let (x, y) = center(place);
+    drag(&mut pila, (x, y), (x + 60.0, y + 40.0));
+    pila.wait("a dragged", |s| s["overview"]["dragging"] == "a");
+    pila.release("left");
+    let state = pila.wait("dropped", |s| s["overview"]["dragging"].is_null());
+    assert_eq!(state["overview"]["open"], true, "not picked: still open");
+    assert_eq!(slot(&state, "a"), place);
+    assert_eq!(window_in(&state, "a").unwrap()["workspace"], 1);
+    assert_eq!(state["focused"], "b");
+}
+
+#[test]
+fn a_minimized_window_dragged_to_a_workspace_stays_minimized_there() {
+    let mut pila = TestPila::start();
+    let _client = windows(&mut pila, &["a", "b"]);
+    pila.combo("Super+n");
+    pila.wait("b minimized", |s| {
+        window_in(s, "b").unwrap()["minimized"] == true
+    });
+    let state = open(&mut pila);
+    let to = thumb_center(&state, 2);
+    drag(&mut pila, center(slot(&state, "b")), to);
+    pila.wait("b dragged", |s| s["overview"]["dragging"] == "b");
+    pila.release("left");
+    let state = pila.wait("b on workspace 2", |s| {
+        window_in(s, "b").unwrap()["workspace"] == 2
+    });
+    assert_eq!(window_in(&state, "b").unwrap()["minimized"], true);
+    // Picked there later, it comes back on workspace 2.
+    pila.key("Escape");
+    pila.combo("Super+2");
+    let state = pila.wait("workspace 2", |s| s["workspace"] == 2);
+    assert_eq!(window_in(&state, "b").unwrap()["minimized"], true);
+}
