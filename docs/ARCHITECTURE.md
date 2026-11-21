@@ -528,7 +528,8 @@ Key flows and invariants:
   last takes the next refresh, and the gap after it counts from the frame before, less that one;
   a host that renders late draws the first frame after a pause at once and the next late). Screen captures are recorded apart
   (`record_capture`, a `captures` line), the blit into them subtracted from the output's
-  frame. The first frame after an output is set up (`OutputSurface::first_frame`: swapchain
+  frame. Clients' shm buffers copied at their commits ("Uploads") are recorded
+  apart too (`record_upload`, an `uploads` line: how many, average and worst CPU). The first frame after an output is set up (`OutputSurface::first_frame`: swapchain
   and modeset) is logged on its own and not counted. A redraw that found nothing new on an output
   (no frame queued: a commit with no new picture, the pointer moving with no cursor drawn) is counted
   apart, `idle` and its summed CPU `idle_cpu_ms` (`record_idle_frame`, udev and headless), and a
@@ -624,6 +625,26 @@ Key flows and invariants:
   has `syncobj_eventfd`: bare metal and headless with a GPU, not nested) a commit's acquire
   point takes the place of the fence, and Smithay signals the release point when the buffer
   is dropped. Pila keeps no buffer of its own: animation snapshots are textures.
+- **Uploads** (`upload.rs`, `Pila::upload_committed`, from the commit handler before
+  `redraw_committed`): a client's shm buffer reaches the GPU as a copy the CPU makes
+  (`glTexImage2D`, `glTexSubImage2D` of its damage), which Smithay makes when a frame builds its
+  elements (`import_surface`). Made in the frame, a whole-screen picture put milliseconds on it:
+  swaybg's first buffer cost 11 to 19 ms of a frame's CPU on Renoir's bare metal (a missed
+  refresh at every start), a fullscreen foot scrolling on 2560x1440 about 3 ms of every frame
+  against kitty's (dmabuf) 1 ms; and a frame held to render late (`udev/render_late.rs`) left
+  that copy its margin to fit in. The commit makes it instead (`import_surface_tree`, with the
+  renderer `Backend::renderer` lends: on bare metal the primary's `GlesRenderer`, the one
+  frames build their elements with, so Smithay's per-renderer texture is found there and not
+  copied again). Only for what a frame would copy anyway: a surface with an shm buffer that has
+  no texture yet (`needs_upload`), shown on an output (`surface_outputs`: not minimized, not on
+  another workspace; while locked, only a lock surface; a sync subsurface waits for its
+  parent's commit), and once between frames (`UploadedAfter`, by `Pila::frames_drawn`, which
+  `post_render` counts): a client committing faster than the outputs refresh leaves the rest to
+  the frame, which gets the damage since the last commit copied (`damage_since`). Dmabufs are
+  imported as before (no copy). The copy's time is counted apart, an `uploads` line on
+  `pila::frames` (`record_upload`), and `early_uploads` in `state_json` counts those commits.
+  On headless, whose frames wait for the GPU, the GPU's part of the copy still lands in the
+  frame that first draws the textures.
 - **Surface limits** (`surface_limits.rs`): no size or place a client gives a surface goes past
   `MAX_EXTENT` (32768 logical px; buffers in pixels), so no sum of a position and a size
   overflows, in Pila's layout and drawing or in Smithay's (bounding boxes, popup placement).

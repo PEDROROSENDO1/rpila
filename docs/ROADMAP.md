@@ -20,10 +20,6 @@ Nothing open: 0.8.1 took what was here.
 
 A feature users ask for goes here first.
 
-- **A frame shown late as the wallpaper first appears** (bare metal): on the 0.8.0 `scripts/check`
-  of a TTY, the frame where swaybg's picture first showed took 11.6 ms of CPU and was shown a
-  refresh late, once, at startup; the whole-screen buffer an app sends is uploaded as it's
-  drawn. Look into uploading it before the frame that shows it. Seen again on 0.8.1's (5 ms).
 - **The first frames after a game tears cost the GPU 3.5-4.8 ms** (bare metal, amdgpu): when a
   fullscreen game with vsync off (`vkcube`) closes or leaves fullscreen, Pila's next frames take
   that long on the GPU, against about 1 ms after the same game with vsync; asked for 4-5.5 ms

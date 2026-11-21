@@ -325,6 +325,21 @@ if [ "${1:-}" = "--workload" ]; then
             mark "fullscreen end"
         fi
 
+        # The same with a terminal that draws in shared memory (foot): its
+        # whole-screen buffers are copied to the GPU at each commit, apart
+        # from the frames (`upload.rs`, `uploads` in the frame statistics).
+        if [ "$terminal" != foot ] && command -v foot >/dev/null; then
+            mark "shm begin"
+            foot --fullscreen sh -c 'while :; do date; done' &
+            held=$!
+            sleep 3
+            stop "$held"
+            sleep 1
+            mark "shm end"
+        else
+            mark "shm skip (no foot, or it was the fullscreen terminal)"
+        fi
+
         # A fullscreen game with vsync off: vkcube (package vulkan-tools) with
         # Vulkan's immediate present mode, for which Mesa asks for its frames
         # to tear (wp-tearing-control). On bare metal they go out with
@@ -839,6 +854,23 @@ if [ -n "$loops" ]; then
         }
     } END { printf "%d %d %.1f %.2f %.0f\n", n, h, c, w, t ? h / t : 0 }' <<<"$loops")
     info "event loop: $iterations iterations, $housekeeping with all the housekeeping (${rate}/s), ${cpu} ms of CPU in all, worst ${worst} ms"
+fi
+
+# Clients' shm buffers copied to the GPU at their commits, apart from the
+# frames (`uploads` in the frame statistics, `upload.rs`). Reported, not
+# judged: their effect on frames is (no refresh missed).
+uploads=$(grep 'pila::frames: uploads' "$log" || true)
+if [ -n "$uploads" ]; then
+    read -r count average worst < <(awk '{
+        u = c = 0
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^uploads=/) u = substr($i, 9)
+            if ($i ~ /^cpu_avg_ms=/) c = substr($i, 12)
+            if ($i ~ /^cpu_max_ms=/) { m = substr($i, 12) + 0; if (m > w) w = m }
+        }
+        n += u; s += u * c
+    } END { printf "%d %.2f %.2f\n", n, n ? s / n : 0, w }' <<<"$uploads")
+    info "clients' shm buffers copied at their commits: $count, ${average} ms of CPU on average, worst ${worst} ms"
 fi
 
 # Frames that were an app's buffer as it is (direct scanout, bare metal:

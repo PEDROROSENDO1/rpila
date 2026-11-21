@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Smoother with apps that draw in shared memory:** a picture an app draws with the CPU
+  (swaybg's wallpaper, foot, Xwayland apps without GPU acceleration) is now copied to the GPU as
+  the app sends it, not in the middle of the frame that shows it. The wallpaper's first frame
+  took up to 19 ms on a laptop and was shown a refresh late at every start; it now takes under
+  4 ms. A fullscreen foot scrolling on a 2560x1440 monitor costs Pila about half as much per
+  frame. The copies' time is logged apart (`uploads` on `pila::frames`) and reported by
+  `pila-check`, which also runs a fullscreen foot where it's installed.
+
 ## 0.8.1 (2026-11-20)
 
 - **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`

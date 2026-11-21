@@ -142,6 +142,12 @@ pub struct Pila {
     /// An output was drawn this event-loop iteration: `after_frames` has
     /// housekeeping to do.
     pub frame_drawn: bool,
+    /// Frames drawn, on any output (`post_render`): a client's buffer is
+    /// uploaded at its commit once between them (`upload.rs`).
+    pub frames_drawn: u64,
+    /// Commits whose shm buffers were uploaded right away (`upload.rs`), for
+    /// the tests.
+    pub early_uploads: u64,
     /// Clients or input were handled this iteration: `after_frames` does its
     /// housekeeping even if no output was drawn (the change may show on
     /// none: a minimized window's title for the taskbar, a capture's window).
@@ -198,6 +204,9 @@ pub struct Pila {
     pub settling_since: Option<std::time::Duration>,
     /// The screen captures' frames (`frame_stats.rs`, `Pila::record_capture`).
     pub capture_stats: crate::frame_stats::FrameStats,
+    /// The uploads of clients' buffers at their commits (`upload.rs`,
+    /// `Pila::record_upload`).
+    pub upload_stats: crate::frame_stats::FrameStats,
     /// The event loop's own work after each iteration (`frame_stats.rs`,
     /// `Pila::record_loop`).
     pub loop_stats: crate::frame_stats::LoopStats,
@@ -573,6 +582,8 @@ impl Pila {
             config_path: None,
             config_reload_pending: false,
             frame_drawn: false,
+            frames_drawn: 0,
+            early_uploads: 0,
             housekeeping: false,
             input_activity: false,
             capture_due: false,
@@ -593,6 +604,7 @@ impl Pila {
             frame_stats: HashMap::new(),
             settling_since: None,
             capture_stats: Default::default(),
+            upload_stats: Default::default(),
             loop_stats: Default::default(),
             space: Space::default(),
             popups,
@@ -1796,6 +1808,7 @@ impl Pila {
         layer_map_for_output(output).cleanup();
         self.signal_barriers_on(output);
         self.frame_drawn = true;
+        self.frames_drawn += 1;
     }
 
     /// Called after every event-loop iteration (`main.rs`), once all the

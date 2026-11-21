@@ -202,7 +202,8 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   own after the outputs', are logged apart (`captures`), held to the same budget
   (`scripts/check` streams one, as a screen share does: `scripts/capture-stream`). The event
   loop's own work after each iteration (`after_frames`: taskbars, IPC, the `Space`), paced
-  by events rather than frames, is logged apart too (`loop`). Any change that touches
+  by events rather than frames, is logged apart too (`loop`), and so are clients' shm buffers,
+  copied to the GPU at their commits rather than in the frame (`uploads`, `upload.rs`). Any change that touches
   rendering, input or the event loop is checked with it (release build) before it's
   committed; bare-metal numbers come from the user with `scripts/check` (see Commands).
 - **Rules:** nothing blocking on the event loop (I/O, D-Bus, font loading go to threads

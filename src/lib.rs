@@ -75,6 +75,7 @@ pub mod tool_configs;
 pub mod toplevel_management;
 pub mod transients;
 pub mod udev;
+pub mod upload;
 pub mod urgency;
 pub mod virtual_keyboard;
 pub mod wallpaper;

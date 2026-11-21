@@ -73,6 +73,8 @@ impl CompositorHandler for Pila {
         self.finish_resize_commit(surface);
         crate::cursor::handle_commit(&self.cursor_status, surface);
         self.handle_dnd_icon_commit(surface);
+        // Before the redraw it asks for, so its frame finds the texture.
+        self.upload_committed(surface);
         self.redraw_committed(surface, before);
         if let Some(window) = self.window_for_surface(&crate::redraw::root_surface(surface)) {
             self.switcher_view_committed(&window);

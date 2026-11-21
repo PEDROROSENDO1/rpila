@@ -3,7 +3,8 @@
 `scripts/check` drives a real Pila with real programs (a terminal, xterm, fuzzel, grim,
 waybar if installed: windows opening and closing, minimize, maximize, workspace switches, the
 overview opening and closing, a
-launcher, a capture, a capture stream, a blurred window, a fullscreen one), over a wallpaper
+launcher, a capture, a capture stream, a blurred window, a fullscreen one, and a fullscreen foot
+when the terminal was kitty: shm buffers, copied to the GPU at each commit), over a wallpaper
 (swaybg on a 4K gradient it writes with python3, if both are installed), and judges the log: the scenarios finished without a panic, animations
 ran (`starts` on `pila::animation`), swaybg's layer surface came, waybar's surfaces follow their layer rule, grim got a
 picture, the stream got frames, monitors were identified from their EDID (bare metal), and the
@@ -24,7 +25,8 @@ output, `gpu_avg_ms` and `gpu_max_ms` (where the renderer gives native fences); 
 the frames' latency per output, how many were held to render late, how far before their vblank
 and how long before it they were ready (`PILA_CHECK_RENDER_LATE=false`
 runs without it, to compare); the event loop's own work after each iteration, `loop`,
-how often it did all of its housekeeping and the CPU it took; on bare metal, how many frames
+how often it did all of its housekeeping and the CPU it took; the clients' shm buffers copied
+at their commits, `uploads`, and their CPU; on bare metal, how many frames
 were an app's buffer as it is, `direct`: direct scanout, which the fullscreen terminal may
 bring; and how many were torn, `torn`, by `vkcube` with vsync off, fullscreen, where it's installed). `--vrr` (bare metal) asks every
 monitor for adaptive sync and checks it comes on where a monitor can do it, that Pila then

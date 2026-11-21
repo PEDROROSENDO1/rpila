@@ -384,6 +384,8 @@ impl Pila {
                 "layer_ghosts": layer_ghosts,
                 "resizing": resizing,
             },
+            // Commits whose shm buffers were uploaded at once (`upload.rs`).
+            "early_uploads": self.early_uploads,
             // A redraw asked for from `after_frames` is queued by an idle
             // callback (`defer_redraws`): pending until it runs.
             "redraw_pending": self.deferred_redraw_idles > 0

@@ -755,6 +755,20 @@ impl Client {
         self.flush();
     }
 
+    /// Draw `count` buffers of the last configured size, one commit each,
+    /// sent together: Pila reads them in one go, with no frame between.
+    pub fn draw_times(&self, window: Window, count: usize) {
+        let mut s = self.lock();
+        let shm = s.shm.clone().expect("wl_shm");
+        let w = &mut s.windows[window.0];
+        let size = configured_size(w);
+        for _ in 0..count {
+            draw(&shm, &self.qh, w, size);
+        }
+        drop(s);
+        self.flush();
+    }
+
     /// Unmap the window (null buffer), keeping its objects.
     pub fn unmap(&self, window: Window) {
         self.with_window(window, |w| {
