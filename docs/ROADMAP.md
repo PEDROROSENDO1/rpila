@@ -4,17 +4,17 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated for **0.8.0** (2026-11-20). Pila is alpha and a daily driver on its author's
+Last updated for **0.8.1** (2026-11-20). Pila is alpha and a daily driver on its author's
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells and tools (waybar and friends), bare metal with direct scanout, all covered by
-1084 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
+1119 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
 doesn't speak yet.
 
 ## Now: the next release
 
 Small, testable in CI, no new hardware needed.
 
-Nothing open: 0.8.0 took what was here.
+Nothing open: 0.8.1 took what was here.
 
 ## Next
 
@@ -23,7 +23,14 @@ A feature users ask for goes here first.
 - **A frame shown late as the wallpaper first appears** (bare metal): on the 0.8.0 `scripts/check`
   of a TTY, the frame where swaybg's picture first showed took 11.6 ms of CPU and was shown a
   refresh late, once, at startup; the whole-screen buffer an app sends is uploaded as it's
-  drawn. Look into uploading it before the frame that shows it.
+  drawn. Look into uploading it before the frame that shows it. Seen again on 0.8.1's (5 ms).
+- **The first frames after a game tears cost the GPU 3.5-4.8 ms** (bare metal, amdgpu): when a
+  fullscreen game with vsync off (`vkcube`) closes or leaves fullscreen, Pila's next frames take
+  that long on the GPU, against about 1 ms after the same game with vsync; asked for 4-5.5 ms
+  before a vblank, one misses it (about one `scripts/check` in ten, on either monitor). Not the
+  wallpaper, the animations, the game's process ending, nor waiting behind its work (a
+  high-priority GPU context changed nothing): what's left is in the driver or the switch back
+  from asynchronous flips, which needs a GPU trace (amdgpu tracepoints) to tell.
 
 ## Waiting for hardware and testers
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 (2026-11-20)
 
 - **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`
   do only one), the top-left corner of the screen (`[overview] hot-corner`) or a 4-finger swipe
