@@ -14,6 +14,12 @@
 //! resizing meanwhile takes its place at once. This module draws only what's
 //! behind them: the selected one's outline and the dimming
 //! (`overview_elements`).
+//!
+//! Opening, the windows glide from where they are to their places and the
+//! wallpaper dims (`[animations] overview`); closing, they glide back from
+//! the places they had then (`Overview::closing`) while it's already closed
+//! to input. A glide is an animation like the others (`step_animations`
+//! ends it, `animating` keeps frames coming).
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -32,8 +38,8 @@ use smithay::{
 };
 
 use crate::{
-    animation::{FrameMap, Transform, WindowEffect},
-    config::{Action, Colors, OverviewAction},
+    animation::{lerp_rect, Animation, FrameMap, Transform, WindowEffect},
+    config::{Action, AnimationKind, Colors, OverviewAction},
     render::{PilaRenderElement, SceneWindow},
     snap::Direction,
     Pila,
@@ -48,10 +54,14 @@ const OUTLINE: i32 = 4;
 /// What the wallpaper is dimmed with (premultiplied black).
 const DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.45];
 
-/// The overview while it's open.
+/// The overview while it's open, or gliding closed.
 #[derive(Default)]
 pub struct Overview {
     open: Option<Open>,
+    /// How far it's shown (0: closed, 1: open) while it opens or closes.
+    glide: Option<Animation>,
+    /// Closing: the places the windows glide back from.
+    closing: Option<Vec<Slot>>,
     buffers: Rc<RefCell<Buffers>>,
 }
 
@@ -94,6 +104,8 @@ pub struct SceneOverview {
     /// Its outline's corners: the windows' radius and corners (`None`:
     /// square).
     pub rounding: Option<(f64, crate::rounded::Corners)>,
+    /// How far it's shown (0 to 1): the dimming and outline fade with it.
+    pub shown: f32,
     buffers: Rc<RefCell<Buffers>>,
 }
 
@@ -244,6 +256,16 @@ impl Pila {
         self.close_window_menu();
         self.hide_shortcuts();
         self.dismiss_popup_grab();
+        // From where a closing one is, if it's on its way back.
+        let now = self.animation_time();
+        let from = self.overview_shown(now);
+        self.overview.closing = None;
+        self.overview.glide = self
+            .animation_duration(AnimationKind::Overview)
+            .map(|duration| Animation::new(now, duration.mul_f64(1.0 - from), from, 1.0));
+        if self.overview.glide.is_some() {
+            crate::animation::log_overview_glide(true);
+        }
         self.overview.open = Some(Open {
             selected: self.focused_window(),
             laid_out: Vec::new(),
@@ -258,15 +280,77 @@ impl Pila {
         }
     }
 
-    /// Close it, the windows back where they are.
+    /// Close it, the windows gliding back where they are.
     pub fn close_overview(&mut self) {
-        if self.overview.open.take().is_none() {
+        if !self.overview_open() {
             return;
         }
         tracing::debug!("closing the overview");
-        *self.overview.buffers.borrow_mut() = Buffers::default();
+        let slots = self.overview_slots();
+        let now = self.animation_time();
+        let from = self.overview_shown(now);
+        self.overview.open = None;
+        self.overview.glide = self
+            .animation_duration(AnimationKind::Overview)
+            .map(|duration| Animation::new(now, duration.mul_f64(from), from, 0.0));
+        if self.overview.glide.is_some() {
+            crate::animation::log_overview_glide(false);
+            self.overview.closing = Some(slots);
+        } else {
+            self.overview_closed(&slots);
+        }
         self.queue_redraw();
         self.refresh_pointer_focus();
+    }
+
+    /// Done closing: what was kept for it goes.
+    fn overview_closed(&mut self, slots: &[Slot]) {
+        *self.overview.buffers.borrow_mut() = Buffers::default();
+        for slot in slots {
+            if !self.window_animates(&slot.window) {
+                crate::animation::clear_textures(slot.window.user_data());
+            }
+        }
+    }
+
+    /// How far it's shown at `now`: 0 closed, 1 open, between while it
+    /// glides.
+    pub(crate) fn overview_shown(&self, now: std::time::Duration) -> f64 {
+        match &self.overview.glide {
+            Some(glide) => glide.value(now),
+            None if self.overview_open() => 1.0,
+            None => 0.0,
+        }
+    }
+
+    /// Whether it opens or closes, though its time may be up
+    /// (`animations_held`): every output is redrawn for it.
+    pub(crate) fn overview_moving(&self) -> bool {
+        self.overview.glide.is_some()
+    }
+
+    /// Whether it's still gliding at `now` (`animating`).
+    pub(crate) fn overview_gliding(&self, now: std::time::Duration) -> bool {
+        self.overview.glide.as_ref().is_some_and(|g| !g.done(now))
+    }
+
+    /// End a glide that's done (`step_animations`).
+    pub(crate) fn end_finished_overview(&mut self, now: std::time::Duration) {
+        if self.overview.glide.as_ref().is_some_and(|g| g.done(now)) {
+            self.overview.glide = None;
+            if let Some(slots) = self.overview.closing.take() {
+                self.overview_closed(&slots);
+            }
+        }
+    }
+
+    /// Stop gliding at once (the session locked, `drop_animations`).
+    pub(crate) fn stop_overview_glide(&mut self) {
+        self.overview.glide = None;
+        if let Some(slots) = self.overview.closing.take() {
+            self.overview_closed(&slots);
+            self.queue_redraw();
+        }
     }
 
     /// Close it on `window`, focused and raised (brought back if minimized).
@@ -440,10 +524,6 @@ impl Pila {
             return Vec::new();
         }
         let active = self.workspaces.active;
-        let frame_at = |window: &Window, loc: Point<i32, Logical>| {
-            let geo = Rectangle::new(loc, window.geometry().size);
-            crate::decoration::title_bar_rect(window, loc).map_or(geo, |bar| bar.merge(geo))
-        };
         let first_output = self.space.outputs().next().cloned();
         let mapped = self
             .space
@@ -499,49 +579,68 @@ impl Pila {
         slots
     }
 
-    /// The scene's windows as it shows them: each on its place (minimized
-    /// ones added behind), those it doesn't show left out.
+    /// The scene's windows as it shows them: each on its place, `shown` of
+    /// the way there from where it is (minimized ones added behind, fading
+    /// with it); while it's open, those it doesn't show are left out.
     pub(crate) fn overview_scene_windows(
         &self,
         windows: Vec<SceneWindow>,
         focused: Option<&Window>,
     ) -> Vec<SceneWindow> {
-        let slots = self.overview_slots();
-        let effect = |slot: &Slot| WindowEffect {
-            transform: Transform {
-                alpha: 1.0,
-                scale: 1.0,
-                offset: Point::default(),
-            },
-            center: crate::animation::center(slot.rect),
-            output: Some(slot.output.clone()),
-            frame: Some(FrameMap {
-                from: slot.frame.to_f64(),
-                to: slot.rect.to_f64(),
-            }),
+        let now = self.animation_time();
+        let shown = self.overview_shown(now);
+        let open = self.overview_open();
+        let slots = match &self.overview.closing {
+            Some(slots) if !open => slots.clone(),
+            _ => self.overview_slots(),
         };
-        let mut shown: Vec<SceneWindow> = windows
+        let effect = |slot: &Slot, frame: Rectangle<i32, Logical>, alpha: f32| {
+            let to = lerp_rect(frame, slot.rect, shown);
+            WindowEffect {
+                transform: Transform {
+                    alpha,
+                    scale: 1.0,
+                    offset: Point::default(),
+                },
+                center: to.loc + to.size.downscale(2.0).to_point(),
+                output: Some(slot.output.clone()),
+                frame: Some(FrameMap {
+                    from: frame.to_f64(),
+                    to,
+                }),
+            }
+        };
+        let mut drawn: Vec<SceneWindow> = windows
             .into_iter()
             .filter_map(|mut entry| {
-                let slot = slots.iter().find(|s| s.window == entry.window)?;
-                entry.effect = Some(effect(slot));
+                let Some(slot) = slots.iter().find(|s| s.window == entry.window) else {
+                    return (!open).then_some(entry);
+                };
+                let frame = self
+                    .space
+                    .element_location(&entry.window)
+                    .map_or(slot.frame, |loc| frame_at(&entry.window, loc));
+                entry.effect = Some(effect(slot, frame, 1.0));
                 Some(entry)
             })
             .collect();
         for slot in slots.iter().filter(|s| self.is_minimized(&s.window)) {
             let loc = crate::workspaces::space_location(&slot.window);
             if let Some(mut entry) = self.scene_window_at(&slot.window, loc, focused, None, None) {
-                entry.effect = Some(effect(slot));
-                shown.push(entry);
+                entry.effect = Some(effect(slot, slot.frame, shown as f32));
+                drawn.push(entry);
             }
         }
-        shown
+        drawn
     }
 
-    /// The overview for `Pila::scene`, while it's open.
+    /// The overview for `Pila::scene`, while it's open or gliding closed.
     pub(crate) fn scene_overview(&self) -> Option<SceneOverview> {
-        let open = self.overview.open.as_ref()?;
-        let selected = open.selected.as_ref().and_then(|window| {
+        if !self.overview_open() && self.overview.closing.is_none() {
+            return None;
+        }
+        let selected = self.overview.open.as_ref().and_then(|open| {
+            let window = open.selected.as_ref()?;
             self.overview_slots()
                 .into_iter()
                 .find(|slot| &slot.window == window)
@@ -558,6 +657,7 @@ impl Pila {
                 f64::from(self.config.corner_radius + OUTLINE as u32),
                 self.config.rounded_corners,
             )),
+            shown: self.overview_shown(self.animation_time()) as f32,
             buffers: self.overview.buffers.clone(),
         })
     }
@@ -565,12 +665,14 @@ impl Pila {
     /// For the state dump: whether it's open, the selected window and each
     /// window's place.
     pub fn overview_json(&self) -> serde_json::Value {
+        let shown = self.overview_shown(self.animation_time());
         let Some(open) = self.overview.open.as_ref() else {
-            return serde_json::json!({ "open": false });
+            return serde_json::json!({ "open": false, "shown": shown });
         };
         let rect = |r: Rectangle<i32, Logical>| serde_json::json!({ "x": r.loc.x, "y": r.loc.y, "w": r.size.w, "h": r.size.h });
         serde_json::json!({
             "open": true,
+            "shown": shown,
             "selected": open.selected.as_ref().map(crate::foreign_toplevel::app_id),
             "slots": self.overview_slots().iter().map(|slot| serde_json::json!({
                 "app_id": crate::foreign_toplevel::app_id(&slot.window),
@@ -579,6 +681,12 @@ impl Pila {
             })).collect::<Vec<_>>(),
         })
     }
+}
+
+/// `window`'s frame (geometry and title bar) with its geometry at `loc`.
+fn frame_at(window: &Window, loc: Point<i32, Logical>) -> Rectangle<i32, Logical> {
+    let geo = Rectangle::new(loc, window.geometry().size);
+    crate::decoration::title_bar_rect(window, loc).map_or(geo, |bar| bar.merge(geo))
 }
 
 /// The selected window's outline around its place.
@@ -608,7 +716,7 @@ pub fn overview_elements(
             buffer,
             (loc - origin).to_physical_precise_round(scale),
             scale,
-            1.0,
+            view.shown,
             Kind::Unspecified,
         )
     };

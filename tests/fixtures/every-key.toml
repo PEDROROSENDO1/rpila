@@ -52,6 +52,7 @@ minimize = true
 maximize = 220
 layer = 150
 workspace = 250
+overview = 250
 
 [cursor]
 theme = "Adwaita"

@@ -83,18 +83,32 @@ if [ "${1:-}" = "--workload" ]; then
     # Quit pila (SIGTERM quits cleanly): the nearest pila among this
     # script's ancestors, never another one (the login session's). Nix's
     # package runs it as .pila-wrapped, behind a wrapper script.
-    quit_pila() {
+    # The Pila running this, among the ancestors.
+    pila_pid() {
         local pid=$PPID
         while [ "$pid" -gt 1 ]; do
             case "$(ps -o comm= -p "$pid")" in
                 pila | .pila-wrapped)
-                    kill -TERM "$pid"
+                    echo "$pid"
                     return
                     ;;
             esac
             pid=$(ps -o ppid= -p "$pid" | tr -d ' ')
         done
-        mark "Pila not found among the ancestors; quit it with Mod+Shift+E"
+        return 1
+    }
+    quit_pila() {
+        local pid
+        if pid=$(pila_pid); then
+            kill -TERM "$pid"
+        else
+            mark "Pila not found among the ancestors; quit it with Mod+Shift+E"
+        fi
+    }
+    # `pila msg ...` with the Pila running this.
+    pila_msg() {
+        local pid
+        pid=$(pila_pid) && "$(readlink "/proc/$pid/exe")" msg "$@" >/dev/null
     }
     # A step that fails ends the scenarios (set -e): say which, and quit pila
     # all the same, or it would wait there until someone quits it.
@@ -241,6 +255,26 @@ if [ "${1:-}" = "--workload" ]; then
             stop "$held"
             sleep 1
             mark "workspace end"
+        fi
+
+        # The overview over two terminals: every window glides into a
+        # texture of its own, then shows live in it.
+        if [ -n "$terminal" ]; then
+            mark "overview begin"
+            run_terminal sh -c 'while :; do date; done' &
+            first=$!
+            run_terminal sleep 10 &
+            second=$!
+            sleep 2
+            for _ in 1 2; do
+                pila_msg action overview open
+                sleep 1.5
+                pila_msg action overview close
+                sleep 1
+            done
+            stop "$first" "$second"
+            sleep 1
+            mark "overview end"
         fi
 
         # A large blurred window over a terminal that never stops writing: its
@@ -641,6 +675,10 @@ fi
 if ran blur; then
     s=$(section blur)
     has "$s" "a window rule gives a translucent window a backdrop" "blur: allocated"
+fi
+if ran overview; then
+    s=$(section overview)
+    has "$s" "the overview glides open and closed" 'starts what="overview" id="close"'
 fi
 if ran layer-rule; then
     s=$(section layer-rule)

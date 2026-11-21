@@ -93,6 +93,7 @@ fn mod_w_spreads_the_windows_out_and_escape_closes_it() {
         }
     }
     assert_eq!(state["overview"]["selected"], "c", "the focused one");
+    assert_eq!(state["overview"]["shown"], 1.0, "at once, animations off");
     // No client gets the pointer while it's open.
     let (x, y) = center(slot(&state, "a"));
     pila.move_to(x, y);
@@ -309,4 +310,52 @@ fn locking_closes_it_and_it_doesnt_open_while_locked() {
     pila.stays("closed while locked", Duration::from_millis(300), |s| {
         s["overview"]["open"] == false
     });
+}
+
+#[test]
+fn with_animations_the_windows_glide_to_their_places_and_back() {
+    let mut pila = TestPila::with_config("[animations]\noverview = 1000\n");
+    let (client, _) = windows(&mut pila, &["a", "b"]);
+    pila.combo("Super+w");
+    let state = pila.wait("on its way", |s| {
+        s["overview"]["open"] == true && s["overview"]["shown"].as_f64().unwrap() < 1.0
+    });
+    assert!(
+        state["animations"]["running"] == true,
+        "{}",
+        state["animations"]
+    );
+    pila.wait("open", |s| s["overview"]["shown"] == 1.0);
+    pila.key("Escape");
+    // Closed to input at once, gliding back meanwhile.
+    let state = pila.wait("on its way back", |s| {
+        s["overview"]["open"] == false && s["overview"]["shown"].as_f64().unwrap() > 0.0
+    });
+    assert_eq!(state["focused"], "b");
+    let (x, y, w, h) = rect(&window_in(&state, "b").unwrap()["geometry"]);
+    pila.wait("closed", |s| s["overview"]["shown"] == 0.0);
+    // The windows are back where they were, and get clicks again.
+    pila.click_at((x + w / 2) as f64, (y + h / 2) as f64);
+    pila.settle();
+    client.roundtrip();
+    assert!(!client.buttons().is_empty());
+}
+
+#[test]
+fn opening_it_again_on_its_way_back_turns_it_around() {
+    let mut pila = TestPila::with_config("[animations]\noverview = 1000\n");
+    let _client = windows(&mut pila, &["a"]);
+    open(&mut pila);
+    pila.wait("open", |s| s["overview"]["shown"] == 1.0);
+    pila.key("Escape");
+    pila.wait("on its way back", |s| {
+        s["overview"]["open"] == false && s["overview"]["shown"].as_f64().unwrap() < 1.0
+    });
+    pila.combo("Super+w");
+    let state = pila.wait("open again", |s| s["overview"]["open"] == true);
+    assert!(
+        state["overview"]["shown"].as_f64().unwrap() > 0.0,
+        "from where it was"
+    );
+    pila.wait("all the way", |s| s["overview"]["shown"] == 1.0);
 }

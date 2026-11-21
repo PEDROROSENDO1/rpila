@@ -1,7 +1,8 @@
 # scripts/check
 
 `scripts/check` drives a real Pila with real programs (a terminal, xterm, fuzzel, grim,
-waybar if installed: windows opening and closing, minimize, maximize, workspace switches, a
+waybar if installed: windows opening and closing, minimize, maximize, workspace switches, the
+overview opening and closing, a
 launcher, a capture, a capture stream, a blurred window, a fullscreen one), over a wallpaper
 (swaybg on a 4K gradient it writes with python3, if both are installed), and judges the log: the scenarios finished without a panic, animations
 ran (`starts` on `pila::animation`), swaybg's layer surface came, waybar's surfaces follow their layer rule, grim got a

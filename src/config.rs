@@ -830,16 +830,19 @@ pub enum AnimationKind {
     Layer,
     /// The workspace changes.
     Workspace,
+    /// The overview opens or closes.
+    Overview,
 }
 
 impl AnimationKind {
-    const ALL: [AnimationKind; 6] = [
+    const ALL: [AnimationKind; 7] = [
         AnimationKind::WindowOpen,
         AnimationKind::WindowClose,
         AnimationKind::Minimize,
         AnimationKind::Maximize,
         AnimationKind::Layer,
         AnimationKind::Workspace,
+        AnimationKind::Overview,
     ];
 
     /// Its key in `[animations]`.
@@ -851,6 +854,7 @@ impl AnimationKind {
             AnimationKind::Maximize => "maximize",
             AnimationKind::Layer => "layer",
             AnimationKind::Workspace => "workspace",
+            AnimationKind::Overview => "overview",
         }
     }
 }
@@ -865,7 +869,7 @@ const ANIMATION_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=4.0;
 pub struct AnimationsConfig {
     /// Each kind's duration in milliseconds (`AnimationKind::ALL` order);
     /// 0 when it's off.
-    durations: [u32; 6],
+    durations: [u32; 7],
     /// Multiplies every duration (2: twice as slow).
     speed: f64,
     /// `enabled`: off, everything that would animate changes at once.
@@ -921,6 +925,7 @@ struct AnimationsFile {
     maximize: Option<AnimationFile>,
     layer: Option<AnimationFile>,
     workspace: Option<AnimationFile>,
+    overview: Option<AnimationFile>,
 }
 
 impl AnimationsFile {
@@ -939,6 +944,7 @@ impl AnimationsFile {
             maximize: entry(self.maximize, example.maximize),
             layer: entry(self.layer, example.layer),
             workspace: entry(self.workspace, example.workspace),
+            overview: entry(self.overview, example.overview),
         }
     }
 
@@ -959,8 +965,9 @@ impl AnimationsFile {
             self.maximize,
             self.layer,
             self.workspace,
+            self.overview,
         ];
-        let mut durations = [0; 6];
+        let mut durations = [0; 7];
         for ((kind, entry), duration) in AnimationKind::ALL.iter().zip(entries).zip(&mut durations)
         {
             let key = format!("animations.{}", kind.key());

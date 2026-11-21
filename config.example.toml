@@ -177,6 +177,7 @@ minimize = 200                   # and restoring
 maximize = 220                   # also fullscreen and snapping
 layer = 150                      # launchers, notifications
 workspace = 250                  # slide sideways
+overview = 250                   # windows glide to their places and back
 
 # The cursor's theme and size, and shake to find it: the cursor grows while
 # it's shaken, and shrinks back a moment after. All read as soon as the file

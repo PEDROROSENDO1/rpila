@@ -172,7 +172,7 @@ impl WindowProps {
             AnimationKind::WindowClose => a.close,
             AnimationKind::Minimize => a.minimize,
             AnimationKind::Maximize => a.maximize,
-            AnimationKind::Layer | AnimationKind::Workspace => None,
+            AnimationKind::Layer | AnimationKind::Workspace | AnimationKind::Overview => None,
         }
         .unwrap_or(true)
     }

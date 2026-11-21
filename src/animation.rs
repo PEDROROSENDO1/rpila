@@ -218,7 +218,7 @@ impl FrameMap {
 }
 
 /// `a` to `b`, `t` of the way (0 to 1).
-fn lerp_rect(
+pub(crate) fn lerp_rect(
     a: Rectangle<i32, Logical>,
     b: Rectangle<i32, Logical>,
     t: f64,
@@ -313,7 +313,7 @@ impl Animations {
 #[derive(Default)]
 pub struct AnimTextures(pub RefCell<Vec<render::OffscreenWindow>>);
 
-fn clear_textures(user_data: &UserDataMap) {
+pub(crate) fn clear_textures(user_data: &UserDataMap) {
     if let Some(textures) = user_data.get::<AnimTextures>() {
         textures.0.borrow_mut().clear();
     }
@@ -356,6 +356,12 @@ fn log_event(what: &str, id: &str, outcome: Outcome) {
     }
 }
 
+/// Log the overview's glide starting, `opening` it or closing it.
+pub(crate) fn log_overview_glide(opening: bool) {
+    let id = if opening { "open" } else { "close" };
+    log_event("overview", id, Outcome::Starts);
+}
+
 /// Log a workspace slide to workspace `index` (from 0) starting.
 pub(crate) fn log_workspace_slide(index: usize) {
     log_event("workspace", &(index + 1).to_string(), Outcome::Starts);
@@ -372,6 +378,7 @@ fn window_event(kind: AnimationKind, coming: bool) -> &'static str {
         (AnimationKind::Layer, true) => "layer-in",
         (AnimationKind::Layer, false) => "layer-out",
         (AnimationKind::Workspace, _) => "workspace",
+        (AnimationKind::Overview, _) => "overview",
     }
 }
 
@@ -463,8 +470,16 @@ impl Pila {
         self.clock.now().into()
     }
 
+    /// Whether `window` appears, goes or changes size and place now: its
+    /// textures (`AnimTextures`) are in use.
+    pub(crate) fn window_animates(&self, window: &Window) -> bool {
+        let a = &self.animations;
+        a.appearing.iter().any(|x| x.window == *window)
+            || a.resizing.iter().any(|x| x.window == *window)
+    }
+
     /// How long `kind` lasts, if it plays.
-    fn animation_duration(&self, kind: AnimationKind) -> Option<Duration> {
+    pub(crate) fn animation_duration(&self, kind: AnimationKind) -> Option<Duration> {
         if self.is_locked() {
             return None;
         }
@@ -789,6 +804,7 @@ impl Pila {
             !done
         });
         self.end_finished_slide(now);
+        self.end_finished_overview(now);
         if held || cursor.is_some() {
             self.redraw_after_frames(outputs);
         }
@@ -817,7 +833,7 @@ impl Pila {
     /// (a workspace slide). A window's or ghost's rectangle grows by its
     /// shadow and by how far an animation moves it (`MINIMIZE_DROP`).
     fn animation_outputs(&self) -> Option<Vec<Output>> {
-        if self.workspace_slide.is_some() {
+        if self.workspace_slide.is_some() || self.overview_moving() {
             return None;
         }
         let margin = self.shadow_margin() + MINIMIZE_DROP.ceil() as i32;
@@ -865,6 +881,7 @@ impl Pila {
             || !a.layer_ghosts.is_empty()
             || !a.resizing.is_empty()
             || self.workspace_slide.is_some()
+            || self.overview_moving()
     }
 
     /// Whether anything is still animating now, so frames are wanted back
@@ -881,6 +898,7 @@ impl Pila {
                 .iter()
                 .any(|x| x.progress.as_ref().is_none_or(running))
             || self.sliding(now)
+            || self.overview_gliding(now)
             || self.shake_cursor.changing(now)
     }
 
@@ -899,6 +917,7 @@ impl Pila {
         self.animations.layer_ghosts.clear();
         let slide = self.workspace_slide.take();
         self.retire_slide(slide);
+        self.stop_overview_glide();
     }
 
     // --- Size and place changes ---------------------------------------------

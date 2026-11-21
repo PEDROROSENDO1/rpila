@@ -793,7 +793,13 @@ Key flows and invariants:
   action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the
   window there, the keyboard layout). Picking is `activate_toplevel` (raised, focused, restored).
   A workspace switch while it's open shows the new windows in their places without a slide
-  (`show_workspace`). The lock closes it, and it doesn't open while locked. The state dump has
+  (`show_workspace`). Opening and closing glide (`[animations] overview`, `Overview::glide`, from
+  where a glide the other way is): each window's `FrameMap` goes `overview_shown` of the way
+  from its frame as it is to its place (minimized ones fading with it), and the dimming and
+  outline fade. Closing, it's closed to input at once and the windows glide back from the places
+  kept in `Overview::closing`; `end_finished_overview` (from `step_animations`) drops them and
+  the windows' textures (`overview_closed`). The glide counts in `animating`/`animations_held`
+  and redraws every output (`animation_outputs`); `drop_animations` stops it. The lock closes it, and it doesn't open while locked. The state dump has
   it (`overview_json`).
 - **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws with the bindings as
   they're bound: a fixed list of actions looked up in `config.bindings` (`keys_for`: the

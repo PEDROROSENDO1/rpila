@@ -61,7 +61,7 @@ impl Pila {
     /// it, so what gets the keys is shown.
     pub fn top_layer_covered(&self, output: &Output) -> bool {
         // The overview shrinks the fullscreen window.
-        if self.overview_open() {
+        if self.overview_open() || self.overview_moving() {
             return false;
         }
         let top = self

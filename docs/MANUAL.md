@@ -260,7 +260,7 @@ as `#rrggbbaa`); `enabled = false` turns it off. A window rule's `shadow` turns 
 app.
 
 **Animations.** Windows opening, closing, minimizing and maximizing (snapping and fullscreen
-too), launchers and notifications, and workspace switches animate briefly. `[animations]`
+too), launchers and notifications, workspace switches and the overview animate briefly. `[animations]`
 changes them:
 
 ```toml
