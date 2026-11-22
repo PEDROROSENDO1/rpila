@@ -794,6 +794,99 @@ fn pila_maximizing_an_x11_window_sets_its_state() {
     }
 }
 
+/// An X11 app that restores itself maximized sets _NET_WM_STATE before it
+/// maps its window: it opens maximized.
+#[test]
+fn an_x11_window_maximized_before_it_maps_opens_maximized() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.unmapped_window("XApp", (300, 200), 0xff0000, false);
+    let states = [
+        x.atom("_NET_WM_STATE_MAXIMIZED_VERT"),
+        x.atom("_NET_WM_STATE_MAXIMIZED_HORZ"),
+    ];
+    x.conn
+        .change_property32(
+            PropMode::REPLACE,
+            id,
+            x.atom("_NET_WM_STATE"),
+            AtomEnum::ATOM,
+            &states,
+        )
+        .unwrap();
+    x.conn.map_window(id).unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("open maximized", |s| {
+        x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == (0, 28, 1280, 772))
+    });
+}
+
+/// Snapping a maximized X11 window tells X it's no longer maximized: an app
+/// that reads its state (to draw its own maximize button) doesn't think it is.
+#[test]
+fn snapping_a_maximized_x11_window_unsets_its_maximized_state() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        x11_window(s, "XApp").unwrap()["geometry"]["w"] == 1280
+    });
+    let maximized = |x: &X11| {
+        x.net_wm_state_of(id)
+            .iter()
+            .any(|s| s == "_NET_WM_STATE_MAXIMIZED_HORZ")
+    };
+    let started = Instant::now();
+    while !maximized(&x) {
+        assert!(started.elapsed() < TIMEOUT, "never maximized for X");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    pila.combo("Super+Left");
+    pila.wait("the left half", |s| {
+        x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == (0, 28, 640, 772))
+    });
+    let started = Instant::now();
+    while maximized(&x) {
+        assert!(started.elapsed() < TIMEOUT, "still maximized for X");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// An override-redirect window (a menu, a tooltip) that moves itself is
+/// drawn where it went.
+#[test]
+fn an_override_redirect_window_that_moves_is_followed() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    let menu = x.menu((100, 120), (80, 60));
+    let menu_geometry = |s: &Value| {
+        s["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|w| w["override_redirect"] == true)
+            .map(|w| rect(&w["geometry"]))
+    };
+    pila.wait("the menu", |s| menu_geometry(s) == Some((100, 120, 80, 60)));
+    x.conn
+        .configure_window(menu, &ConfigureWindowAux::new().x(300).y(250))
+        .unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("the menu where it moved", |s| {
+        menu_geometry(s) == Some((300, 250, 80, 60))
+    });
+}
+
 #[test]
 fn an_iconify_request_minimizes() {
     let mut pila = TestPila::start();

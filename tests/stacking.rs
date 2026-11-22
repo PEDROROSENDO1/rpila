@@ -737,6 +737,45 @@ fn the_quarters_take_a_quarter_of_the_output() {
     });
 }
 
+/// `snap-left` and `snap-right`, for bindings that go straight to a half
+/// (the Mod+arrows step from where the window is instead).
+#[test]
+fn the_left_and_right_halves_by_their_actions() {
+    let bindings = "[bindings]\n\"Mod+1\" = \"snap-left\"\n\"Mod+2\" = \"snap-right\"\n";
+    let mut pila = TestPila::with_config(bindings);
+    let client = pila.client();
+    let window = client.window("a").size(400, 300).create();
+    pila.wait_focus("a");
+    let before = rect(&pila.window("a")["geometry"]);
+    for (combo, side, geometry, tiled) in [
+        (
+            "Super+1",
+            "left",
+            (0, BAR, 640, 800 - BAR),
+            states::TILED_LEFT,
+        ),
+        (
+            "Super+2",
+            "right",
+            (640, BAR, 640, 800 - BAR),
+            states::TILED_RIGHT,
+        ),
+    ] {
+        pila.combo(combo);
+        pila.wait(side, |s| {
+            let a = window_in(s, "a").unwrap();
+            a["snapped"] == side && rect(&a["geometry"]) == geometry
+        });
+        client.wait_configure(window, side, |c| c.has(tiled));
+    }
+    // Again: restored to where it was before the first.
+    pila.combo("Super+2");
+    pila.wait("restored", |s| {
+        let a = window_in(s, "a").unwrap();
+        a["snapped"].is_null() && rect(&a["geometry"]) == before
+    });
+}
+
 #[test]
 fn the_top_and_bottom_halves_take_half_of_the_output() {
     let bindings = "[bindings]\n\"Mod+1\" = \"snap-top\"\n\"Mod+2\" = \"snap-bottom\"\n";

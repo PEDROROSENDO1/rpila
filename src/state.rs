@@ -2150,7 +2150,6 @@ impl Pila {
     /// Xwayland) isn't sent; one `[environment]` removes stays as the bus
     /// has it.
     fn exported_env(&self) -> Vec<(String, String)> {
-        let env = self.spawned_env();
         let mut names: Vec<&str> = SESSION_ENV.to_vec();
         names.extend(
             self.config
@@ -2165,21 +2164,7 @@ impl Pila {
         if self.config.cursor.size.is_some() {
             names.push("XCURSOR_SIZE");
         }
-        let mut vars: Vec<(String, String)> = Vec::new();
-        for name in names {
-            if vars.iter().any(|(known, _)| known == name) {
-                continue;
-            }
-            // The last word on it is Pila's; else the program inherits it.
-            let value = match env.iter().rev().find(|(known, _)| known == name) {
-                Some((_, value)) => value.clone(),
-                None => std::env::var(name).ok(),
-            };
-            if let Some(value) = value {
-                vars.push((name.to_string(), value));
-            }
-        }
-        vars
+        exported_vars(&names, &self.spawned_env(), |name| std::env::var(name).ok())
     }
 
     /// The variables everything Pila starts gets set (`Some`) or removed
@@ -2651,8 +2636,88 @@ impl ClientData for ClientState {
     }
 }
 
+/// The value of each of `names` that a program Pila starts gets: the last
+/// word on it in `spawned` (`Pila::spawned_env`; `None`, removed), else
+/// `inherited`'s (Pila's own environment). A name it doesn't get is left out,
+/// and each comes once.
+fn exported_vars(
+    names: &[&str],
+    spawned: &[(String, Option<String>)],
+    inherited: impl Fn(&str) -> Option<String>,
+) -> Vec<(String, String)> {
+    let mut vars: Vec<(String, String)> = Vec::new();
+    for &name in names {
+        if vars.iter().any(|(known, _)| known == name) {
+            continue;
+        }
+        let value = match spawned.iter().rev().find(|(known, _)| known == name) {
+            Some((_, value)) => value.clone(),
+            None => inherited(name),
+        };
+        if let Some(value) = value {
+            vars.push((name.to_string(), value));
+        }
+    }
+    vars
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_bus_gets_what_programs_get() {
+        let set = |name: &str, value: Option<&str>| (name.to_string(), value.map(String::from));
+        let spawned = [
+            set("QT_QPA_PLATFORM", Some("wayland")),
+            set("WAYLAND_DISPLAY", Some("wayland-1")),
+            set("DISPLAY", Some(":1")),
+            set("XAUTHORITY", Some("/run/user/1000/pila-xauthority-1")),
+            set("PILA_SOCKET", None),
+            // The last word counts.
+            set("QT_QPA_PLATFORM", Some("wayland;xcb")),
+        ];
+        let host = |name: &str| match name {
+            "PILA_SOCKET" => Some("/elsewhere".to_string()),
+            "XDG_CURRENT_DESKTOP" => Some("host".to_string()),
+            _ => None,
+        };
+        let names = [
+            "WAYLAND_DISPLAY",
+            "DISPLAY",
+            "XAUTHORITY",
+            "XDG_CURRENT_DESKTOP",
+            "PILA_SOCKET",
+            "QT_QPA_PLATFORM",
+            "XDG_SESSION_TYPE",
+            "DISPLAY",
+        ];
+        let vars = super::exported_vars(&names, &spawned, host);
+        let pair = |name: &str, value: &str| (name.to_string(), value.to_string());
+        assert_eq!(
+            vars,
+            [
+                pair("WAYLAND_DISPLAY", "wayland-1"),
+                pair("DISPLAY", ":1"),
+                pair("XAUTHORITY", "/run/user/1000/pila-xauthority-1"),
+                // Not set by Pila: as Pila has it.
+                pair("XDG_CURRENT_DESKTOP", "host"),
+                // PILA_SOCKET, removed for programs, isn't the host's
+                // either; XDG_SESSION_TYPE is set nowhere; the last word
+                // counts.
+                pair("QT_QPA_PLATFORM", "wayland;xcb"),
+            ]
+        );
+    }
+
+    #[test]
+    fn without_xwayland_the_bus_gets_no_display_or_cookie() {
+        let spawned = [
+            ("DISPLAY".to_string(), None),
+            ("XAUTHORITY".to_string(), None),
+        ];
+        let host = |_: &str| Some("the host's".to_string());
+        assert!(super::exported_vars(&["DISPLAY", "XAUTHORITY"], &spawned, host).is_empty());
+    }
+
     use super::*;
 
     #[test]

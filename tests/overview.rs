@@ -170,6 +170,54 @@ fn arrows_and_enter_pick_a_window() {
     assert!(no_key_but_super(&client), "{:?}", client.keys());
 }
 
+/// Each arrow picks a window that way, or stays where there's none.
+#[test]
+fn each_arrow_picks_a_window_its_way() {
+    let mut pila = TestPila::start();
+    let (_client, _) = windows(&mut pila, &["a", "b", "c", "d"]);
+    let state = open(&mut pila);
+    let centers: Vec<(String, (f64, f64))> = slots(&state)
+        .iter()
+        .map(|s| {
+            let app = s["app_id"].as_str().unwrap().to_string();
+            (app, center(rect(&s["rect"])))
+        })
+        .collect();
+    let at = |app: &str| centers.iter().find(|(a, _)| a == app).unwrap().1;
+    // Its way: further along the axis by more than a few pixels.
+    let ahead = |from: (f64, f64), to: (f64, f64), key: &str| match key {
+        "Right" => to.0 > from.0 + 4.0,
+        "Left" => to.0 < from.0 - 4.0,
+        "Down" => to.1 > from.1 + 4.0,
+        _ => to.1 < from.1 - 4.0,
+    };
+    let mut moved = [false; 4];
+    // Twice round, so each arrow is tried from more than one window.
+    for _ in 0..2 {
+        for (i, key) in ["Right", "Down", "Left", "Up"].into_iter().enumerate() {
+            let state = pila.state();
+            let from = state["overview"]["selected"].as_str().unwrap().to_string();
+            let any_that_way = centers.iter().any(|(_, c)| ahead(at(&from), *c, key));
+            pila.key(key);
+            let state = pila.settle();
+            let to = state["overview"]["selected"].as_str().unwrap().to_string();
+            if any_that_way {
+                assert!(
+                    ahead(at(&from), at(&to), key),
+                    "{key} from {from} picked {to}: {centers:?}"
+                );
+                moved[i] = true;
+            } else {
+                assert_eq!(to, from, "{key} from {from}, with nothing that way");
+            }
+        }
+    }
+    assert!(
+        moved.iter().all(|m| *m),
+        "every arrow moved once: {moved:?}"
+    );
+}
+
 #[test]
 fn a_key_that_isnt_a_binding_reaches_no_window_and_another_binding_closes_it_and_runs() {
     let mut pila = TestPila::start();
