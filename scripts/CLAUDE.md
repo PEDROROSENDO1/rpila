@@ -119,3 +119,12 @@ times out, a saved config doesn't load or Pila panics, and lists missed refreshe
 `pila::frames`. Redo it when the looks, the bar, the launcher or the scenes change, and watch
 it before publishing it: no personal data. A scene that needs a new kind of input or wait gets
 a helper in `demo-scenes`, not a sleep.
+
+# scripts/install
+
+`scripts/install` builds the release binary (with the host's cargo if there is one, else
+`--container`; `--no-build`) and installs it with the files listed in its `install_files`
+(what they are: `docs/INSTALL.md`), among them `resources/session/` (the `pila-session`
+wrapper, the `wayland-sessions` entry and, where there's systemd, the user units Pila runs
+as); `scripts/uninstall` removes them. Paths come from `scripts/install-paths` (`PREFIX`,
+`BINDIR`, `DATADIR`, `SYSCONFDIR`, `DESTDIR`), sourced by both.

@@ -65,14 +65,9 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   then clippy, a release build and the tests with `--locked` (a `Cargo.lock` out of date
   with `Cargo.toml` fails there, not locally), does a staged install and runs
   `shellcheck --severity=warning --external-sources` on the scripts (and parses the Python
-  ones): run that after editing one. `compat.yml` (`rust-version`, Debian, Ubuntu, Fedora, Nix,
-  `cargo audit`) runs when dependencies, the Nix files, `scripts/install`(`-paths`) or
-  `resources/` change (not `packaging/`), weekly and by hand before a release. The package
-  workflows (`packages.yml`, `repos.yml`, `aur.yml`) are the `release` skill's; `aur.yml`
-  publishes only once approved: a release's `pkgver` commit by Claude, any other change by
-  the user. `vkms.yml` (by hand, an experiment) runs the udev backend on the kernel's virtual
-  KMS driver in the runner's VM. `fuzz.yml` (by hand) runs the fuzz targets in `fuzz/` for a
-  few minutes each.
+  ones): run that after editing one. The other workflows are in `.github/workflows/` (the
+  package ones in the `release` skill); `aur.yml` publishes only once approved: a release's
+  `pkgver` commit by Claude, any other change by the user.
 - Every feature gets integration tests (`tests/*.rs`; how they work is in `tests/CLAUDE.md`)
   and a new test goes into `tests/FEATURES.md`; only bare-metal paths (`udev/`), real frame
   times (`scripts/check`) and looks stay with the user. `scripts/coverage [--html]` reports line
@@ -118,23 +113,16 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   compositor, `RUST_LOG=pila::frames=debug` for frame times and missed refreshes (see
   "Performance pillar"). To watch an animation frame by frame: `[animations] speed = 4`
   and `grim` in a loop from a script run with `cargo run -- -c`.
-- The login session (the user, on the host): `scripts/install` builds the release binary
-  (with the host's cargo if there is one, else `--container`; `--no-build`) and installs it
-  with the files listed in its `install_files` (what they are: `docs/INSTALL.md`), among them
-  `resources/session/` (the `pila-session` wrapper, the `wayland-sessions` entry and, where
-  there's systemd, the user units Pila runs as); `scripts/uninstall` removes them. Paths come
-  from `scripts/install-paths` (`PREFIX`, `BINDIR`, `DATADIR`, `SYSCONFDIR`, `DESTDIR`),
-  sourced by both. Its log is in the journal (`journalctl -t pila -b`) and in
+- The login session (the user, on the host) is installed by `scripts/install`
+  (`scripts/CLAUDE.md`). Its log is in the journal (`journalctl -t pila -b`) and in
   `~/.local/state/pila/pila.log`, mounted here read-only as `/run/host-pila/pila.log`
   (previous run: `pila.log.old`).
   Taking a change into the session means logging out and back in, which ends this
   Claude session; the user does it.
-- Packages: Arch (`packaging/aur/pila-git`), Debian/Fedora (`packaging/nfpm.yaml`) and Nix
-  (`flake.nix`, `package.nix`); each also has `pila-desktop`, a metapackage of the tools the
-  default configuration runs (`packaging/aur/pila-desktop`, `packaging/nfpm-desktop.yaml`, the
-  flake's `pila-desktop`), whose lists change together when a default tool does. A file
-  added to `scripts/install`'s `install_files` or a newly linked library also goes in those
-  packages, so read the `release` skill first (it covers packaging as well as releases).
+- Packages (Arch, Debian/Fedora, Nix, and each one's `pila-desktop` metapackage of the
+  default tools, whose lists change together): a file added to `scripts/install`'s
+  `install_files`, a newly linked library or a changed default tool also goes in them, so
+  read the `release` skill first (it covers packaging as well as releases).
 - TTY runs (the user, on the host): `scripts/tty [config]` runs the release build
   (`--debug` for the debug one) by hand on a spare VT, under `dbus-run-session`, while the
   login session keeps running; read `pila-tty.log` and the previous run's
@@ -179,33 +167,10 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   render) stays well inside the period. Target: release build on the user's laptop (AMD
   Renoir), typical scenes, **at most 4 ms per output** (a quarter of 60 Hz, still room at
   144 Hz).
-- **Measure it:** `RUST_LOG=pila::frames=debug` (`frame_stats.rs`) logs per output,
-  every 5 s, frames, average and worst CPU time and missed refreshes, plus every frame
-  over half the period, and apart the redraws that found nothing new to show (`idle`, with
-  their summed CPU time; `scripts/check` reports them per output) and, on bare metal, the
-  frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn) and
-  those shown at once by an asynchronous flip (`torn`: a fullscreen game with vsync off, which
-  miss no refresh).
-  Missed refreshes are vblanks with no new frame while an animation runs and, on bare metal,
-  a frame asked for in time but shown a vblank late, animation or not (`late`): exact on bare
-  metal (the DRM sequence of the vblanks that showed frames) and an estimate nested (gaps
-  over 1.5 periods; the host decides when frames show); `pila::frames=trace` logs every
-  frame. The first frame after an output is set up (connected, powered on, a new mode, back
-  from another VT: swapchain and modeset) is a cost of setting it up, logged on its own and
-  not counted. The GPU's part of a frame (`gpu_avg_ms`, `gpu_max_ms`: from its submission to
-  its native fence signaling, not waited for; none on software rendering) is logged with the
-  rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. On bare
-  metal frames are drawn late while the scene is steady, as close to their vblank as recent
-  frames allow (`render-late`, `udev/render_late.rs`), and their latency (redraw asked →
-  vblank that showed it) is logged and reported too; `PILA_CHECK_RENDER_LATE=false
-  scripts/check` gives the numbers without it. Screen captures, which build frames of their
-  own after the outputs', are logged apart (`captures`), held to the same budget
-  (`scripts/check` streams one, as a screen share does: `scripts/capture-stream`). The event
-  loop's own work after each iteration (`after_frames`: taskbars, IPC, the `Space`), paced
-  by events rather than frames, is logged apart too (`loop`), and so are clients' shm buffers,
-  copied to the GPU at their commits rather than in the frame (`uploads`, `upload.rs`). Any change that touches
-  rendering, input or the event loop is checked with it (release build) before it's
-  committed; bare-metal numbers come from the user with `scripts/check` (see Commands).
+- **Measure it:** any change that touches rendering, input or the event loop is checked
+  with `RUST_LOG=pila::frames=debug` (`frame_stats.rs`) and `scripts/check --nested` (release
+  build) before it's committed; bare-metal numbers come from the user with `scripts/check`
+  (see Commands). What each logged number means: the `frame-stats` skill.
 - **Rules:**
   - Nothing blocks the event loop: I/O, D-Bus and font loading go to threads or run in the
     background, like `text.rs` and `export_environment`.
@@ -260,11 +225,8 @@ Privileged protocols are hidden from sandboxed apps: a client that connected thr
 wp-security-context (Flatpak) fails `state::is_privileged` (`ClientState::security_context`;
 Xwayland counts as privileged). Smithay globals take it as their filter (those Smithay
 gives none, keyboard-shortcuts-inhibit and ext-idle-notify, are made again hidden with
-`state::hide_from_sandboxes`), Pila's own as `GlobalDispatch::can_view`. It covers
-layer-shell, session lock, ext-data-control, virtual-keyboard, input-method,
-ext-foreign-toplevel-list, screen capture (both protocols), toplevel management, gamma, output
-management and power, ext-workspace, keyboard-shortcuts-inhibit, ext-idle-notify, and
-security-context itself (xwayland-keyboard-grab is shown to Xwayland alone, by Smithay). A new
+`state::hide_from_sandboxes`), Pila's own as `GlobalDispatch::can_view` (grep those for
+the list; xwayland-keyboard-grab is shown to Xwayland alone, by Smithay). A new
 global that exposes or controls other clients, input or outputs must get it too.
 
 ## Architecture
@@ -344,11 +306,4 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
 Smithay's `smallvil` (minimal stacking compositor) and `anvil` (full-featured) examples are
 the canonical references. Clone `https://github.com/Smithay/smithay` outside `/workspace`
 (e.g. `/tmp`) at the `rev` of the `smithay` dependency in `Cargo.toml` and read them before
-inventing new patterns. Moving `rev` forward is a change of its own: read Smithay's
-`CHANGELOG.md` and log since the old one, run the whole suite, `scripts/check --nested` and
-`scripts/apps`, and have the user check bare metal (`udev/`). While the dependency is Pila's
-fork (`Cargo.toml` says which rev of Smithay's it is and what it adds), a bump tags the rev
-`main` pinned (`rev-<sha>`, so the releases that pin it keep building) and rebases its
-`pila` branch on the new rev, or goes back to Smithay's own once it has the fixes: each has a
-test that fails without it. The branch is moved through the GitHub API (no git network here),
-at the user's word.
+inventing new patterns. Moving `rev` forward is a change of its own: follow the `smithay-bump` skill.
