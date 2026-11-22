@@ -7,6 +7,10 @@
   authorization, so a Flatpak app with network access but no X11 permission (or another user
   on the machine) could connect to it: read and replace the clipboard at any time and type into
   X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
+- **Security: no focus stealing by hovering:** an app could take the keyboard focus (and what
+  was typed next, such as a password in a terminal) whenever the pointer merely rested on one of
+  its windows, by asking for an activation token with the serial of the pointer entering it.
+  Only a click on it counts now, and only until the keyboard focus moves elsewhere.
 - **Smoother with apps that draw in shared memory:** a picture an app draws with the CPU
   (swaybg's wallpaper, foot, Xwayland apps without GPU acceleration) is now copied to the GPU as
   the app sends it, not in the middle of the frame that shows it. The wallpaper's first frame

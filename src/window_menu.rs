@@ -97,7 +97,8 @@ impl Item {
     }
 }
 
-/// The last pointer button press (`InputState::last_press`).
+/// The last pointer button press (`InputState::last_press`), for the window
+/// menu and for activation tokens (`handlers/xdg_activation.rs`).
 pub struct LastPress {
     pub serial: Serial,
     pub button: u32,

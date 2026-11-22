@@ -218,9 +218,9 @@ manager, restarted if it dies, with selections bridged both ways.
   through any path, Pila's or a Smithay grab's; a path that tries is a panic in debug builds.
   Hit testing and the scene contain only lock surfaces, and a test runs every action, gesture,
   activation and taskbar request while locked.
-- **xdg-activation tokens** only for a serial newer than the client's keyboard focus, or its
-  pointer focus (a clicked notification), single-use and short-lived; one from before a lock
-  activates nothing.
+- **xdg-activation tokens** only for a serial newer than the client's keyboard focus, or a
+  click on it since the focus last moved (a clicked notification; hovering alone doesn't count),
+  single-use and short-lived; one from before a lock activates nothing.
 
 ## Configuration and IPC
 

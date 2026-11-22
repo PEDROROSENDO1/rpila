@@ -2,8 +2,9 @@
 //! to the front, e.g. a browser raising itself when a link is opened.
 //!
 //! Focus-stealing policy: a token is only issued for user input the client
-//! received while it had the keyboard focus, or the pointer (a click on a
-//! notification or panel, which take no keyboard). Tokens are single-use and
+//! received while it had the keyboard focus, or for a click on it since the
+//! keyboard focus last changed (a notification or panel, which take no
+//! keyboard; not the pointer only resting on it). Tokens are single-use and
 //! expire after `TOKEN_TIMEOUT`.
 
 use std::time::Duration;
@@ -114,17 +115,25 @@ impl Pila {
                     .and_then(|focus| focus.surface().and_then(|s| client_of(&s)))
                     == data.client_id
         });
-        // A click (or motion) on a surface of the client under the pointer:
-        // a notification or a panel, which take no keyboard (as niri, which
-        // doesn't check the client).
-        let pointer = self.seat.get_pointer().is_some_and(|pointer| {
-            pointer
-                .last_enter()
-                .is_some_and(|enter| serial.is_no_older_than(&enter))
-                && pointer
-                    .current_focus()
-                    .and_then(|focus| focus.surface().and_then(client_of))
-                    == data.client_id
+        // A click on a surface of the client under the pointer: a
+        // notification or a panel, which take no keyboard. A press, not the
+        // pointer's enter: motion isn't the user asking for anything, and an
+        // app would take the keyboard whenever the pointer rests on it. The
+        // press must be the user's last say, newer than the keyboard focus's
+        // last change: a click on an app and then Alt+Tab away, the pointer
+        // left on it, doesn't let it take the focus back.
+        let keyboard_enter = self.seat.get_keyboard().and_then(|k| k.last_enter());
+        let pointer = self.input.last_press.as_ref().is_some_and(|press| {
+            press.client.is_some()
+                && press.client == data.client_id
+                && serial.is_no_older_than(&press.serial)
+                && keyboard_enter.is_none_or(|enter| press.serial.is_no_older_than(&enter))
+                && self.seat.get_pointer().is_some_and(|pointer| {
+                    pointer
+                        .current_focus()
+                        .and_then(|focus| focus.surface().and_then(client_of))
+                        == data.client_id
+                })
         });
         keyboard || pointer
     }

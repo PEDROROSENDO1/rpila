@@ -1253,9 +1253,11 @@ Key flows and invariants:
   signal source is created first thing in `main`, before any thread, so no thread can
   take the signal instead.
 - **Activation** (`handlers/xdg_activation.rs`, xdg-activation): a token that activates
-  is issued only for a serial newer than the keyboard focus's enter to the client holding it, or newer
-  than the pointer focus's enter to the client under the pointer (a clicked notification or
-  panel, which take no keyboard); one with no
+  is issued only for a serial newer than the keyboard focus's enter to the client holding it, or
+  no older than the last button press (`InputState::last_press`) to the client under the pointer,
+  if that press came after the keyboard focus's last change (a clicked notification or panel,
+  which take no keyboard; the pointer's enter alone doesn't count, or a window would take the
+  keyboard whenever the pointer rests on it); one with no
   serial is issued too, but only marks its window urgent (`UrgentOnlyToken`, see "Urgency"). Tokens
   are single-use and expire after `TOKEN_TIMEOUT`. A request switches to the window's
   workspace (`reveal_workspace_of`), shows it if minimized and focuses it if it's mapped;

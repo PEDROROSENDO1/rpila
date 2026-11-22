@@ -1135,6 +1135,61 @@ fn a_pointer_serial_of_another_surface_doesnt_activate() {
     });
 }
 
+/// The pointer only resting on a window isn't the user asking for it: the
+/// serial of its enter can't activate it, or an app could take the keyboard
+/// (and what's typed next) whenever the pointer passes over it.
+#[test]
+fn hovering_a_window_doesnt_let_it_take_the_focus() {
+    let mut pila = TestPila::start();
+    let thief = pila.client();
+    let window = thief.window("thief").size(800, 600).create();
+    pila.wait_focus("thief");
+    let owner = pila.client();
+    owner.window("owner").size(200, 100).create();
+    let state = pila.wait_focus("owner");
+    let (x, y, ..) = rect(&window_in(&state, "thief").unwrap()["geometry"]);
+    pila.move_to(x as f64 + 10.0, y as f64 + 10.0);
+    thief.wait("the pointer's enter", |s| s.pointer_enter_serial != 0);
+    let serial = thief.lock().pointer_enter_serial;
+    let token = token_for(&thief, serial);
+    let activation: XdgActivationV1 = thief.bind("xdg_activation_v1", 1);
+    activation.activate(token, &thief.surface(window));
+    thief.flush();
+    pila.stays("owner keeps focus", Duration::from_millis(200), |s| {
+        s["focused"] == "owner"
+    });
+}
+
+/// A click counts until the keyboard focus moves on: the app clicked, then
+/// another window focused with the pointer left on the app, can't use that
+/// click to take the focus back.
+#[test]
+fn a_click_before_the_focus_moved_on_doesnt_activate() {
+    let mut pila = TestPila::start();
+    let thief = pila.client();
+    let window = thief.window("thief").size(800, 600).create();
+    let state = pila.wait_focus("thief");
+    let (x, y, ..) = rect(&window_in(&state, "thief").unwrap()["geometry"]);
+    pila.move_to(x as f64 + 10.0, y as f64 + 10.0);
+    pila.click("left");
+    thief.wait("the click", |s| {
+        s.events
+            .iter()
+            .any(|e| matches!(e, Ev::Button { pressed: false, .. }))
+    });
+    let serial = thief.last_serial();
+    let owner = pila.client();
+    owner.window("owner").size(200, 100).create();
+    pila.wait_focus("owner");
+    let token = token_for(&thief, serial);
+    let activation: XdgActivationV1 = thief.bind("xdg_activation_v1", 1);
+    activation.activate(token, &thief.surface(window));
+    thief.flush();
+    pila.stays("owner keeps focus", Duration::from_millis(200), |s| {
+        s["focused"] == "owner"
+    });
+}
+
 #[test]
 fn an_unfocused_client_cant_steal_focus() {
     let mut pila = TestPila::start();
