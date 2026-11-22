@@ -5,8 +5,8 @@
 - **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves
   for Xwayland listened on an abstract socket too, which has no permissions and needs no
   authorization, so a Flatpak app with network access but no X11 permission (or another user
-  on the machine) could connect to it: read and replace the clipboard at any time and type into
-  X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
+  on the machine) could connect to it: replace the clipboard, read it while an X11 app had the
+  focus, and type into X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
 - **Security: no focus stealing by hovering:** an app could take the keyboard focus (and what
   was typed next, such as a password in a terminal) whenever the pointer merely rested on one of
   its windows, by asking for an activation token with the serial of the pointer entering it.
