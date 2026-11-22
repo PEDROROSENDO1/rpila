@@ -359,7 +359,12 @@ impl Pila {
             return;
         }
         ensure_x11_socket_dir();
-        match XWaylandDisplay::new(None, true) {
+        // Only the socket file, no abstract socket: Xwayland runs without
+        // `-auth`, and an abstract socket has no permissions, so any process
+        // in the network namespace (a Flatpak with network access but no X11
+        // permission, another user) would get the clipboard and XTEST into
+        // X11 apps. The file's permissions keep them out.
+        match XWaylandDisplay::new(None, false) {
             Ok(reservation) => {
                 info!(
                     display = reservation.display_number(),

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves
+  for Xwayland listened on an abstract socket too, which has no permissions and needs no
+  authorization, so a Flatpak app with network access but no X11 permission (or another user
+  on the machine) could connect to it: read and replace the clipboard at any time and type into
+  X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
 - **Smoother with apps that draw in shared memory:** a picture an app draws with the CPU
   (swaybg's wallpaper, foot, Xwayland apps without GPU acceleration) is now copied to the GPU as
   the app sends it, not in the middle of the frame that shows it. The wallpaper's first frame

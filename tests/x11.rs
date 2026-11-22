@@ -383,6 +383,37 @@ fn xwayland_starts_when_an_x11_app_connects() {
     xwayland_pid(&pila);
 }
 
+/// The reserved display listens only on its socket file, whose permissions
+/// keep other users out, never on an abstract socket, which any process in
+/// the network namespace reaches: a Flatpak with network access and no X11
+/// permission, or another user, would get the clipboard and XTEST into X11
+/// apps. X11 apps still connect, through the file.
+#[test]
+fn the_x11_display_has_no_abstract_socket() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start();
+    let display = reserved_display(&mut pila);
+    let file = format!("/tmp/.X11-unix/X{}", &display[1..]);
+    let unix = std::fs::read_to_string("/proc/net/unix").unwrap();
+    let names: Vec<&str> = unix
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(7))
+        .collect();
+    assert!(names.contains(&file.as_str()), "no socket file {file}");
+    let abstract_name = format!("@{file}");
+    assert!(
+        !names.contains(&abstract_name.as_str()),
+        "the display listens on {abstract_name}"
+    );
+    let x11 = X11::connect(&mut pila).unwrap();
+    x11.window("through-the-file", (200, 200), 0xff0000);
+    pila.wait("its window", |s| {
+        x11_window(s, "through-the-file").is_some()
+    });
+}
+
 /// With `idle-timeout`, Xwayland stops once its last X11 client leaves, and
 /// the next one starts it again on the same display, time after time.
 #[test]

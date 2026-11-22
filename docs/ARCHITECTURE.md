@@ -1332,7 +1332,8 @@ Key flows and invariants:
   it, clients get it as motion, and it isn't activity.
 - **X11** (`xwayland.rs`, `focus.rs`): Xwayland on demand. At launch Pila only reserves an
   X display (`reserve_xwayland`: Smithay's `XWaylandDisplay`, its number, lock file and
-  listening sockets, held until exit), unless Xwayland isn't installed or `[xwayland] enabled =
+  listening sockets, held until exit: the socket file only, never an abstract socket, which has
+  no permissions while Xwayland runs without `-auth`), unless Xwayland isn't installed or `[xwayland] enabled =
   false`; spawned clients get its `DISPLAY` from the start (never the host's; `Pila::x11_display`,
   none while turned off), and the startup programs don't wait for X. Turned on or off on reload
   (`xwayland_config_changed`): on, the display is reserved then; off, it's let go at once if
