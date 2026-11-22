@@ -9,7 +9,9 @@ when the terminal was kitty: shm buffers, copied to the GPU at each commit), ove
 ran (`starts` on `pila::animation`), swaybg's layer surface came, waybar's surfaces follow their layer rule, grim got a
 picture, the stream got frames, monitors were identified from their EDID (bare metal), and the
 frame statistics (no missed refresh, frames shown late included, CPU per frame on average within 4 ms, for the outputs'
-frames and, on average over all of them, the captures'; bare metal, if a night light set gamma,
+frames and, on average over all of them, the captures'; each copy of a client's shm buffer at
+its commit, `uploads`, within 8 ms (half a 60 Hz period, render late's margin), since it holds
+the event loop; bare metal, if a night light set gamma,
 its changes within that budget too: commits that don't wait). It prints PASS/FAIL per check
 and exits 1 on a failure (`scripts/check --judge <log>` judges a log again; `PILA_BIN` runs
 another binary; installed as `pila-check` by `scripts/install` and the packages, it runs the
@@ -25,8 +27,7 @@ output, `gpu_avg_ms` and `gpu_max_ms` (where the renderer gives native fences); 
 the frames' latency per output, how many were held to render late, how far before their vblank
 and how long before it they were ready (`PILA_CHECK_RENDER_LATE=false`
 runs without it, to compare); the event loop's own work after each iteration, `loop`,
-how often it did all of its housekeeping and the CPU it took; the clients' shm buffers copied
-at their commits, `uploads`, and their CPU; on bare metal, how many frames
+how often it did all of its housekeeping and the CPU it took; on bare metal, how many frames
 were an app's buffer as it is, `direct`: direct scanout, which the fullscreen terminal may
 bring; and how many were torn, `torn`, by `vkcube` with vsync off, fullscreen, where it's installed). `--vrr` (bare metal) asks every
 monitor for adaptive sync and checks it comes on where a monitor can do it, that Pila then

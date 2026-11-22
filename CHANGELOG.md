@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **No refresh missed when a fullscreen shm app opens:** a client's buffer drawn with the CPU
+  (foot, swaybg's wallpaper, Xwayland apps without GPU acceleration) is now copied to the GPU in
+  strips, not all at once: on AMD's driver a whole 1920x1080 buffer in one copy took 10 to 22 ms
+  about one time in three, and a fullscreen foot's first buffer made the screen miss a refresh;
+  in strips the worst copy takes under 5 ms. `pila-check` now judges each copy (within 8 ms).
+
 ## 0.8.2 (2026-11-21)
 
 - **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves

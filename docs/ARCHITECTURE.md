@@ -640,8 +640,11 @@ Key flows and invariants:
   another workspace; while locked, only a lock surface; a sync subsurface waits for its
   parent's commit), and once between frames (`UploadedAfter`, by `Pila::frames_drawn`, which
   `post_render` counts): a client committing faster than the outputs refresh leaves the rest to
-  the frame, which gets the damage since the last commit copied (`damage_since`). Dmabufs are
-  imported as before (no copy). The copy's time is counted apart, an `uploads` line on
+  the frame, which gets the damage since the last commit copied (`damage_since`). Smithay
+  (Pila's fork) copies in strips of at most 128 KiB, a new texture allocated empty first: one
+  call for a whole 1920x1080 buffer took radeonsi's slow path (a staging buffer of its size,
+  allocated anew while the last is busy), 10 to 22 ms about one time in three; `scripts/check`
+  fails a copy over 8 ms. Dmabufs are imported as before (no copy). The copy's time is counted apart, an `uploads` line on
   `pila::frames` (`record_upload`), and `early_uploads` in `state_json` counts those commits.
   On headless, whose frames wait for the GPU, the GPU's part of the copy still lands in the
   frame that first draws the textures.

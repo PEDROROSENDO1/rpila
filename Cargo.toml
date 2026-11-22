@@ -68,13 +68,17 @@ zbus = "6"
 #   removes its event sources when dropped: Smithay's pull request #2269
 #   without its selection part (Xwayland on demand, `xwayland.rs`: Pila
 #   doesn't build without `XWaylandDisplay`;
-#   `x11::xwayland_stops_when_idle_if_asked` fails on the leaked sources).
+#   `x11::xwayland_stops_when_idle_if_asked` fails on the leaked sources);
+# - shm buffers uploaded to their textures in strips of at most 128 KiB: a
+#   whole 1920x1080 buffer in one call took radeonsi's slow path, 10 to 22 ms
+#   of the event loop (`scripts/check`'s shm copies within 8 ms each fails
+#   without, on bare metal).
 # On a bump: tag the rev `main` pins (`rev-<sha>`: released versions pin older
 # ones, kept by their tags), rebase that branch on the new rev, or go back to
 # `https://github.com/Smithay/smithay.git` once it has them.
 [dependencies.smithay]
 git = "https://github.com/igalmarino/smithay.git"
-rev = "3e1f459aaf943f93b324a9a03fc39b244ac8a13e"
+rev = "432098edac106abb393811fcc94006f9dc4f17da"
 default-features = false
 features = [
     "backend_winit",

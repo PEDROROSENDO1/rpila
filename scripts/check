@@ -857,8 +857,13 @@ if [ -n "$loops" ]; then
 fi
 
 # Clients' shm buffers copied to the GPU at their commits, apart from the
-# frames (`uploads` in the frame statistics, `upload.rs`). Reported, not
-# judged: their effect on frames is (no refresh missed).
+# frames (`uploads` in the frame statistics, `upload.rs`). A copy holds the
+# event loop, and a frame due meanwhile, so each stays within half a period at
+# 60 Hz, the margin a frame held to render late is drawn with: a whole buffer
+# copied at once took the driver's slow path (a fullscreen foot's first
+# 1920x1080 buffer, 22.5 ms on bare metal, a refresh missed), which Smithay's
+# upload in strips (Pila's fork) avoids; a new buffer's first copy still
+# costs a few ms (the driver's upload path starting cold).
 uploads=$(grep 'pila::frames: uploads' "$log" || true)
 if [ -n "$uploads" ]; then
     read -r count average worst < <(awk '{
@@ -870,7 +875,11 @@ if [ -n "$uploads" ]; then
         }
         n += u; s += u * c
     } END { printf "%d %.2f %.2f\n", n, n ? s / n : 0, w }' <<<"$uploads")
-    info "clients' shm buffers copied at their commits: $count, ${average} ms of CPU on average, worst ${worst} ms"
+    if awk -v v="$worst" 'BEGIN { exit !(v <= 8) }'; then
+        pass "clients' shm buffers copied at their commits within 8 ms each ($count, ${average} ms of CPU on average, worst ${worst} ms)"
+    else
+        fail "clients' shm buffers copied at their commits within 8 ms each ($count, worst ${worst} ms)"
+    fi
 fi
 
 # Frames that were an app's buffer as it is (direct scanout, bare metal:

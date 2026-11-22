@@ -27,11 +27,6 @@ A feature users ask for goes here first.
   wallpaper, the animations, the game's process ending, nor waiting behind its work (a
   high-priority GPU context changed nothing): what's left is in the driver or the switch back
   from asynchronous flips, which needs a GPU trace (amdgpu tracepoints) to tell.
-- **A large shm buffer's first copy to the GPU can take a refresh** (bare metal): a fullscreen
-  foot's first 1920x1080 buffer took 22.5 ms to copy at its commit, the one that makes its
-  texture (later ones take about 2 ms), and the frame after it was shown a refresh late. Before
-  copies moved to the commit it cost the frame itself as much. Making the texture ahead of the
-  copy, or copying a new buffer in parts, would keep it inside a period.
 
 ## Waiting for hardware and testers
 
