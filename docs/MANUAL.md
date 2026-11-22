@@ -31,6 +31,7 @@ This manual says how to use Pila and set it up. Every configuration option is de
 - [The configuration file](#the-configuration-file)
 - [Building your desktop](#building-your-desktop)
 - [Screenshots and screen sharing](#screenshots-and-screen-sharing)
+- [Portals, polkit and the keyring](#portals-polkit-and-the-keyring)
 - [Locking the screen and idling](#locking-the-screen-and-idling)
 - [Games and X11 apps](#games-and-x11-apps)
 - [Window and layer rules](#window-and-layer-rules)
@@ -723,6 +724,65 @@ covered, minimized or on another workspace.
 Screen sharing needs the session's D-Bus bus, which the login screen and `pila-session` set up;
 a nested Pila doesn't have it.
 
+## Portals, polkit and the keyring
+
+Apps ask the session for a few things a full desktop starts for them: a file chooser and other
+dialogs (the desktop portal), a password prompt for administrator tasks (a polkit agent), and a
+place to keep the passwords they save (a keyring). Pila draws none of them; standard programs
+do. On a TTY Pila hands the session bus and systemd its environment by itself (`WAYLAND_DISPLAY`,
+`DISPLAY`, `XAUTHORITY`, `XDG_CURRENT_DESKTOP=pila` and `[environment]`'s), so nothing like
+`dbus-update-activation-environment` is needed in `autostart`.
+
+**Portals.** xdg-desktop-portal picks its backends from `pila-portals.conf` (named after
+`XDG_CURRENT_DESKTOP`). Pila's, in `/etc/xdg/xdg-desktop-portal/`, uses `xdg-desktop-portal-gtk`
+for everything (a GTK file chooser) but screen sharing and screenshots
+(`xdg-desktop-portal-wlr`). For GNOME's file chooser, install `xdg-desktop-portal-gnome` and
+Nautilus, and write your own `~/.config/xdg-desktop-portal/pila-portals.conf`. It replaces Pila's
+whole, so keep its two `wlr` lines, or screen sharing stops working:
+
+```ini
+[preferred]
+default=gnome;gtk
+org.freedesktop.impl.portal.ScreenCast=wlr
+org.freedesktop.impl.portal.Screenshot=wlr
+# These need GNOME Shell in the GNOME backend.
+org.freedesktop.impl.portal.Access=gtk
+org.freedesktop.impl.portal.Notification=gtk
+org.freedesktop.impl.portal.Inhibit=gtk
+```
+
+Log in again, or `systemctl --user restart xdg-desktop-portal`. Qt apps use the portal's file
+chooser with `QT_QPA_PLATFORMTHEME = "xdgdesktopportal"` under `[environment]`; Firefox with
+`widget.use-xdg-desktop-portal.file-picker` set to `1` in `about:config`. GTK 4 apps follow the
+dark style through the portal: `gsettings set org.gnome.desktop.interface color-scheme
+prefer-dark` (either backend reads it).
+
+**Polkit.** An app that needs an administrator's password (`pkexec`, a disk utility, a software
+center) asks a polkit agent for it, which a desktop starts in its session. Pila doesn't, and
+`pila-desktop` doesn't bring one: without one, those apps fail with no prompt. Start one from
+`autostart`, as the last of your list (an `autostart` of yours replaces the default one, so keep
+the default's programs in it), e.g. GNOME's:
+
+```toml
+autostart = [
+    "swaybg",
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+    "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
+]
+```
+
+Its path depends on the distribution (that one is Arch's; package polkit-gnome).
+`lxqt-policykit-agent` and `mate-polkit` work too; run one agent at a time.
+
+**The keyring.** Passwords apps save (browsers, mail, Git's credential helper over libsecret)
+go to a Secret Service: GNOME Keyring, or KeePassXC with its Secret Service on. GNOME Keyring
+unlocks with your login password through PAM: in the login screen's PAM file
+(`/etc/pam.d/greetd` for greetd), `auth optional pam_gnome_keyring.so` and `session optional
+pam_gnome_keyring.so auto_start`. It starts when an app first asks for it (D-Bus activation);
+where it doesn't, add `gnome-keyring-daemon --start --components=secrets` to `autostart`.
+
 ## Locking the screen and idling
 
 Lock screens that use ext-session-lock work: `swaylock`, or your shell's own.
@@ -925,6 +985,7 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | They need `grim`, and `Mod+Shift+S` also `slurp` and `wl-clipboard` (`wl-copy`): Pila tells you when one of them isn't installed. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |
+| An app's administrator password prompt never shows (`pkexec` fails at once) | No polkit agent runs: start one from `autostart` ([Portals, polkit and the keyring](#portals-polkit-and-the-keyring)). |
 | Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `pila-shot`, which Pila no longer has: change its `chooser_cmd` to `slurp -f 'Monitor: %o' -or`, or delete it (`scripts/tty` does the first by itself). |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
