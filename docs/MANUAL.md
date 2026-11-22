@@ -761,7 +761,7 @@ prefer-dark` (either backend reads it).
 center) asks a polkit agent for it, which a desktop starts in its session. Pila doesn't, and
 `pila-desktop` doesn't bring one: without one, those apps fail with no prompt. Start one from
 `autostart`, as the last of your list (an `autostart` of yours replaces the default one, so keep
-the default's programs in it), e.g. GNOME's:
+the default's programs in it), e.g. Soteria, a GTK 4 agent made for any desktop:
 
 ```toml
 autostart = [
@@ -769,12 +769,18 @@ autostart = [
     "waybar",
     "mako",
     "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
-    "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
+    "soteria",
 ]
 ```
 
-Its path depends on the distribution (that one is Arch's; package polkit-gnome).
-`lxqt-policykit-agent` and `mate-polkit` work too; run one agent at a time.
+Soteria is on the AUR (`soteria-bin`, `soteria-git`) and in nixpkgs (`soteria`, or
+`security.soteria.enable` on NixOS); elsewhere it builds with Cargo
+([github.com/imvaskel/soteria](https://github.com/imvaskel/soteria)), and it needs a
+`helper_path` in its configuration where `polkit-agent-helper-1` isn't in `/usr/lib/polkit/`.
+Agents in every distribution's own repositories work too, GTK 3 ones such as mate-polkit and
+GNOME's polkit-gnome (whose path depends on the distribution:
+`/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1` on Arch), or LXQt's
+`lxqt-policykit-agent`. Run one agent at a time.
 
 **The keyring.** Passwords apps save (browsers, mail, Git's credential helper over libsecret)
 go to a Secret Service: GNOME Keyring, or KeePassXC with its Secret Service on. GNOME Keyring
