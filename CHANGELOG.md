@@ -1,22 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.8.3 (2026-11-22)
 
 - **Gaps:** `gaps` leaves room around maximized windows and the halves and quarters windows are
   snapped to, and between snapped ones, in logical pixels (0, none, by default). With room
   around it a maximized window keeps its shadow and rounded corners; fullscreen windows still
   take the whole monitor.
-
 - **Windows no longer end up under a bar that comes after them:** a window snapped to a half or
   a quarter stayed where it was when a bar appeared or grew (an app snapped at login, before
   waybar was up), its top under the bar; it now moves below it, as maximized windows already
   did. And a maximized window refit to a bar no longer comes in front of the other windows.
-
 - **No refresh missed when a fullscreen shm app opens:** a client's buffer drawn with the CPU
   (foot, swaybg's wallpaper, Xwayland apps without GPU acceleration) is now copied to the GPU in
   strips, not all at once: on AMD's driver a whole 1920x1080 buffer in one copy took 10 to 22 ms
   about one time in three, and a fullscreen foot's first buffer made the screen miss a refresh;
   in strips the worst copy takes under 5 ms. `pila-check` now judges each copy (within 8 ms).
+- **Why a fullscreen app isn't shown as it is** (direct scanout, bare metal) is logged on
+  `pila::frames`: the format and modifier of a buffer the screen refused, and whether its app
+  was told the screen's formats. With Mesa 26.3 on AMD, OpenGL apps keep a buffer layout the
+  screen can't read, so their frames are drawn by Pila (docs/ROADMAP.md).
 
 ## 0.8.2 (2026-11-21)
 
