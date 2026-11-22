@@ -1479,6 +1479,116 @@ fn a_candidate_window_can_ask_for_blur_behind_it() {
     wait_mixed(&mut pila, 636.0, 400.0);
 }
 
+/// `popup-blur = true` blurs behind a window's popups that don't ask (GTK's
+/// menus), over their geometry: not behind the shadow the app draws around it.
+#[test]
+fn a_popup_blur_rule_blurs_behind_a_windows_popups() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = true"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    // Its geometry from 550,310 to 750,490, in a 20 px shadow.
+    let popup = clear_popup(&client, Ok(window), (240, 220));
+    client.set_popup_geometry(popup, (20, 20, 200, 180));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(636.0, 302.0), CLEAR, "in its shadow");
+    // Its window, outside it: still clear.
+    assert_eq!(pila.pixel(560.0, 305.0), CLEAR);
+}
+
+/// A popup's corners are the app's own (a GTK 4 menu's are rounded): a square
+/// backdrop would show in them, so `popup-corner-radius` rounds it.
+#[test]
+fn popup_corner_radius_rounds_the_blur_behind_popups() {
+    for (rest, rounded) in [
+        ("popup-blur = true", false),
+        ("popup-blur = true\npopup-corner-radius = 20", true),
+    ] {
+        let mut pila = TestPila::with_config(&glass_window_rule(628, 300, rest));
+        let client = pila.client();
+        let window = halves_and_a_glass_window(&mut pila, &client);
+        // From 638,310, over the red/green edge.
+        clear_popup(&client, Ok(window), (200, 180));
+        wait_mixed(&mut pila, 639.0, 400.0);
+        pila.settle();
+        let corner = pila.pixel(639.0, 311.0);
+        if rounded {
+            assert_eq!(corner, CLEAR, "rounded off");
+        } else {
+            assert!(mixed(corner), "square: {corner:?}");
+        }
+    }
+}
+
+/// GTK gives a popover's shape (its arrow, its rounded corners) as its input
+/// region: `popup-blur = true` blurs behind that, not all of its geometry.
+#[test]
+fn a_popup_blur_rule_follows_the_shape_a_popup_takes_input_in() {
+    let mut pila = TestPila::with_config(&glass_window_rule(628, 300, "popup-blur = true"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    // From 638,310, over the red/green edge: an arrow on top, then its body.
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    let compositor: WlCompositor = client.lock().compositor.clone().unwrap();
+    let region = compositor.create_region(&client.qh, "region".into());
+    region.add(90, 0, 20, 20);
+    region.add(0, 20, 200, 160);
+    let surface = client.wl_surface_of(popup);
+    surface.set_input_region(Some(&region));
+    surface.commit();
+    client.flush();
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(639.0, 311.0), CLEAR, "beside its arrow");
+}
+
+/// An input method's candidate window is a popup of the window it types into:
+/// `popup-blur = true` blurs behind all of it.
+#[test]
+fn a_popup_blur_rule_blurs_behind_a_candidate_window() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = true"));
+    let app = pila.client();
+    halves_and_a_glass_window(&mut pila, &app);
+    let ime = pila.client();
+    let input_method = ime.input_method();
+    let text_input = app.text_input();
+    app.wait_logged("text_input", "Enter");
+    // Below the text cursor: from 630,370, over the red/green edge.
+    app.enable_text_input(&text_input, (90, 50, 2, 20));
+    ime.wait_logged("input_method", "Activate");
+    ime.ime_popup(&input_method, [0, 0, 0, 0], (200, 50));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    // Its window, outside it: still clear.
+    assert_eq!(pila.pixel(560.0, 305.0), CLEAR);
+}
+
+#[test]
+fn a_popup_blur_rule_can_refuse_what_popups_ask() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = false"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
+    assert_eq!(pila.pixel(636.0, 400.0), CLEAR);
+    assert_eq!(pila.state()["blur"]["entries"], 0);
+}
+
+/// `popup-blur` is the popups' alone: with it, `blur = false` refuses the
+/// window its blur but not them theirs.
+#[test]
+fn a_popup_blur_rule_beats_a_windows_blur_false() {
+    let mut pila = TestPila::with_config(&glass_window_rule(
+        540,
+        300,
+        "blur = false\npopup-blur = true",
+    ));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    clear_popup(&client, Ok(window), (200, 180));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    assert_eq!(pila.state()["blur"]["entries"], 1, "the popup's alone");
+}
+
 #[test]
 fn a_rule_refusing_a_window_its_blur_refuses_its_popups_theirs() {
     let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "blur = false"));

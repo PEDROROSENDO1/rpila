@@ -992,7 +992,8 @@ Key flows and invariants:
   false` (`decoration::bar_hidden`: no bar drawn nor laid out, the window stays SSD),
   `corner-radius` (over the global one, in `scene_window`) and `opacity`
   (`SceneWindow::alpha`, passed to every element of the window, title bar and flash
-  included; Smithay's elements drop their opaque regions below 1), `blur` (see "Blur") and
+  included; Smithay's elements drop their opaque regions below 1), `blur`,
+  `popup-blur` and `popup-corner-radius` (see "Blur") and
   `shadow` (see "Shadows"). Hot paths read them
   through `rules::with_window_props` (no copy); a reload also re-fits filled windows
   (a bar shown or hidden moves them). Layer properties: `animations` and
@@ -1144,8 +1145,14 @@ Key flows and invariants:
   surface elements draw the multiplier themselves). Their popups that ask (menus, an input
   method's candidate window) go into `SceneWindow::popup_blur` and `SceneLayer::popup_blur`
   (`render::PopupBlur`: the popup, its place among its root's popups as
-  `PopupManager::popups_for_surface` gives them, front to back, and its region; the client's
-  region alone, but a rule's `blur = false` refuses them too). A window or layer surface with
+  `PopupManager::popups_for_surface` gives them, front to back, its region and its rounded
+  corners; the client's region, but a rule's `blur = false` refuses them too; a window rule's
+  `popup-blur` decides for its popups alone: `true` blurs behind each one's geometry, or all
+  of it without one or for an input method's (`blur::popup_frame`), and only its input region
+  there if it set one (GTK's popover is its shape, arrow and rounded corners, in strips, which
+  the mask cuts out as it does a client's blur region), that geometry rounded by
+  `popup-corner-radius` through `Shaders::up_rounded` as a window's backdrop is, `false` behind
+  none; layer surfaces' popups have no such rule). A window or layer surface with
   one has its popups drawn by hand (`render::popup_elements`, as Smithay's `render_elements`
   places them), each with its backdrop right behind it. Before an output's elements are built, `render::output_elements` (which
   the backends and captures use) calls `BlurCache::prepare`: back to front, windows (each

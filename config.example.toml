@@ -458,6 +458,16 @@ tap = true                       # tap to click
 # shadow = false                   # (true: even if the app draws its own)
 #
 # [[window-rule]]
+# app-id = "org.gnome.Nautilus"
+# opacity = 0.9                    # its menus too
+# popup-blur = true                # blur behind its menus, which don't ask for
+#                                  # it, in their shape where the app gives it
+#                                  # (GTK does; false: never; unset: where they
+#                                  # ask, unless blur = false)
+# popup-corner-radius = 8          # rounds it where the app doesn't (unset:
+#                                  # square)
+#
+# [[window-rule]]
 # app-id = "thunderbird"
 # open-on-workspace = 3            # opens there, without switching to it
 # open-on-output = "eDP-1"         # opens on that monitor (its connector, or

@@ -266,6 +266,8 @@ pub struct PopupBlur {
     pub index: usize,
     /// Where it's blurred, in space coordinates.
     pub rects: Vec<Rectangle<i32, Logical>>,
+    /// The blur's rounded corners (a rule's `popup-corner-radius`).
+    pub rounding: Option<Rounding>,
 }
 
 /// A layer surface and where it's drawn, in space coordinates.

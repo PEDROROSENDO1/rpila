@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Blur behind any app's menus:** a window rule's `popup-blur = true` blurs behind its menus
+  and other popups even when the app doesn't ask (GTK's menus don't), in the shape the app gives
+  them (GTK's rounded corners and popover arrows) and not behind the shadow it draws around
+  them; for apps that don't give it, `popup-corner-radius` rounds that blur to the menu's own
+  corners. With `opacity` in the same rule, the window and its menus are both translucent and
+  blurred. `popup-blur = false` refuses popups the blur they ask for.
 - **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves
   for Xwayland listened on an abstract socket too, which has no permissions and needs no
   authorization, so a Flatpak app with network access but no X11 permission (or another user

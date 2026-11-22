@@ -80,6 +80,8 @@ pub struct WindowRuleFile {
     corner_radius: Option<u32>,
     opacity: Option<f64>,
     blur: Option<bool>,
+    popup_blur: Option<bool>,
+    popup_corner_radius: Option<u32>,
     shadow: Option<bool>,
     always_on_top: Option<bool>,
     all_workspaces: Option<bool>,
@@ -137,6 +139,13 @@ pub struct WindowProps {
     /// `true`: blur behind all of it; `false`: never; unset: where the
     /// client asks (ext-background-effect).
     pub blur: Option<bool>,
+    /// Of its popups (menus): `true`: blur behind each one's geometry, in the
+    /// shape its input region gives (`blur::window_popup_blurs`); `false`:
+    /// never; unset: where the client asks, unless `blur = false`.
+    pub popup_blur: Option<bool>,
+    /// The corners of a blur behind its popups (`popup-blur = true`), for
+    /// an app that gives no shape (unset: square).
+    pub popup_corner_radius: Option<u32>,
     /// `true`: pila draws one, even if the client draws its own; `false`:
     /// never; unset: `[shadow]`, for a window that doesn't draw its own.
     pub shadow: Option<bool>,
@@ -159,6 +168,8 @@ impl WindowProps {
         self.corner_radius = other.corner_radius.or(self.corner_radius);
         self.opacity = other.opacity.or(self.opacity);
         self.blur = other.blur.or(self.blur);
+        self.popup_blur = other.popup_blur.or(self.popup_blur);
+        self.popup_corner_radius = other.popup_corner_radius.or(self.popup_corner_radius);
         self.shadow = other.shadow.or(self.shadow);
         self.always_on_top = other.always_on_top.or(self.always_on_top);
         self.all_workspaces = other.all_workspaces.or(self.all_workspaces);
@@ -244,10 +255,13 @@ impl WindowRuleFile {
                 ));
             }
         }
-        if let Some(radius) = self.corner_radius {
-            if radius > crate::config::MAX_CORNER_RADIUS {
+        for (key, radius) in [
+            ("corner-radius", self.corner_radius),
+            ("popup-corner-radius", self.popup_corner_radius),
+        ] {
+            if let Some(radius) = radius.filter(|r| *r > crate::config::MAX_CORNER_RADIUS) {
                 return Err(format!(
-                    "window-rule {index}: corner-radius = {radius}: must be 0 to {}",
+                    "window-rule {index}: {key} = {radius}: must be 0 to {}",
                     crate::config::MAX_CORNER_RADIUS
                 ));
             }
@@ -286,6 +300,8 @@ impl WindowRuleFile {
                 corner_radius: self.corner_radius,
                 opacity: self.opacity,
                 blur: self.blur,
+                popup_blur: self.popup_blur,
+                popup_corner_radius: self.popup_corner_radius,
                 shadow: self.shadow,
                 always_on_top: self.always_on_top,
                 all_workspaces: self.all_workspaces,
@@ -650,6 +666,8 @@ mod tests {
         assert!(invalid("[[window-rule]]\nopacity = 0").contains("opacity"));
         assert!(invalid("[[window-rule]]\nopacity = 1.5").contains("opacity"));
         assert!(invalid("[[window-rule]]\ncorner-radius = 100").contains("corner-radius"));
+        assert!(invalid("[[window-rule]]\npopup-corner-radius = 100")
+            .contains("popup-corner-radius = 100"));
     }
 
     #[test]

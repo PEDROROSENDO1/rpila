@@ -284,9 +284,13 @@ false }`) or for a panel or launcher. Shells that animate their own panels need 
 (ext-background-effect; some terminals and shells' panels do, and fcitx5's candidate window),
 and Pila blurs it, behind menus and other popups too. A rule with `blur = true` blurs behind a
 whole window (its title bar included) or panel that doesn't ask, and `blur = false` refuses an
-app's request, its popups' included. Panels are blurred above the windows (the top and
-overlay layers), not below them. A window rule's `opacity` (0.1 to 1) makes a whole window
-translucent. Rules are in [Window and layer rules](#window-and-layer-rules).
+app's request, its popups' included. Most apps' menus don't ask (GTK's don't): a window rule's
+`popup-blur = true` blurs behind them all the same, and `popup-blur = false` refuses its popups
+what they ask. The blur takes a menu's shape (its rounded corners, a popover's arrow) where the
+app gives it, as GTK does; elsewhere it's square unless `popup-corner-radius` gives it the
+menu's radius. Panels are blurred above the windows (the top and overlay layers), not below
+them. A window rule's `opacity` (0.1 to 1) makes a whole window translucent, its menus included.
+Rules are in [Window and layer rules](#window-and-layer-rules).
 
 **The bell.** An app ringing the system bell (xdg-system-bell) makes its window flash briefly;
 Pila plays no sound.
@@ -828,7 +832,7 @@ Rules change how particular windows or panels behave. A `[[window-rule]]` matche
 app id, title or tag, with `*` for any text, and can set: animations, the workspace and monitor
 to open on, opening without the keyboard focus, size, position, opening maximized or
 fullscreen, staying above the others or on all workspaces, the title bar, corner radius,
-opacity, blur and shadow. A window's rules follow its
+opacity, blur (its own and its menus') and shadow. A window's rules follow its
 title as it changes (a browser's page title), except what applies when it opens. A
 `[[layer-rule]]` matches bars, launchers and notifications by namespace, and sets their
 animations and blur.

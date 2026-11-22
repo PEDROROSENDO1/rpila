@@ -208,6 +208,8 @@ title-bar = false
 corner-radius = 12
 opacity = 0.95
 blur = true
+popup-blur = true
+popup-corner-radius = 12
 shadow = false
 
 [[window-rule]]
