@@ -27,6 +27,13 @@ A feature users ask for goes here first.
   wallpaper, the animations, the game's process ending, nor waiting behind its work (a
   high-priority GPU context changed nothing): what's left is in the driver or the switch back
   from asynchronous flips, which needs a GPU trace (amdgpu tracepoints) to tell.
+- **A desktop portal inside Pila** ([discussion #12](https://github.com/igalmarino/pila/discussions/12)):
+  Pila itself serving the ScreenCast and Screenshot portals, feeding PipeWire from the buffers it
+  already has, with a picker it draws (screens and windows with live previews, like the
+  overview) instead of xdg-desktop-portal-wlr's `slurp`; and GlobalShortcuts, which
+  xdg-desktop-portal-wlr lacks, for apps' global shortcuts (push-to-talk). No program of its own:
+  the service lives in the compositor. First a ScreenCast prototype, kept only if a browser
+  sharing a screen leaves Pila inside its frame budget and nothing it does blocks the event loop.
 
 ## Waiting for hardware and testers
 
@@ -71,7 +78,9 @@ to say so.
 - Vendor protocols (KDE, GNOME, Hyprland, …), even when Smithay implements them; wlroots ones only
   as the protocol policy in
   [CONTRIBUTING.md](https://github.com/igalmarino/pila/blob/main/CONTRIBUTING.md) allows.
-  Features with no protocol go through Pila's configuration and `pila msg`.
+  Features with no protocol go through Pila's configuration and `pila msg`. Nor GNOME's private
+  D-Bus interfaces (Mutter's ScreenCast and DisplayConfig, GNOME Shell's Screenshot), which
+  xdg-desktop-portal-gnome needs to capture the screen.
 - A build without X11 support: `[xwayland] enabled = false` and Xwayland left uninstalled give a
   session with no X at all, and the X11 code Pila compiles in is pure Rust, with no X libraries.
 - Breaking configuration or `pila msg`: keys, actions and fields are only added to
