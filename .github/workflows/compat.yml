@@ -128,18 +128,47 @@ jobs:
       - run: for program in pila waybar fuzzel mako swayidle swaylock kitty wpctl; do test -x "desktop/bin/$program"; done
       # EGL's drivers, which a NixOS system provides, come from Mesa here. If
       # it starts, it's still running when its time is up. An X client
-      # connecting starts the package's Xwayland (on demand), which answers
-      # its handshake.
+      # connecting starts the package's Xwayland (on demand), which refuses
+      # its handshake without the cookie in XAUTHORITY and answers it with.
       - name: Smoke test
         run: |
           mesa="$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#mesa)"
           cat >x11-client.py <<'EOF'
           import os, socket, struct
-          conn = socket.socket(socket.AF_UNIX)
-          conn.connect("/tmp/.X11-unix/X" + os.environ["DISPLAY"].lstrip(":"))
-          conn.sendall(b"l\0" + struct.pack("<HHHH", 11, 0, 0, 0) + b"\0\0")
-          conn.settimeout(4)
-          print("X11 handshake:", "accepted" if conn.recv(8)[:1] == b"\1" else "refused")
+
+
+          def cookie():
+              data = open(os.environ["XAUTHORITY"], "rb").read()
+              at = 0
+
+              def field():
+                  nonlocal at
+                  (size,) = struct.unpack(">H", data[at:at + 2])
+                  value = data[at + 2:at + 2 + size]
+                  at += 2 + size
+                  return value
+
+              while at < len(data):
+                  at += 2
+                  field(), field()
+                  name, value = field(), field()
+                  if name == b"MIT-MAGIC-COOKIE-1":
+                      return name, value
+              raise SystemExit("no cookie in XAUTHORITY")
+
+
+          def handshake(name=b"", value=b""):
+              conn = socket.socket(socket.AF_UNIX)
+              conn.connect("/tmp/.X11-unix/X" + os.environ["DISPLAY"].lstrip(":"))
+              pad = lambda b: b + b"\0" * (-len(b) % 4)
+              conn.sendall(b"l\0" + struct.pack("<HHHH", 11, 0, len(name), len(value)) + b"\0\0"
+                           + pad(name) + pad(value))
+              conn.settimeout(4)
+              return "accepted" if conn.recv(8)[:1] == b"\1" else "refused"
+
+
+          print("X11 handshake without the cookie:", handshake())
+          print("X11 handshake:", handshake(*cookie()))
           EOF
           status=0
           XDG_RUNTIME_DIR="$(mktemp -d)" PILA_HEADLESS_DEVICE=software \
@@ -149,6 +178,7 @@ jobs:
           tail -n 20 pila.log
           test "$status" = 124
           grep -F 'Xwayland ready' pila.log
+          grep -F 'X11 handshake without the cookie: refused' pila.log
           grep -F 'X11 handshake: accepted' pila.log
 
   audit:
