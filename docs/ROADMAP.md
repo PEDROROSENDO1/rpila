@@ -52,6 +52,12 @@ to say so.
 - **Smithay with the changes Pila's fork carries** (a text cursor with no width, asynchronous
   page flips, the X display reserved apart from Xwayland): Pila goes back to Smithay's own
   repository.
+- **Direct scanout of EGL apps on AMD GPUs**: a fullscreen app drawn with OpenGL (kitty,
+  weston-simple-egl) keeps the render-only compressed (DCC) buffer layout Mesa 26.3's radeonsi
+  picks, which the display can't read, after Pila tells it the layouts the screen takes (a
+  scanout tranche of dmabuf feedback), so Pila draws its frames instead of showing them as they
+  are. Seen on a Renoir laptop with Mesa 26.3.1; Pila's part is logged (`direct scanout
+  refused`, `dmabuf feedback` on `pila::frames`).
 - **A maintained font parser in cosmic-text**: `cargo audit` reports `ttf-parser`, which
   cosmic-text uses, unmaintained (RUSTSEC-2026-0192; no vulnerability). Moving up with
   cosmic-text's next release.

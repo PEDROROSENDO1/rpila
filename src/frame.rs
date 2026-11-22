@@ -79,6 +79,11 @@ pub fn update_primary_outputs(
     }
 }
 
+/// Whether a surface was last told an output's scanout formats
+/// (`send_dmabuf_feedback`).
+#[derive(Default)]
+struct ScanoutFeedbackSent(std::cell::Cell<bool>);
+
 /// Tell the surfaces `output` showed in the frame described by `states`, those
 /// that asked, which dmabuf formats to use: `scanout`'s (what `output` can
 /// show as it is, first) for a surface that went to the screen as it is or was
@@ -92,8 +97,22 @@ pub fn send_dmabuf_feedback(
     render: &DmabufFeedback,
     scanout: &DmabufFeedback,
 ) {
-    let select = |surface: &WlSurface, _: &SurfaceData| {
-        select_dmabuf_feedback(surface, states, render, scanout)
+    let select = |surface: &WlSurface, data: &SurfaceData| {
+        let chosen = select_dmabuf_feedback(surface, states, render, scanout);
+        // Which one it was last told, logged when it changes: whether a
+        // client refused the primary plane gets the plane's formats.
+        let to_scanout = std::ptr::eq(chosen, scanout) && !std::ptr::eq(render, scanout);
+        let told = data.data_map.get_or_insert(ScanoutFeedbackSent::default);
+        if told.0.replace(to_scanout) != to_scanout {
+            tracing::debug!(
+                target: "pila::frames",
+                surface = ?smithay::reexports::wayland_server::Resource::id(surface),
+                output = output.name(),
+                scanout = to_scanout,
+                "dmabuf feedback"
+            );
+        }
+        chosen
     };
     for entry in &scene.windows {
         entry

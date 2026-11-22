@@ -7,7 +7,10 @@ use smithay::{
         allocator::Buffer as _,
         drm::compositor::{FrameError, PrimaryPlaneElement},
         renderer::{
-            element::{Id, RenderElement as _, UnderlyingStorage},
+            element::{
+                Element as _, Id, RenderElement as _, RenderElementPresentationState,
+                RenderElementStates, RenderingReason, UnderlyingStorage,
+            },
             gles::GlesTarget,
             PresentationMode,
         },
@@ -82,6 +85,27 @@ fn dmabuf_format(element: &PilaRenderElement, renderer: &mut GlesRenderer) -> Op
             .map(|dmabuf| dmabuf.format()),
         UnderlyingStorage::Memory(_) => None,
     }
+}
+
+/// A client's buffer Smithay tried to show as it is and couldn't, in front
+/// to back order, the first one: its format and modifier (`None`: not a
+/// dmabuf) and why (`ScanoutFailed`: the kernel or GBM refused it, which
+/// sends the client the plane's formats, `frame::send_dmabuf_feedback`;
+/// `FormatUnsupported`: not one the plane takes). Logged when it changes.
+fn refused_scanout(
+    elements: &[PilaRenderElement],
+    states: &RenderElementStates,
+    renderer: &mut GlesRenderer,
+) -> Option<(Option<Format>, RenderingReason)> {
+    elements.iter().find_map(|element| {
+        let state = states.element_render_state(element.id().clone())?;
+        match state.presentation_state {
+            RenderElementPresentationState::Rendering {
+                reason: Some(reason),
+            } => Some((dmabuf_format(element, renderer), reason)),
+            _ => None,
+        }
+    })
 }
 
 /// An output about to be drawn (`prepare`).
@@ -374,6 +398,27 @@ fn draw(
                             surface.client_format = dmabuf_format(element, renderer);
                         }
                         PrimaryPlaneElement::Element(_) => {}
+                    }
+                    // Why a client's buffer wasn't shown as it is: its format
+                    // and modifier, once per change (a buffer the plane
+                    // refuses, before and after its client is told the
+                    // plane's formats).
+                    let refused = if direct_scanout && !direct {
+                        refused_scanout(&elements, &result.states, renderer)
+                    } else {
+                        None
+                    };
+                    if surface.refused_scanout != refused {
+                        if let Some((format, reason)) = &refused {
+                            tracing::debug!(
+                                target: "pila::frames",
+                                output = output.name(),
+                                ?format,
+                                ?reason,
+                                "direct scanout refused"
+                            );
+                        }
+                        surface.refused_scanout = refused;
                     }
                     if !result.is_empty {
                         // Captures of this output take the frame just

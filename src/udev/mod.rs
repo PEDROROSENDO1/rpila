@@ -305,6 +305,12 @@ struct OutputSurface {
     /// device's other outputs' flips.
     swapchain_format: Option<Format>,
     client_format: Option<Format>,
+    /// A client's buffer last refused the primary plane, and why
+    /// (`draw::refused_scanout`); logged when it changes.
+    refused_scanout: Option<(
+        Option<Format>,
+        smithay::backend::renderer::element::RenderingReason,
+    )>,
     /// What a surface this output shows as it is, or could, is told about
     /// dmabufs: the formats its primary plane takes first (`scanout_feedback`).
     /// Only for an output on the primary GPU, with a CRTC.

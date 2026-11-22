@@ -11,7 +11,9 @@ The budget and the rules are in CLAUDE.md, "Performance pillar". This is how to 
 every 5 s, frames, average and worst CPU time and missed refreshes, plus every frame
 over half the period, and apart the redraws that found nothing new to show (`idle`, with
 their summed CPU time; `scripts/check` reports them per output) and, on bare metal, the
-frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn) and
+frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn; why
+not, when it changes: `direct scanout refused` with the buffer's format and modifier, and
+`dmabuf feedback` with `scanout` for a surface told the plane's formats) and
 those shown at once by an asynchronous flip (`torn`: a fullscreen game with vsync off, which
 miss no refresh).
 Missed refreshes are vblanks with no new frame while an animation runs and, on bare metal,

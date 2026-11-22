@@ -489,6 +489,14 @@ Key flows and invariants:
   (`direct scanout`, `pila::frames`, with the time that frame's render and commit took and
   `others_pending`, the device's other outputs with a commit on its way, and the format and modifier
   of the client's buffer and of the swapchain (`OutputSurface::client_format`, `swapchain_format`)).
+  Why one isn't is logged too, each when it changes: an output enabled with or without scanout
+  formats for clients (`direct scanout formats for clients`), a client's buffer Smithay tried and
+  couldn't show (`direct scanout refused`, `draw::refused_scanout`: its format and modifier, and
+  `ScanoutFailed` when GBM or the kernel refused it, as amdgpu does a buffer whose DCC isn't
+  displayable), and a surface told the plane's formats or back to the renderer's (`dmabuf
+  feedback`, `scanout`). With Mesa 26.3 (radeonsi) EGL clients (kitty, weston-simple-egl) keep
+  their render-only DCC modifier after a scanout tranche, so they're drawn, not shown as they
+  are.
   The swapchain is opaque (`COLOR_FORMATS`: XRGB8888 first) because Smithay adds a client's buffer
   shown on the primary plane as the opaque variant of its format (ARGB8888 as XRGB8888): with an
   ARGB8888 swapchain the plane's framebuffer changed format at every switch between the two, and

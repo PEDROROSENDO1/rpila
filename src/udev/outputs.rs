@@ -636,6 +636,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             direct: false,
             swapchain_format: None,
             client_format: None,
+            refused_scanout: None,
             scanout_feedback: None,
             idle_until: None,
             idle_timer: false,
@@ -745,6 +746,14 @@ pub(super) fn enable_output(state: &mut Pila, id: OutputId) -> bool {
             scanout_feedback(primary.dev_id(), dmabuf_formats, id.node.dev_id(), &plane)
         })
         .flatten();
+    // `false`: its primary plane and the renderer share no format, so no
+    // client is told one it could show as it is.
+    debug!(
+        target: "pila::frames",
+        name,
+        scanout_formats = surface.scanout_feedback.is_some(),
+        "direct scanout formats for clients"
+    );
     surface.drm_output = Some(drm_output);
     surface.frame_pending = false;
     surface.redraw_needed = true;
