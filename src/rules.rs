@@ -501,7 +501,7 @@ impl Pila {
         }
         if before.is_some_and(|before| before.title_bar != after.title_bar) {
             // A title bar shown or hidden changes where filled windows go.
-            self.refit_maximized();
+            self.refit_to_usable_area();
         }
         self.queue_redraw();
     }
@@ -533,7 +533,7 @@ impl Pila {
             self.resolve_layer_rules(layer);
         }
         // A title bar shown or hidden changes where filled windows go.
-        self.refit_maximized();
+        self.refit_to_usable_area();
         self.queue_redraw();
     }
 }

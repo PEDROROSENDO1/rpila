@@ -753,8 +753,10 @@ Key flows and invariants:
   hit testing goes through `Pila::under` (layers and windows in that order; `window_under`
   is windows only), and `Pila::scene` renders the same order. Placement, maximize and
   toplevel bounds use `usable_geometry_at` (the output minus exclusive zones); fullscreen
-  uses the whole output. When the zone or output size changes, `refit_maximized` re-applies
-  fill states. A mapped Top/Overlay surface with exclusive keyboard interactivity
+  uses the whole output. When the zone or output size changes, `refit_to_usable_area` re-applies
+  fill states and snapped windows' halves and quarters (`refit_snapped`), without raising them
+  (`Pila::move_window`: Smithay's `map_element` always raises, `relocate_element` doesn't);
+  hidden ones (minimized, another workspace) are fit as they come back. A mapped Top/Overlay surface with exclusive keyboard interactivity
   (`exclusive_layer`) keeps keyboard focus: `focus_window` then only raises. A Top/Overlay
   surface with on-demand interactivity gets the keyboard when it maps
   (`takes_keyboard_on_map`, `MapChange::Mapped`), as on COSMIC; else on a click. Popups may
@@ -1402,7 +1404,8 @@ Key flows and invariants:
   wake Pila once per timeout while Xwayland runs with no window.
 - **Snapping and keyboard moves** (`snap.rs`): a snapped window fills half of its output's
   usable area, gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
-  Snapping is floating geometry, not a fill state: maximizing a snapped window
+  Snapping is floating geometry, not a fill state (but a change of the usable area refits it,
+  as `refit_to_usable_area` does filled windows): maximizing a snapped window
   (`set_fill_state_on`) or resizing it (`begin_resize`, keyboard resizes) calls
   `forget_snap`, and maximizing keeps the pre-snap rect as the restore geometry.
   `MoveSurfaceGrab` previews the edge snap target (`Pila::snap_preview`, a solid element

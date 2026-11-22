@@ -615,7 +615,7 @@ pub fn add_output(state: &mut Pila, spec: &OutputSpec) -> bool {
     });
     info!(name = spec.name, size = ?spec.size, refresh_mhz = spec.refresh_mhz, "output connected");
     apply_output_config(state);
-    state.refit_maximized();
+    state.refit_to_usable_area();
     state.configure_lock_surfaces();
     state.refresh_output_heads();
     state.refresh_workspaces();

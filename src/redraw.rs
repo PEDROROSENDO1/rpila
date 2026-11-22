@@ -181,6 +181,14 @@ impl Pila {
         self.queue_redraw_window(&window);
     }
 
+    /// Move a window that's on the `Space` to `loc`, where it is in the stack,
+    /// redrawing where it was and where it is (`map_window` raises it).
+    pub fn move_window(&mut self, window: &Window, loc: Point<i32, Logical>) {
+        self.queue_redraw_window(window);
+        self.space.relocate_element(window, loc);
+        self.queue_redraw_window(window);
+    }
+
     /// Take `window` off the `Space`, redrawing where it was.
     pub fn unmap_window(&mut self, window: &Window) {
         self.queue_redraw_window(window);

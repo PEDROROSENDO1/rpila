@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Windows no longer end up under a bar that comes after them:** a window snapped to a half or
+  a quarter stayed where it was when a bar appeared or grew (an app snapped at login, before
+  waybar was up), its top under the bar; it now moves below it, as maximized windows already
+  did. And a maximized window refit to a bar no longer comes in front of the other windows.
+
 - **No refresh missed when a fullscreen shm app opens:** a client's buffer drawn with the CPU
   (foot, swaybg's wallpaper, Xwayland apps without GPU acceleration) is now copied to the GPU in
   strips, not all at once: on AMD's driver a whole 1920x1080 buffer in one copy took 10 to 22 ms

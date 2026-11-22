@@ -111,6 +111,110 @@ fn maximized_windows_refit_when_the_zone_changes_or_goes() {
     });
 }
 
+/// A refit leaves the windows where they are in the stack: a maximized one
+/// behind another stays behind it.
+#[test]
+fn a_refit_keeps_the_stacking_order() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        window_in(s, "a").unwrap()["geometry"]["y"] == BAR
+    });
+    client.window("b").size(300, 200).create();
+    pila.wait_focus("b");
+    let (bar, _) = client.layer_surface("bar", &top_bar(30), BLUE);
+    client.wait_surface_configured(bar);
+    let state = pila.wait("refit below the bar", |s| {
+        window_in(s, "a").unwrap()["geometry"]["y"] == 30 + BAR
+    });
+    assert_eq!(stacking(&state), ["a", "b"]);
+    assert_eq!(state["focused"], "b");
+}
+
+/// A bar that comes after a window snapped to a half (an app restored at
+/// login before waybar is up) doesn't cover it: the half is refit below it.
+#[test]
+fn snapped_windows_refit_when_the_zone_changes() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+Left");
+    pila.wait("snapped", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == (0, BAR, 640, 800 - BAR)
+    });
+    // Another window in front of it, which the refit leaves there.
+    client.window("b").create();
+    pila.wait_focus("b");
+    let (bar, _) = client.layer_surface("bar", &top_bar(30), BLUE);
+    client.wait_surface_configured(bar);
+    let state = pila.wait("refit below the bar", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == (0, 30 + BAR, 640, 770 - BAR)
+    });
+    let stack = |app: &str| window_in(&state, app).unwrap()["stack"].as_u64().unwrap();
+    assert!(stack("a") < stack("b"), "a stays behind b");
+    assert_eq!(state["focused"], "b");
+}
+
+/// A snapped window that was minimized when the bar came goes back to its
+/// half below the bar.
+#[test]
+fn hidden_snapped_windows_refit_when_the_zone_changes() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+Left");
+    pila.wait("snapped", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == (0, BAR, 640, 800 - BAR)
+    });
+    pila.combo("Super+n");
+    pila.wait("minimized", |s| {
+        window_in(s, "a").unwrap()["minimized"] == true
+    });
+    let (bar, _) = client.layer_surface("bar", &top_bar(30), BLUE);
+    client.wait_surface_configured(bar);
+    pila.wait("the usable area", |s| {
+        rect(&s["outputs"][0]["usable"]).1 == 30
+    });
+    pila.combo("Super+Tab");
+    pila.wait("back, below the bar", |s| {
+        let w = window_in(s, "a").unwrap();
+        w["minimized"] == false && rect(&w["geometry"]) == (0, 30 + BAR, 640, 770 - BAR)
+    });
+}
+
+/// A maximized window off the screen (minimized, or on another workspace)
+/// when the bar comes is refit too, not left under it when it's back.
+#[test]
+fn hidden_maximized_windows_refit_when_the_zone_changes() {
+    let mut pila = TestPila::start();
+    let client = pila.client();
+    client.window("a").create();
+    pila.wait_focus("a");
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == (0, BAR, 1280, 800 - BAR)
+    });
+    pila.combo("Super+n");
+    pila.wait("minimized", |s| {
+        window_in(s, "a").unwrap()["minimized"] == true
+    });
+    let (bar, _) = client.layer_surface("bar", &top_bar(30), BLUE);
+    client.wait_surface_configured(bar);
+    pila.wait("the usable area", |s| {
+        rect(&s["outputs"][0]["usable"]).1 == 30
+    });
+    pila.combo("Super+Tab");
+    pila.wait("back, below the bar", |s| {
+        let w = window_in(s, "a").unwrap();
+        w["minimized"] == false && rect(&w["geometry"]) == (0, 30 + BAR, 1280, 770 - BAR)
+    });
+}
+
 #[test]
 fn layers_stack_around_windows() {
     let mut pila = TestPila::start();

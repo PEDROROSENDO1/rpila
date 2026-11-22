@@ -278,8 +278,19 @@ impl Pila {
     }
 
     /// Give a window this geometry (location and size), tiled to `side` or
-    /// floating.
+    /// floating, and raise it.
     fn apply_rect(&mut self, window: &Window, rect: Rectangle<i32, Logical>, side: Option<Side>) {
+        self.place_rect(window, rect, side, true);
+    }
+
+    /// `apply_rect`, raising the window only with `raise`.
+    fn place_rect(
+        &mut self,
+        window: &Window,
+        rect: Rectangle<i32, Logical>,
+        side: Option<Side>,
+        raise: bool,
+    ) {
         if let Some(toplevel) = window.toplevel() {
             toplevel.with_pending_state(|state| {
                 use xdg_toplevel::State::*;
@@ -308,8 +319,12 @@ impl Pila {
         } else if let Some(x11) = window.x11_surface() {
             let _ = x11.configure(rect);
         }
-        self.map_window(window.clone(), rect.loc, true);
-        self.keep_transients_above(window);
+        if raise || self.space.element_location(window).is_none() {
+            self.map_window(window.clone(), rect.loc, true);
+            self.keep_transients_above(window);
+        } else {
+            self.move_window(window, rect.loc);
+        }
         self.x11_window_moved(window);
         self.queue_redraw();
     }
@@ -346,6 +361,28 @@ impl Pila {
         let rect = side_rect(area, side, decoration::layout_offset(window, false));
         set_snap_state(window, Some((side, before)));
         self.apply_rect(window, rect, Some(side));
+    }
+
+    /// Snapped windows on the `Space` to their half or quarter of the usable
+    /// area again, after it changed (a panel came, resized or went; the
+    /// output was resized), as `refit_to_usable_area` does maximized ones:
+    /// an app snapped at login before the bar was up stays under it
+    /// otherwise. Where they are in the stack stays.
+    pub(crate) fn refit_snapped(&mut self) {
+        let windows: Vec<(Window, Side)> = self
+            .space
+            .elements()
+            .filter_map(|window| snapped_side(window).map(|side| (window.clone(), side)))
+            .collect();
+        for (window, side) in windows {
+            let Some(area) = self.usable_area_for(&window) else {
+                continue;
+            };
+            let rect = side_rect(area, side, decoration::layout_offset(&window, false));
+            if self.window_rect(&window) != Some(rect) {
+                self.place_rect(&window, rect, Some(side), false);
+            }
+        }
     }
 
     /// If `window` is snapped: the same side of `area`, on another output, and it

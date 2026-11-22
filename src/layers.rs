@@ -192,7 +192,7 @@ impl Pila {
             layer.layer_surface().send_configure();
         }
         if zone_changed {
-            self.refit_maximized();
+            self.refit_to_usable_area();
         }
         self.layer_committed(&layer);
 
@@ -240,7 +240,7 @@ impl Pila {
             self.queue_redraw_output(&output);
         }
         if zone_changed {
-            self.refit_maximized();
+            self.refit_to_usable_area();
         }
         if was_focused {
             self.focus_recent_window();

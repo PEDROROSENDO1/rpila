@@ -1139,7 +1139,7 @@ impl Pila {
                 }
             }
         }
-        self.refit_maximized();
+        self.refit_to_usable_area();
     }
 
     /// The usable area (minus panels) of the output a window is mostly on.
@@ -1178,10 +1178,14 @@ impl Pila {
 
     /// Put a window at `loc`: in the `Space` if it's there, else where it
     /// comes back to when shown again. Nothing for an unmapped window.
-    fn place_window(&mut self, window: &Window, loc: Point<i32, Logical>) {
+    fn place_window(&mut self, window: &Window, loc: Point<i32, Logical>, raise: bool) {
         if self.space.element_location(window).is_some() {
-            self.map_window(window.clone(), loc, true);
-            self.keep_transients_above(window);
+            if raise {
+                self.map_window(window.clone(), loc, true);
+                self.keep_transients_above(window);
+            } else {
+                self.move_window(window, loc);
+            }
         } else if self.off_space_windows().any(|w| w == window) {
             crate::workspaces::set_space_location(window, loc);
         }
@@ -1512,9 +1516,10 @@ impl Pila {
         }
     }
 
-    /// Fit maximized windows to the usable area again after it changed (a
-    /// panel appeared, resized or went away, or the output was resized).
-    pub fn refit_maximized(&mut self) {
+    /// Fit maximized, fullscreen and snapped windows to the usable area again
+    /// after it changed (a panel appeared, resized or went away, or the
+    /// output was resized).
+    pub fn refit_to_usable_area(&mut self) {
         let windows: Vec<Window> = self
             .space
             .elements()
@@ -1523,8 +1528,10 @@ impl Pila {
             .collect();
         for window in windows {
             let (maximized, fullscreen) = fill_state(&window);
-            self.set_fill_state(&window, maximized, fullscreen);
+            // Where it is in the stack stays.
+            self.apply_fill_state(&window, maximized, fullscreen, None, false);
         }
+        self.refit_snapped();
     }
 
     pub fn close_focused(&mut self) {
@@ -1565,6 +1572,19 @@ impl Pila {
         maximized: bool,
         fullscreen: bool,
         output: Option<&Output>,
+    ) {
+        self.apply_fill_state(window, maximized, fullscreen, output, true);
+    }
+
+    /// `set_fill_state_on`, raising the window only with `raise` (a refit
+    /// leaves it where it is in the stack).
+    fn apply_fill_state(
+        &mut self,
+        window: &Window,
+        maximized: bool,
+        fullscreen: bool,
+        output: Option<&Output>,
+        raise: bool,
     ) {
         let toplevel = window.toplevel();
         let x11 = window.x11_surface();
@@ -1630,7 +1650,7 @@ impl Pila {
                 let _ = x11.set_fullscreen(fullscreen);
                 let _ = x11.configure(output_geo);
             }
-            self.place_window(window, output_geo.loc);
+            self.place_window(window, output_geo.loc, raise);
         } else {
             // The saved geometry, or (if the window started out filled, as
             // a terminal configured to open maximized) two thirds of its
@@ -1658,7 +1678,7 @@ impl Pila {
                 }
             }
             if let Some(saved) = saved {
-                self.place_window(window, saved.loc);
+                self.place_window(window, saved.loc, raise);
             }
         }
 

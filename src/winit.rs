@@ -221,7 +221,7 @@ pub fn init_winit(
                         None,
                     );
                     layer_map_for_output(&output).arrange();
-                    state.refit_maximized();
+                    state.refit_to_usable_area();
                     state.configure_lock_surfaces();
                     state.refresh_output_heads();
                     full_redraw = 4;

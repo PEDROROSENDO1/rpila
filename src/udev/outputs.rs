@@ -673,7 +673,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
     {
         set_vrr(data, id, on);
     }
-    state.refit_maximized();
+    state.refit_to_usable_area();
     state.configure_lock_surfaces();
     state.refresh_output_heads();
     state.queue_redraw();
@@ -859,7 +859,7 @@ pub(super) fn keep_a_screen_on(state: &mut Pila) {
         enable_output(state, id);
     }
     state.fixup_windows();
-    state.refit_maximized();
+    state.refit_to_usable_area();
     state.configure_lock_surfaces();
     state.refresh_output_heads();
     state.queue_redraw();
