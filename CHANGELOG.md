@@ -1,13 +1,7 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 (2026-11-21)
 
-- **Blur behind any app's menus:** a window rule's `popup-blur = true` blurs behind its menus
-  and other popups even when the app doesn't ask (GTK's menus don't), in the shape the app gives
-  them (GTK's rounded corners and popover arrows) and not behind the shadow it draws around
-  them; for apps that don't give it, `popup-corner-radius` rounds that blur to the menu's own
-  corners. With `opacity` in the same rule, the window and its menus are both translucent and
-  blurred. `popup-blur = false` refuses popups the blur they ask for.
 - **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves
   for Xwayland listened on an abstract socket too, which has no permissions and needs no
   authorization, so a Flatpak app with network access but no X11 permission (or another user
@@ -22,6 +16,12 @@
   was typed next, such as a password in a terminal) whenever the pointer merely rested on one of
   its windows, by asking for an activation token with the serial of the pointer entering it.
   Only a click on it counts now, and only until the keyboard focus moves elsewhere.
+- **Blur behind any app's menus:** a window rule's `popup-blur = true` blurs behind its menus
+  and other popups even when the app doesn't ask (GTK's menus don't), in the shape the app gives
+  them (GTK's rounded corners and popover arrows) and not behind the shadow it draws around
+  them; for apps that don't give it, `popup-corner-radius` rounds that blur to the menu's own
+  corners. With `opacity` in the same rule, the window and its menus are both translucent and
+  blurred. `popup-blur = false` refuses popups the blur they ask for.
 - **Smoother with apps that draw in shared memory:** a picture an app draws with the CPU
   (swaybg's wallpaper, foot, Xwayland apps without GPU acceleration) is now copied to the GPU as
   the app sends it, not in the middle of the frame that shows it. The wallpaper's first frame

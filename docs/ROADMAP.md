@@ -4,17 +4,17 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated for **0.8.1** (2026-11-20). Pila is alpha and usable day to day on its development
+Last updated for **0.8.2** (2026-11-21). Pila is alpha and usable day to day on its development
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells and tools (waybar and friends), bare metal with direct scanout, all covered by
-1119 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
+1140 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
 doesn't speak yet.
 
 ## Now: the next release
 
 Small, testable in CI, no new hardware needed.
 
-Nothing open: 0.8.1 took what was here.
+Nothing open: 0.8.2 took what was here.
 
 ## Next
 
@@ -27,6 +27,11 @@ A feature users ask for goes here first.
   wallpaper, the animations, the game's process ending, nor waiting behind its work (a
   high-priority GPU context changed nothing): what's left is in the driver or the switch back
   from asynchronous flips, which needs a GPU trace (amdgpu tracepoints) to tell.
+- **A large shm buffer's first copy to the GPU can take a refresh** (bare metal): a fullscreen
+  foot's first 1920x1080 buffer took 22.5 ms to copy at its commit, the one that makes its
+  texture (later ones take about 2 ms), and the frame after it was shown a refresh late. Before
+  copies moved to the commit it cost the frame itself as much. Making the texture ahead of the
+  copy, or copying a new buffer in parts, would keep it inside a period.
 
 ## Waiting for hardware and testers
 
