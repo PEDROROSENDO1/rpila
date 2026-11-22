@@ -904,6 +904,10 @@ impl Pila {
     ) -> Option<SceneWindow> {
         let bar_rect = decoration::title_bar_rect(window, loc);
         let (maximized, fullscreen) = fill_state(window);
+        // Square and without a shadow when it fills the output to its edges:
+        // maximized with room around it (`gaps`), it looks like a floating
+        // window.
+        let fills_output = fullscreen || (maximized && self.config.gaps == 0);
         // Past its geometry a client draws what a shadow would be (GTK), and
         // its own corners with it: the global radius leaves it to them, or
         // Pila's rounded cut and the client's shadow make a double corner.
@@ -922,7 +926,7 @@ impl Pila {
                 bar_rect,
                 radius,
                 corners,
-                maximized || fullscreen,
+                fills_output,
             )
         };
         let corners = self.config.rounded_corners;
@@ -961,8 +965,7 @@ impl Pila {
         let wanted = shadow_rule.unwrap_or(config.enabled && !draws_own_shadow);
         let shadow = (wanted
             && config.size > 0
-            && !maximized
-            && !fullscreen
+            && !fills_output
             && !crate::workspaces::is_override_redirect(window))
         .then(|| crate::rounded::Shadow {
             frame,
@@ -1267,8 +1270,10 @@ impl Pila {
 
         // Room for the title bar above the window, if pila draws one.
         let bar = decoration::layout_offset(&window, fullscreen);
-        let location = if maximized || fullscreen {
+        let location = if fullscreen {
             output_geo.loc + Point::from((0, bar))
+        } else if maximized {
+            crate::snap::gapped(output_geo, self.config.gaps).loc + Point::from((0, bar))
         } else if let Some((x, y)) = props.position {
             debug!(target: "pila::rules", x, y, "placed by rule");
             output_geo.loc + Point::from((x, y + bar))
@@ -1614,6 +1619,9 @@ impl Pila {
                 debug!("no output to fill");
                 return;
             };
+            if !fullscreen {
+                output_geo = crate::snap::gapped(output_geo, self.config.gaps);
+            }
             // A maximized window's title bar stays visible above it.
             let bar = decoration::layout_offset(window, fullscreen);
             output_geo.loc.y += bar;

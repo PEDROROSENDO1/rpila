@@ -166,6 +166,15 @@ one again restores). For the arrows as they used to be, halves and maximize only
 any bar), `Mod+F` makes it fullscreen; pressing them again restores the window. Maximized and fullscreen windows have square corners and
 no shadow.
 
+**Gaps.** `gaps` in the configuration leaves room, in logical pixels, around maximized windows and
+the halves and quarters snapped windows fill, and between those: a little desktop shows around
+them, and a maximized window keeps its shadow and rounded corners, like a floating one.
+Fullscreen windows still take the whole monitor. It's 0 (none) unless you set it:
+
+```toml
+gaps = 12
+```
+
 **From the keyboard.** `Mod+Shift` with an arrow moves the focused window, `Mod+Ctrl` with an
 arrow resizes it (right and down grow it, left and up shrink it), and `Mod+C` centers it.
 

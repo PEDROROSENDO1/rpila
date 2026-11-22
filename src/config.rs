@@ -52,6 +52,9 @@ use crate::snap::{Direction, KEYBOARD_STEP};
 /// further limited by its size and the title bar's height (`rounded.rs`).
 pub const MAX_CORNER_RADIUS: u32 = 64;
 
+/// The largest `gaps` (logical pixels).
+pub const MAX_GAPS: u32 = 128;
+
 /// The most workspaces `workspaces` may ask for.
 pub const MAX_WORKSPACES: usize = 32;
 
@@ -1336,6 +1339,7 @@ struct ConfigFile {
     workspaces: Option<usize>,
     corner_radius: Option<u32>,
     rounded_corners: Option<String>,
+    gaps: Option<u32>,
     other_gpus: Option<bool>,
     direct_scanout: Option<bool>,
     tearing: Option<bool>,
@@ -1790,6 +1794,9 @@ pub struct Config {
     /// Which of a window's corners it rounds: the top ones (as GTK's own
     /// windows) or all four.
     pub rounded_corners: crate::rounded::Corners,
+    /// Room around maximized windows, and around and between snapped ones,
+    /// in logical pixels (`snap::side_rect`, `snap::gapped`).
+    pub gaps: u32,
     /// Whether monitors on the seat's other GPUs are used, drawn on the
     /// primary and copied over (`udev/secondary.rs`). Off in `EXAMPLE`:
     /// untried on real hardware.
@@ -2044,6 +2051,10 @@ impl Config {
                 ))
             }
         };
+        let gaps = match need(file.gaps.or(example.gaps), "gaps")? {
+            g @ 0..=MAX_GAPS => g,
+            g => return Err(format!("gaps = {g}: must be 0 to {MAX_GAPS}")),
+        };
         let rounded_corners = match need(
             file.rounded_corners.or(example.rounded_corners),
             "rounded-corners",
@@ -2221,6 +2232,7 @@ impl Config {
             workspaces,
             corner_radius,
             rounded_corners,
+            gaps,
             other_gpus,
             direct_scanout,
             tearing,
@@ -3254,6 +3266,15 @@ mod tests {
         );
         assert!(Config::from_toml("corner-radius = 65", &no_env).is_err());
         assert!(Config::from_toml("corner-radius = -1", &no_env).is_err());
+    }
+
+    #[test]
+    fn gaps_default_to_none_and_are_bounded() {
+        assert_eq!(Config::from_toml("", &no_env).unwrap().gaps, 0);
+        assert_eq!(Config::from_toml("gaps = 12", &no_env).unwrap().gaps, 12);
+        let err = Config::from_toml("gaps = 129", &no_env).unwrap_err();
+        assert!(err.contains("gaps = 129: must be 0 to 128"), "{err}");
+        assert!(Config::from_toml("gaps = -1", &no_env).is_err());
     }
 
     #[test]

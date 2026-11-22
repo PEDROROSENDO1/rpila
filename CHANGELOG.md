@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Gaps:** `gaps` leaves room around maximized windows and the halves and quarters windows are
+  snapped to, and between snapped ones, in logical pixels (0, none, by default). With room
+  around it a maximized window keeps its shadow and rounded corners; fullscreen windows still
+  take the whole monitor.
+
 - **Windows no longer end up under a bar that comes after them:** a window snapped to a half or
   a quarter stayed where it was when a bar appeared or grew (an app snapped at login, before
   waybar was up), its top under the bar; it now moves below it, as maximized windows already

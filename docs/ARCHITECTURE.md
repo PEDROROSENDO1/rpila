@@ -1403,7 +1403,11 @@ Key flows and invariants:
   for it are housekeeping, not frame pacing: they exist only with `idle-timeout` set, and
   wake Pila once per timeout while Xwayland runs with no window.
 - **Snapping and keyboard moves** (`snap.rs`): a snapped window fills half of its output's
-  usable area, gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
+  usable area (less `gaps`, from the edges and between halves: `snap::side_rect`; a maximized
+  window fills `snap::gapped`, the area less `gaps` all around, through `set_fill_state_on`,
+  `place_new_window` and the drag's preview, `snap_target_rect`; with `gaps` above 0 it keeps
+  a floating window's shadow and rounded corners, `scene_window`'s `fills_output`; a change of
+  `gaps` refits like a change of the area), gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
   Snapping is floating geometry, not a fill state (but a change of the usable area refits it,
   as `refit_to_usable_area` does filled windows): maximizing a snapped window
   (`set_fill_state_on`) or resizing it (`begin_resize`, keyboard resizes) calls

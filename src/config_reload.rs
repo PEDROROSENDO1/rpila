@@ -156,6 +156,9 @@ impl Pila {
         if old.workspaces != self.config.workspaces {
             self.apply_workspace_count();
         }
+        if old.gaps != self.config.gaps {
+            self.refit_to_usable_area();
+        }
         if old.xwayland != self.config.xwayland {
             self.xwayland_config_changed();
         }

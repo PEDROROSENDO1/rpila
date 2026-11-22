@@ -84,6 +84,13 @@ workspaces = 4
 corner-radius = 8
 rounded-corners = "top"
 
+# Room around maximized windows and windows snapped to a half or quarter (Mod+
+# arrows), and between snapped ones, in logical pixels, 0 to 128. With room
+# around it a maximized window keeps its shadow and rounded corners;
+# fullscreen windows still take the whole monitor.
+# gaps = 12                        # e.g.
+gaps = 0
+
 # Monitors on the seat's other GPUs (a laptop's HDMI or DisplayPort wired to
 # its dedicated GPU, a dock with a GPU of its own): drawn with the main GPU
 # and copied to theirs. Off by default while it's new: untried on real
