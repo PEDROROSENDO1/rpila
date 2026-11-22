@@ -13,6 +13,11 @@
   authorization, so a Flatpak app with network access but no X11 permission (or another user
   on the machine) could connect to it: replace the clipboard, read it while an X11 app had the
   focus, and type into X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
+- **Security: X11 apps need Xwayland's cookie:** Xwayland now runs with `-auth`, and only
+  clients with its cookie get in: programs Pila starts get it as `XAUTHORITY` (a file in
+  `$XDG_RUNTIME_DIR` only the user can read, made anew for each session), and so does the
+  D-Bus session bus on a TTY. A process that can reach the X socket without it (another user, a
+  sandbox without X11 permission) is refused.
 - **Security: no focus stealing by hovering:** an app could take the keyboard focus (and what
   was typed next, such as a password in a terminal) whenever the pointer merely rested on one of
   its windows, by asking for an activation token with the serial of the pointer entering it.

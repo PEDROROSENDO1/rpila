@@ -1342,9 +1342,14 @@ Key flows and invariants:
 - **X11** (`xwayland.rs`, `focus.rs`): Xwayland on demand. At launch Pila only reserves an
   X display (`reserve_xwayland`: Smithay's `XWaylandDisplay`, its number, lock file and
   listening sockets, held until exit: the socket file only, never an abstract socket, which has
-  no permissions while Xwayland runs without `-auth`), unless Xwayland isn't installed or `[xwayland] enabled =
-  false`; spawned clients get its `DISPLAY` from the start (never the host's; `Pila::x11_display`,
-  none while turned off), and the startup programs don't wait for X. Turned on or off on reload
+  no permissions) and its cookie (`xauth::Xauthority`: one MIT-MAGIC-COOKIE-1, random, in
+  `$XDG_RUNTIME_DIR/pila-xauthority-<N>`, mode 0600, a `FamilyWild` entry as Flatpak writes them;
+  removed with the reservation, in `stop_xwayland`), unless Xwayland isn't installed or `[xwayland] enabled =
+  false`; Xwayland runs with `-auth` on that file, so a client without the cookie is refused (the
+  window manager's `-wm` connection needs none, and Pila's own XRes connection,
+  `only_pilas_x11_clients`, passes it through `xauth::connect`, as Pila's environment has no
+  `XAUTHORITY`); spawned clients get its `DISPLAY` and `XAUTHORITY` from the start (never the
+  host's; `Pila::x11_display`, `Pila::x11_authority`, none while turned off), and the startup programs don't wait for X. Turned on or off on reload
   (`xwayland_config_changed`): on, the display is reserved then; off, it's let go at once if
   Xwayland doesn't run, else when it stops (idle or crashed: `listen_for_x11` gives it up
   instead of watching again), so its apps keep running meanwhile.

@@ -1252,9 +1252,10 @@ enum EnvFile {
 /// The variables Pila gives what it starts itself (`Pila::session_env`,
 /// `Pila::spawn`), which `[environment]` can't change: the session needs
 /// them as they are.
-pub const PILA_ENV: [&str; 6] = [
+pub const PILA_ENV: [&str; 7] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
+    "XAUTHORITY",
     "XDG_CURRENT_DESKTOP",
     "XDG_SESSION_TYPE",
     "PILA_SOCKET",

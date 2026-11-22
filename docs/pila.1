@@ -329,7 +329,10 @@ What the log shows (default: info; debug for details).
 Programs Pila starts get its
 .B WAYLAND_DISPLAY
 and Xwayland's
-.BR DISPLAY ,
+.B DISPLAY
+and
+.B XAUTHORITY
+(its cookie),
 .BR XDG_CURRENT_DESKTOP =pila,
 .BR XDG_SESSION_TYPE =wayland
 and
@@ -344,7 +347,7 @@ commands run by key bindings also get
 the name of the monitor under the pointer.
 .PP
 On a TTY, Pila exports
-.BR WAYLAND_DISPLAY ", " DISPLAY ", " XDG_CURRENT_DESKTOP ", " XDG_SESSION_TYPE
+.BR WAYLAND_DISPLAY ", " DISPLAY ", " XAUTHORITY ", " XDG_CURRENT_DESKTOP ", " XDG_SESSION_TYPE
 and
 .B PILA_SOCKET
 to the D\-Bus session bus (and to systemd \-\-user when that's the bus), for the

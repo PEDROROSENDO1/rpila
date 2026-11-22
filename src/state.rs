@@ -363,9 +363,10 @@ pub struct Protocols {
 /// picks its backends from `pila-portals.conf` by it.
 const DESKTOP_NAME: &str = "pila";
 /// What `export_environment` hands the session bus.
-const SESSION_ENV: [&str; 5] = [
+const SESSION_ENV: [&str; 6] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
+    "XAUTHORITY",
     "XDG_CURRENT_DESKTOP",
     "XDG_SESSION_TYPE",
     // For a shell started by systemd or D-Bus to find `pila msg`'s socket.
@@ -2042,8 +2043,8 @@ impl Pila {
         self.spawn_all(&commands);
     }
 
-    /// Give the D-Bus session bus pila's `WAYLAND_DISPLAY`, `DISPLAY` and
-    /// desktop name, so services it activates (xdg-desktop-portal and its
+    /// Give the D-Bus session bus pila's `WAYLAND_DISPLAY`, `DISPLAY` (and
+    /// its `XAUTHORITY`) and desktop name, so services it activates (xdg-desktop-portal and its
     /// wlr backend, for screen sharing) talk to pila.
     ///
     /// Only on bare metal; nested, apps use the host's portals. On the
@@ -2182,6 +2183,12 @@ impl Pila {
         set(
             "DISPLAY",
             self.x11_display().map(|display| format!(":{display}")),
+        );
+        // Its cookie, which Xwayland asks for (`xauth.rs`).
+        set(
+            "XAUTHORITY",
+            self.x11_authority()
+                .map(|path| path.to_string_lossy().into_owned()),
         );
         // Apps that draw their own cursor (X11 ones among them) use the
         // theme and size Pila draws its own with; unset, they inherit

@@ -31,12 +31,17 @@ struct X11 {
 
 /// Whether Xwayland is installed (else the test is skipped).
 fn xwayland_installed() -> bool {
+    installed("Xwayland")
+}
+
+/// Whether `program` is in `PATH` (else the test is skipped).
+fn installed(program: &str) -> bool {
     let installed = std::process::Command::new("sh")
-        .args(["-c", "command -v Xwayland"])
+        .args(["-c", &format!("command -v {program}")])
         .output()
         .is_ok_and(|o| o.status.success());
     if !installed {
-        eprintln!("Xwayland not installed: skipped");
+        eprintln!("{program} not installed: skipped");
     }
     installed
 }
@@ -59,8 +64,9 @@ impl X11 {
             std::thread::sleep(Duration::from_millis(10));
         }
         let state = pila.state();
-        let display = format!(":{}", state["xwayland"].as_u64().unwrap());
-        let (conn, screen) = x11rb::connect(Some(&display)).expect("connect to Xwayland");
+        let display = state["xwayland"].as_u64().unwrap() as u32;
+        let (conn, screen) =
+            pila::xauth::connect(display, &cookie(&state)).expect("connect to Xwayland");
         let root = conn.setup().roots[screen].root;
         Some(X11 {
             conn,
@@ -281,6 +287,12 @@ fn xwayland_pid(pila: &TestPila) -> u32 {
     find_xwayland(pila).expect("pila's Xwayland")
 }
 
+/// The cookie in the Xauthority file Pila gives X11 apps (`XAUTHORITY`).
+fn cookie(state: &serde_json::Value) -> Vec<u8> {
+    let path = state["xauthority"].as_str().expect("an Xauthority file");
+    pila::xauth::read_cookie(std::path::Path::new(path)).expect("a cookie in it")
+}
+
 /// The display pila reserved for X11 apps, as `DISPLAY` names it.
 fn reserved_display(pila: &mut TestPila) -> String {
     let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
@@ -365,11 +377,15 @@ fn xwayland_starts_when_an_x11_app_connects() {
         return;
     }
     let mut pila = TestPila::start_with(Options {
-        command: Some("echo $DISPLAY > $XDG_RUNTIME_DIR/ran".into()),
+        command: Some("echo $DISPLAY $XAUTHORITY > $XDG_RUNTIME_DIR/ran".into()),
         ..Options::default()
     });
     let display = reserved_display(&mut pila);
-    assert_eq!(pila.wait_file("ran").trim(), display);
+    let xauthority = pila.state()["xauthority"].as_str().unwrap().to_string();
+    assert_eq!(
+        pila.wait_file("ran").trim(),
+        format!("{display} {xauthority}")
+    );
     pila.stays(
         "no Xwayland until an X11 app comes",
         Duration::from_millis(500),
@@ -502,6 +518,68 @@ fn xwayland_comes_back_after_a_crash() {
 }
 
 /// Whether the X socket of `display` (`:n`) is there.
+/// Xwayland runs with `-auth`: a client without the cookie Pila gave its
+/// apps (another user, a sandbox without X11 permission that reached the
+/// socket) is refused, even while Xwayland runs.
+#[test]
+fn the_x11_display_takes_only_its_cookie() {
+    let mut pila = TestPila::start();
+    let Some(_x11) = X11::connect(&mut pila) else {
+        return;
+    };
+    let state = pila.state();
+    let display = state["xwayland"].as_u64().unwrap() as u32;
+    assert!(pila::xauth::connect(display, &[]).is_err(), "no cookie");
+    let mut wrong = cookie(&state);
+    wrong[0] ^= 0xff;
+    assert!(
+        pila::xauth::connect(display, &wrong).is_err(),
+        "a wrong one"
+    );
+    let path = state["xauthority"].as_str().unwrap();
+    let mode =
+        std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(path).unwrap().permissions());
+    assert_eq!(mode & 0o777, 0o600, "{path} is the user's alone");
+}
+
+/// An X11 app Pila starts gets in with the cookie, through libXau's reading
+/// of `XAUTHORITY` (xdpyinfo, as any Xlib app).
+#[test]
+fn an_x11_app_pila_starts_gets_in() {
+    if !xwayland_installed() || !installed("xdpyinfo") {
+        return;
+    }
+    let pila = TestPila::start_with(Options {
+        command: Some(
+            "xdpyinfo > $XDG_RUNTIME_DIR/info 2>&1; echo $? > $XDG_RUNTIME_DIR/ran".into(),
+        ),
+        ..Options::default()
+    });
+    let status = pila.wait_file("ran");
+    let info = pila.wait_file("info");
+    assert_eq!(status.trim(), "0", "{info}");
+    assert!(info.contains("name of display"), "{info}");
+}
+
+/// Its cookie goes with the display: the file is gone once Pila lets the
+/// display go, and turned on again, the display gets a new one.
+#[test]
+fn the_cookie_goes_with_the_display() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start();
+    let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
+    let path = state["xauthority"].as_str().unwrap().to_string();
+    let first = cookie(&state);
+    pila.write_config("[xwayland]\nenabled = false\n");
+    pila.wait("the display given back", |s| s["xwayland"].is_null());
+    assert!(!std::path::Path::new(&path).exists(), "{path} stays");
+    pila.write_config("");
+    let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
+    assert_ne!(cookie(&state), first);
+}
+
 fn x_socket_exists(display: &str) -> bool {
     std::path::Path::new(&format!("/tmp/.X11-unix/X{}", &display[1..])).exists()
 }
@@ -515,11 +593,13 @@ fn xwayland_can_be_turned_off() {
     }
     let mut pila = TestPila::start_with(Options {
         config: "[xwayland]\nenabled = false\n".into(),
-        command: Some("echo \"[$DISPLAY]\" > $XDG_RUNTIME_DIR/ran".into()),
+        command: Some("echo \"[$DISPLAY][$XAUTHORITY]\" > $XDG_RUNTIME_DIR/ran".into()),
+        env: vec![("XAUTHORITY".into(), "/somewhere/else".into())],
         ..Options::default()
     });
-    assert_eq!(pila.wait_file("ran").trim(), "[]");
+    assert_eq!(pila.wait_file("ran").trim(), "[][]");
     assert!(pila.state()["xwayland"].is_null());
+    assert!(pila.state()["xauthority"].is_null());
     assert!(pila.log().contains("Xwayland is turned off"));
     assert_eq!(find_xwayland(&pila), None);
 }

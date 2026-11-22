@@ -83,6 +83,7 @@ pub mod window_menu;
 pub mod winit;
 pub mod workspace_slide;
 pub mod workspaces;
+pub mod xauth;
 pub mod xwayland;
 
 pub use crate::state::Pila;

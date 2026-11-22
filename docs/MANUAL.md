@@ -569,7 +569,7 @@ QT_QPA_PLATFORMTHEME = false
 A saved change reaches the programs started from then on. On a TTY the variables also go to the
 D-Bus session bus and, in a login session, to systemd's user manager, so the services they start
 (portals, apps started over D-Bus) get them too. The variables Pila sets itself (`WAYLAND_DISPLAY`,
-`DISPLAY`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, `PILA_SOCKET`, `PILA_OUTPUT`) stay as Pila
+`DISPLAY`, `XAUTHORITY`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, `PILA_SOCKET`, `PILA_OUTPUT`) stay as Pila
 sets them, with a warning if the section names one, and so do `XCURSOR_THEME` and `XCURSOR_SIZE`
 when `[cursor]` sets them. Pila itself doesn't read the section: its own settings (such as the
 keymap) are in the rest of the file.
@@ -757,8 +757,10 @@ you the session back.
 
 X11 apps (older programs, many games, Steam) run through Xwayland, which Pila starts by itself
 when the first X11 app opens: `DISPLAY` is set from the start, but a session with no X11 app
-runs no X server. The clipboard works between X11 and Wayland apps. Games can lock and confine
-the pointer.
+runs no X server. Only apps with the X server's cookie get in: Pila gives it to what it starts as
+`XAUTHORITY`, a file in `$XDG_RUNTIME_DIR` only you can read, made anew each session (Flatpak
+apps with X11 permission get it through Flatpak). The clipboard works between X11 and Wayland
+apps. Games can lock and confine the pointer.
 
 Once started, Xwayland runs until Pila exits. To have it stop when no X11 app is left, set a
 timeout in seconds; the next X11 app starts it again:
@@ -774,7 +776,7 @@ server itself (`xrdb`, `setxkbmap`, `xmodmap`): leave the timeout unset if your 
 any of those.
 
 For a session with no X11 at all, turn it off; Pila then reserves no X display and sets no
-`DISPLAY`, so apps that can use either pick Wayland:
+`DISPLAY` nor `XAUTHORITY`, so apps that can use either pick Wayland:
 
 ```toml
 [xwayland]
