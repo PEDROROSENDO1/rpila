@@ -49,7 +49,7 @@ x11rb = { version = "0.14", features = ["res"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Desktop notifications over D-Bus (`notifications.rs`), on a thread of
 # their own: pure Rust, so no notify-send and no new system library.
-zbus = "5"
+zbus = "6"
 
 # Smithay's main branch, as niri and cosmic-comp use it: fixes reach pila
 # without waiting for a release (0.7.0 is from June 2025). Move `rev` forward

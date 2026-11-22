@@ -52,9 +52,9 @@ to say so.
 - **Smithay with the changes Pila's fork carries** (a text cursor with no width, asynchronous
   page flips, the X display reserved apart from Xwayland): Pila goes back to Smithay's own
   repository.
-- **Maintained dependencies of zbus and cosmic-text**: `cargo audit` reports `zbus_names`,
-  `zvariant` and `zvariant_derive` (zbus 5) and `ttf-parser` (cosmic-text) unmaintained
-  (RUSTSEC-2026-0370 and later; no vulnerability). Moving up with their next releases.
+- **A maintained font parser in cosmic-text**: `cargo audit` reports `ttf-parser`, which
+  cosmic-text uses, unmaintained (RUSTSEC-2026-0192; no vulnerability). Moving up with
+  cosmic-text's next release.
 
 ## Not planned
 

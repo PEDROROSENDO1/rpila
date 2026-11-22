@@ -11,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-use zbus::{blocking::Connection, zvariant::OwnedValue};
+use zbus::{Connection, OwnedVariant};
 
 use super::TIMEOUT;
 
@@ -56,19 +56,19 @@ impl Bus {
     /// A notification daemon on this bus, recording, until it's dropped.
     pub fn notification_daemon(&self) -> Daemon {
         let shown = Arc::new(Mutex::new(Vec::new()));
-        let connection = zbus::blocking::connection::Builder::address(self.address.as_str())
-            .unwrap()
-            .name("org.freedesktop.Notifications")
-            .unwrap()
-            .serve_at(
-                "/org/freedesktop/Notifications",
-                FakeDaemon {
-                    shown: shown.clone(),
-                },
-            )
-            .unwrap()
-            .build()
-            .unwrap();
+        // Served by zbus's helper thread once `block_on` returns.
+        let connection = zbus::block_on(
+            zbus::connection::Builder::address(self.address.as_str())
+                .name("org.freedesktop.Notifications")
+                .serve_at(
+                    "/org/freedesktop/Notifications",
+                    FakeDaemon {
+                        shown: shown.clone(),
+                    },
+                )
+                .build(),
+        )
+        .unwrap();
         Daemon {
             _connection: connection,
             shown,
@@ -128,7 +128,7 @@ impl FakeDaemon {
         summary: String,
         body: String,
         _actions: Vec<String>,
-        _hints: HashMap<String, OwnedValue>,
+        _hints: HashMap<String, OwnedVariant>,
         expire_timeout: i32,
     ) -> u32 {
         let mut shown = self.shown.lock().unwrap();

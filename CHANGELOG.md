@@ -18,6 +18,9 @@
   4 ms. A fullscreen foot scrolling on a 2560x1440 monitor costs Pila about half as much per
   frame. The copies' time is logged apart (`uploads` on `pila::frames`) and reported by
   `pila-check`, which also runs a fullscreen foot where it's installed.
+- **For packagers: zbus 6.** Pila's D-Bus crate moves up a major version, which takes in the
+  `zvariant` and `zbus_names` crates `cargo audit` reported unmaintained (RUSTSEC-2026-0370 to
+  0372): 14 fewer crates to build. No new system library.
 
 ## 0.8.1 (2026-11-20)
 
