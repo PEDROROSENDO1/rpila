@@ -4,21 +4,36 @@ Pila's one roadmap: what comes next and in what order, what waits for testers or
 projects, and what isn't planned. It changes with each release; the
 [changelog](https://github.com/igalmarino/pila/blob/main/CHANGELOG.md) says what's done.
 
-Last updated for **0.7.1** (2026-11-18). Pila is alpha and a daily driver on its author's
+Last updated for **0.8.3** (2026-11-22). Pila is alpha and usable day to day on its development
 machine: windows, Xwayland, workspaces, snapping, rules, input methods, screen capture, desktop
 shells and tools (waybar and friends), bare metal with direct scanout, all covered by
-1006 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
+1162 tests and real-app checks. What's left is mostly hardware Pila hasn't met and protocols it
 doesn't speak yet.
 
 ## Now: the next release
 
 Small, testable in CI, no new hardware needed.
 
-Nothing open: 0.7.1 took what was here.
+Nothing open: 0.8.3 took what was here.
 
 ## Next
 
-Nothing planned beyond what waits below: a feature users ask for goes here first.
+A feature users ask for goes here first.
+
+- **The first frames after a game tears cost the GPU 3.5-4.8 ms** (bare metal, amdgpu): when a
+  fullscreen game with vsync off (`vkcube`) closes or leaves fullscreen, Pila's next frames take
+  that long on the GPU, against about 1 ms after the same game with vsync; asked for 4-5.5 ms
+  before a vblank, one misses it (about one `scripts/check` in ten, on either monitor). Not the
+  wallpaper, the animations, the game's process ending, nor waiting behind its work (a
+  high-priority GPU context changed nothing): what's left is in the driver or the switch back
+  from asynchronous flips, which needs a GPU trace (amdgpu tracepoints) to tell.
+- **A desktop portal inside Pila** ([discussion #12](https://github.com/igalmarino/pila/discussions/12)):
+  Pila itself serving the ScreenCast and Screenshot portals, feeding PipeWire from the buffers it
+  already has, with a picker it draws (screens and windows with live previews, like the
+  overview) instead of xdg-desktop-portal-wlr's `slurp`; and GlobalShortcuts, which
+  xdg-desktop-portal-wlr lacks, for apps' global shortcuts (push-to-talk). No program of its own:
+  the service lives in the compositor. First a ScreenCast prototype, kept only if a browser
+  sharing a screen leaves Pila inside its frame budget and nothing it does blocks the event loop.
 
 ## Waiting for hardware and testers
 
@@ -44,13 +59,28 @@ to say so.
 - **Smithay with the changes Pila's fork carries** (a text cursor with no width, asynchronous
   page flips, the X display reserved apart from Xwayland): Pila goes back to Smithay's own
   repository.
+- **Direct scanout of EGL apps on AMD GPUs**: a fullscreen app drawn with OpenGL (kitty,
+  weston-simple-egl) keeps the render-only compressed (DCC) buffer layout Mesa 26.3's radeonsi
+  picks, which the display can't read, after Pila tells it the layouts the screen takes (a
+  scanout tranche of dmabuf feedback), so Pila draws its frames instead of showing them as they
+  are. Seen on a Renoir laptop with Mesa 26.3.1; Pila's part is logged (`direct scanout
+  refused`, `dmabuf feedback` on `pila::frames`).
+- **A maintained font parser in cosmic-text**: `cargo audit` reports `ttf-parser`, which
+  cosmic-text uses, unmaintained (RUSTSEC-2026-0192; no vulnerability). Moving up with
+  cosmic-text's next release.
 
 ## Not planned
 
+- A bar, launcher, on-screen display or screenshot tool of Pila's own: standard tools (waybar,
+  fuzzel, swayosd, grim and slurp, ...) do those jobs, and Pila is the compositor alone. Pila
+  draws what a compositor must or does best itself: title bars, the window switcher and the overview. Idle
+  (swayidle) and the wallpaper (swaybg) are standard tools' too.
 - Vendor protocols (KDE, GNOME, Hyprland, …), even when Smithay implements them; wlroots ones only
   as the protocol policy in
   [CONTRIBUTING.md](https://github.com/igalmarino/pila/blob/main/CONTRIBUTING.md) allows.
-  Features with no protocol go through Pila's configuration and `pila msg`.
+  Features with no protocol go through Pila's configuration and `pila msg`. Nor GNOME's private
+  D-Bus interfaces (Mutter's ScreenCast and DisplayConfig, GNOME Shell's Screenshot), which
+  xdg-desktop-portal-gnome needs to capture the screen.
 - A build without X11 support: `[xwayland] enabled = false` and Xwayland left uninstalled give a
   session with no X at all, and the X11 code Pila compiles in is pure Rust, with no X libraries.
 - Breaking configuration or `pila msg`: keys, actions and fields are only added to

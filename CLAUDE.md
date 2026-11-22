@@ -9,6 +9,11 @@ on **Smithay**'s main branch (a git dependency pinned to a `rev` in `Cargo.toml`
 cosmic-comp does: 0.7.0, the last release, is from June 2025; for now from Pila's fork,
 `igalmarino/smithay`, branch `pila`: a rev of Smithay's plus the fixes `Cargo.toml` lists).
 
+Two more files go with this one: `tests/CLAUDE.md` (how the integration tests work) and
+`scripts/CLAUDE.md` (`scripts/check`, `scripts/apps`, the demo video); read the one for the
+directory before working in `tests/` or `scripts/`. Releases and packaging are in the
+`release` skill (`.claude/skills/release`).
+
 ## Environment
 
 - You run inside a dev container (Arch Linux base). The host is Arch Linux; the user logs
@@ -46,41 +51,34 @@ cargo test                      # cargo test <name_substring> for one test
 timeout 10 cargo run            # nested smoke test; never leave it running
 ```
 
-- `pila-launcher` (`launcher/`), `pila-bar` (`bar/`), `pila-osd` (`osd/`) and `pila-shot` (`shot/`) are a cargo workspace of their own,
-  rooted in `launcher/`, with its own `Cargo.lock` (Smithay and iced_layershell need different
-  winit betas): the same commands with `--manifest-path launcher/Cargo.toml` (or run from
-  `launcher/`; `cargo fmt --all`); the binaries land in `launcher/target/`. CI, the packages
-  and `scripts/install` build them with Pila; a release bumps their versions with Pila's.
-  Pila's own UI pieces are iced clients there, never GTK or drawn inside the compositor (the
-  wallpaper and the window switcher aren't: Pila draws `[wallpaper]` and the switch's live
-  previews itself, `wallpaper.rs`, `switcher_view.rs`).
+- Pila ships no desktop programs of its own (no bar, launcher, on-screen display or
+  screenshot tool): its defaults are standard tools packaged by Arch, Debian and Fedora
+  (fuzzel, waybar, wpctl, brightnessctl, playerctl, grim, slurp, wl-copy), named in
+  `config.example.toml` alone (swayidle and swaylock to lock and turn the monitors off,
+  swaybg for the wallpaper, which Pila draws as a PNG in `[colors]`: `wallpaper.rs`). Where
+  a packaged tool does a job well, Pila uses it rather than growing the feature; what only a
+  compositor can do, Pila draws: title bars, the window switcher's live previews and the overview
+  (`switcher_view.rs`).
+  Programs an older install left are in `scripts/install-paths`' `removed_files`.
 
 - CI (`.github/workflows/ci.yml`, every push to `main` and every PR) runs `cargo fmt --check`,
   then clippy, a release build and the tests with `--locked` (a `Cargo.lock` out of date
   with `Cargo.toml` fails there, not locally), does a staged install and runs
   `shellcheck --severity=warning --external-sources` on the scripts (and parses the Python
-  ones): run that after editing one. `compat.yml` (`rust-version`, Debian, Ubuntu, Fedora, Nix,
-  `cargo audit`) runs when dependencies, the Nix files, `scripts/install`(`-paths`) or
-  `resources/` change (not `packaging/`), weekly and by hand before a release. `packages.yml`
-  builds the `.deb` and `.rpm` of a release, and `repos.yml` then puts the last three releases'
-  in the signed APT and DNF repositories on GitHub Pages (key in the `repos` environment, public
-  half `packaging/pila.asc`). `aur.yml` publishes `packaging/aur/pila-git` to
-  the AUR once approved in the `aur` environment: a release's `pkgver` commit by Claude, as
-  part of the release; any other change by the user. `vkms.yml` (by hand, an
-  experiment) runs the udev backend on the kernel's virtual KMS driver in the runner's VM.
-  `fuzz.yml` (by hand) runs the fuzz targets in `fuzz/` for a few minutes each.
-- Test: `cargo test`; single test: `cargo test <name_substring>`. Every feature gets
-  integration tests (`tests/*.rs`; how they work is in `tests/CLAUDE.md`) and a new test
-  goes into `tests/FEATURES.md`; only bare-metal paths (`udev/`), real frame times
-  (`scripts/check`) and looks stay with the user. `scripts/coverage [--html]` reports line
+  ones): run that after editing one. The other workflows are in `.github/workflows/` (the
+  package ones in the `release` skill); `aur.yml` publishes only once approved: a release's
+  `pkgver` commit by Claude, any other change by the user.
+- Every feature gets integration tests (`tests/*.rs`; how they work is in `tests/CLAUDE.md`)
+  and a new test goes into `tests/FEATURES.md`; only bare-metal paths (`udev/`), real frame
+  times (`scripts/check`) and looks stay with the user. `scripts/coverage [--html]` reports line
   coverage per file, a guide to what the tests miss.
 - Fixing a bug: first write a test that reproduces it and see it fail, then fix it; the test
   stays in the suite to verify the fix and keep the bug from coming back. If a bug can't be
   tested automatically (bare metal, looks), say so and why.
 - Run nested: `cargo run` opens a window on the host desktop and blocks. Don't leave it
   running in the foreground; use `timeout 10 cargo run` for smoke tests or ask the user.
-  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default
-  `pila-bar`; no terminal starts by itself).
+  `cargo run -- -c '<cmd>'` runs `<cmd>` at startup instead of `autostart` (default: the
+  `autostart` list in `config.example.toml`; no terminal starts by itself).
 - Config: `config.example.toml` (copy to `~/.config/pila/config.toml`, or `--config`);
   `pila --check-config [--config FILE]` validates a file as Pila reads it, plus the
   keymap (`config::check_keymap`), and exits 0/1 (`main::run_config_check`).
@@ -91,7 +89,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   popovers, dropdowns: the way to exercise popups and popup grabs). `foot` and GTK use
   cursor-shape (named cursors); `weston-terminal` draws its own cursor surfaces.
   Desktop tools for layer-shell and friends: `swaybg` (Background), `waybar` (Top, exclusive
-  zone), `fuzzel` (Overlay, exclusive keyboard; `PILA_LAUNCHER=fuzzel`), `mako` +
+  zone), `fuzzel` (Overlay, exclusive keyboard; the default launcher), `mako` +
   `notify-send` (notifications), `swaylock` (session lock), `wl-copy`/`wl-paste`
   (ext-data-control), `grim` + `slurp` (screenshots: ext-image-copy-capture), `wtype`
   (virtual keyboard), `wlr-randr` (output management), `wlopm` (output power), `wlsunset`
@@ -102,7 +100,7 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   `pila-check.log`) is for you: run it before asking the user to check anything; the user
   runs plain `scripts/check` from a TTY (log in `pila-tty.log`) for bare metal. What it
   checks and when a feature adds a scenario: `scripts/CLAUDE.md`.
-- Real apps: `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm ...]` drags, clicks,
+- Real apps: `scripts/apps [gtk4|foot|kitty|weston-terminal|xterm|switcher|overview ...]` drags, clicks,
   maximizes and snaps real apps' windows with real input on a sealed headless Pila and checks
   they follow the pointer and leave no grab; `fcitx5-foot` and `fcitx5-gtk4` type Chinese
   through fcitx5 into a terminal and a GTK text field (`scripts/CLAUDE.md`): after changing
@@ -115,23 +113,16 @@ timeout 10 cargo run            # nested smoke test; never leave it running
   compositor, `RUST_LOG=pila::frames=debug` for frame times and missed refreshes (see
   "Performance pillar"). To watch an animation frame by frame: `[animations] speed = 4`
   and `grim` in a loop from a script run with `cargo run -- -c`.
-- The login session (the user, on the host): `scripts/install` builds the release binary
-  (with the host's cargo if there is one, else `--container`; `--no-build`) and installs it
-  with `scripts/report` (as `pila-report`), `scripts/check` (as `pila-check`, its helpers in
-  `share/pila/check`), the man page, `resources/session/` (the
-  `pila-session` wrapper, the `wayland-sessions` entry and the systemd user units it runs Pila as
-where there's systemd, whose `@BINDIR@` it fills in), the
-  icon (`resources/icons/pila.svg`, also the logo's mark: `docs/logo/`) and the portal configs; `scripts/uninstall` removes them. Paths come from
-  `scripts/install-paths` (`PREFIX`, `BINDIR`, `DATADIR`, `SYSCONFDIR`, `DESTDIR`), sourced
-  by both. Its log is in the journal (`journalctl -t pila -b`) and in
+- The login session (the user, on the host) is installed by `scripts/install`
+  (`scripts/CLAUDE.md`). Its log is in the journal (`journalctl -t pila -b`) and in
   `~/.local/state/pila/pila.log`, mounted here read-only as `/run/host-pila/pila.log`
   (previous run: `pila.log.old`).
   Taking a change into the session means logging out and back in, which ends this
   Claude session; the user does it.
-- Packages: Arch (`packaging/aur/pila-git`), Debian/Fedora (`packaging/nfpm.yaml`) and Nix
-  (`flake.nix`, `package.nix`). A file added to `scripts/install`'s `install_files` or a newly
-  linked library also goes in those packages, so read the `release` skill first (it covers
-  packaging as well as releases).
+- Packages (Arch, Debian/Fedora, Nix, and each one's `pila-desktop` metapackage of the
+  default tools, whose lists change together): a file added to `scripts/install`'s
+  `install_files`, a newly linked library or a changed default tool also goes in them, so
+  read the `release` skill first (it covers packaging as well as releases).
 - TTY runs (the user, on the host): `scripts/tty [config]` runs the release build
   (`--debug` for the debug one) by hand on a spare VT, under `dbus-run-session`, while the
   login session keeps running; read `pila-tty.log` and the previous run's
@@ -176,55 +167,37 @@ mean redrawing when nothing changed. How fast clients draw is up to them.
   render) stays well inside the period. Target: release build on the user's laptop (AMD
   Renoir), typical scenes, **at most 4 ms per output** (a quarter of 60 Hz, still room at
   144 Hz).
-- **Measure it:** `RUST_LOG=pila::frames=debug` (`frame_stats.rs`) logs per output,
-  every 5 s, frames, average and worst CPU time and missed refreshes, plus every frame
-  over half the period, and apart the redraws that found nothing new to show (`idle`, with
-  their summed CPU time; `scripts/check` reports them per output) and, on bare metal, the
-  frames that were a client's buffer as it is (`direct`: direct scanout, nothing drawn) and
-  those shown at once by an asynchronous flip (`torn`: a fullscreen game with vsync off, which
-  miss no refresh).
-  Missed refreshes are vblanks with no new frame while an animation runs and, on bare metal,
-  a frame asked for in time but shown a vblank late, animation or not (`late`): exact on bare
-  metal (the DRM sequence of the vblanks that showed frames) and an estimate nested (gaps
-  over 1.5 periods; the host decides when frames show); `pila::frames=trace` logs every
-  frame. The first frame after an output is set up (connected, powered on, a new mode, back
-  from another VT: swapchain and modeset) is a cost of setting it up, logged on its own and
-  not counted. The GPU's part of a frame (`gpu_avg_ms`, `gpu_max_ms`: from its submission to
-  its native fence signaling, not waited for; none on software rendering) is logged with the
-  rest, and `scripts/check` reports it per output, unjudged: the budget is CPU time. On bare
-  metal frames are drawn late while the scene is steady, as close to their vblank as recent
-  frames allow (`render-late`, `udev/render_late.rs`), and their latency (redraw asked →
-  vblank that showed it) is logged and reported too; `PILA_CHECK_RENDER_LATE=false
-  scripts/check` gives the numbers without it. Screen captures, which build frames of their
-  own after the outputs', are logged apart (`captures`), held to the same budget
-  (`scripts/check` streams one, as a screen share does: `scripts/capture-stream`). The event
-  loop's own work after each iteration (`after_frames`: taskbars, IPC, the `Space`), paced
-  by events rather than frames, is logged apart too (`loop`). Any change that touches
-  rendering, input or the event loop is checked with it (release build) before it's
-  committed; bare-metal numbers come from the user with `scripts/check` (see Commands).
-- **Rules:** nothing blocking on the event loop (I/O, D-Bus, font loading go to threads
-  or run in the background, like `text.rs` and `export_environment`); work proportional
-  to damage; expensive paths (offscreen textures, blur, captures) only while they're
-  needed; frames paced by vblank (udev) or the host's frame callbacks (nested), never by
-  timers (the headless test backend, which has no vblank, is the one exception;
-  `schedule_hidden_frames`' and `commit_pacing.rs`'s once-a-second wakes for hidden
-  surfaces, the wake for a timestamp a client asked for, the frame callbacks a captured
-  hidden window gets at its capture client's rate and, on bare metal, the wait of an output
-  that just redrew with nothing new until half a period before its next vblank, for the next
-  redraw that may bring nothing either, and the wait of a frame held to be drawn its margin
-  before the vblank (`udev/render_late.rs`: the vblank paces it, the timer only places it in the
-  period) (`udev/draw.rs::idle_wait`: a client committing no
-  new picture (no buffer, or one without damage) in a loop of frame callbacks or fifo
-  barriers would make it redraw as fast as it loops; a change
-  of Pila's own never waits, a client's new picture once per wait: `redraw::Content`,
-  `idle_streak`) aren't pacing); redraws per output: a change redraws
-  only the outputs it shows on (`redraw.rs`); idle callbacks
-  inserted outside an event source come with a `Pila::wake` ping (see "Architecture");
-  one-time costs are paid at startup, not in the
-  first frame that needs them (`render::warm_up` when a renderer is created: shaders,
-  an offscreen texture, a draw of each kind a window needs; `text::init` shapes and rasterizes common characters on its
-  thread before publishing the fonts; a workspace slide's output-sized textures are made
-  ahead and kept, `workspace_slide.rs`).
+- **Measure it:** any change that touches rendering, input or the event loop is checked
+  with `RUST_LOG=pila::frames=debug` (`frame_stats.rs`) and `scripts/check --nested` (release
+  build) before it's committed; bare-metal numbers come from the user with `scripts/check`
+  (see Commands). What each logged number means: the `frame-stats` skill.
+- **Rules:**
+  - Nothing blocks the event loop: I/O, D-Bus and font loading go to threads or run in the
+    background, like `text.rs` and `export_environment`.
+  - Work is proportional to damage; expensive paths (offscreen textures, blur, captures) run
+    only while they're needed.
+  - Frames are paced by vblank (udev) or the host's frame callbacks (nested), never by
+    timers. These timers don't pace frames, so they're allowed:
+    - the headless test backend's, which has no vblank;
+    - the once-a-second wakes for hidden surfaces (`schedule_hidden_frames`,
+      `commit_pacing.rs`);
+    - the wake for a timestamp a client asked for;
+    - the frame callbacks a captured hidden window gets at its capture client's rate;
+    - on bare metal, the wait of an output that just redrew with nothing new, until half a
+      period before its next vblank (`udev/draw.rs::idle_wait`). A client committing no new
+      picture (no buffer, or one without damage) in a loop of frame callbacks or fifo
+      barriers would otherwise make it redraw as fast as it loops. A change of Pila's own
+      never waits, and a client's new picture waits once (`redraw::Content`, `idle_streak`);
+    - on bare metal, the wait of a frame held to be drawn its margin before the vblank
+      (`udev/render_late.rs`: the vblank paces it, the timer only places it in the period).
+  - Redraws are per output: a change redraws only the outputs it shows on (`redraw.rs`).
+    Idle callbacks inserted outside an event source come with a `Pila::wake` ping (see
+    "Architecture").
+  - One-time costs are paid at startup, not in the first frame that needs them:
+    `render::warm_up` when a renderer is created (shaders, an offscreen texture, a draw of
+    each kind a window needs); `text::init` shapes and rasterizes common characters on its
+    thread before publishing the fonts; a workspace slide's output-sized textures are made
+    ahead and kept (`workspace_slide.rs`).
 
 ## Protocol policy
 
@@ -252,11 +225,8 @@ Privileged protocols are hidden from sandboxed apps: a client that connected thr
 wp-security-context (Flatpak) fails `state::is_privileged` (`ClientState::security_context`;
 Xwayland counts as privileged). Smithay globals take it as their filter (those Smithay
 gives none, keyboard-shortcuts-inhibit and ext-idle-notify, are made again hidden with
-`state::hide_from_sandboxes`), Pila's own as `GlobalDispatch::can_view`. It covers
-layer-shell, session lock, ext-data-control, virtual-keyboard, input-method,
-ext-foreign-toplevel-list, screen capture (both protocols), toplevel management, gamma, output
-management and power, ext-workspace, keyboard-shortcuts-inhibit, ext-idle-notify, and
-security-context itself (xwayland-keyboard-grab is shown to Xwayland alone, by Smithay). A new
+`state::hide_from_sandboxes`), Pila's own as `GlobalDispatch::can_view` (grep those for
+the list; xwayland-keyboard-grab is shown to Xwayland alone, by Smithay). A new
 global that exposes or controls other clients, input or outputs must get it too.
 
 ## Architecture
@@ -264,9 +234,6 @@ global that exposes or controls other clients, input or outputs must get it too.
 The crate is a library (`src/lib.rs`: every module and `Pila`) plus the `pila` command
 (`src/main.rs`: arguments, `USAGE`, `--check-config`, the panic hook); the fuzz targets
 (`fuzz/`, a nightly workspace of its own) call the library, so code they reach stays in it.
-`launcher/` is `pila-launcher`, `bar/` is `pila-bar`, `osd/` is `pila-osd` and `shot/` is
-`pila-shot`, iced clients of their own that reach Pila only through Wayland and its IPC (see
-"Launcher", "Bar", "OSD" and "Screenshots" in `docs/ARCHITECTURE.md`).
 
 One state struct, `Pila` (`src/state.rs`), implements every Smithay handler trait and is
 the calloop event loop's data. Core window management lives in `state.rs`; each feature
@@ -339,11 +306,4 @@ What breaks silently anywhere in the code, whichever subsystem you're in:
 Smithay's `smallvil` (minimal stacking compositor) and `anvil` (full-featured) examples are
 the canonical references. Clone `https://github.com/Smithay/smithay` outside `/workspace`
 (e.g. `/tmp`) at the `rev` of the `smithay` dependency in `Cargo.toml` and read them before
-inventing new patterns. Moving `rev` forward is a change of its own: read Smithay's
-`CHANGELOG.md` and log since the old one, run the whole suite, `scripts/check --nested` and
-`scripts/apps`, and have the user check bare metal (`udev/`). While the dependency is Pila's
-fork (`Cargo.toml` says which rev of Smithay's it is and what it adds), a bump tags the rev
-`main` pinned (`rev-<sha>`, so the releases that pin it keep building) and rebases its
-`pila` branch on the new rev, or goes back to Smithay's own once it has the fixes: each has a
-test that fails without it. The branch is moved through the GitHub API (no git network here),
-at the user's word.
+inventing new patterns. Moving `rev` forward is a change of its own: follow the `smithay-bump` skill.

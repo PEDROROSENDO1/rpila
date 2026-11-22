@@ -24,17 +24,15 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Packages
+        # A font, as every desktop has: the tests that look at text drawn
+        # (the shortcuts panel) need one; PILA_HEADLESS_NO_FONTS covers none.
         run: |
           pacman -Syu --noconfirm --needed git rust gcc pkgconf \
-            seatd libinput systemd-libs mesa libxkbcommon xorg-xwayland
+            seatd libinput systemd-libs mesa libxkbcommon xorg-xwayland ttf-dejavu
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          workspaces: |
-            . -> target
-            launcher -> target
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
@@ -44,17 +42,6 @@ jobs:
       # assertions catch more.
       - run: cargo test --locked
       - run: target/release/pila --version
-      # pila-launcher (launcher/), pila-bar (bar/),
-      # pila-osd (osd/) and pila-shot (shot/): a workspace of their own, with
-      # its own lock.
-      - run: cargo fmt --all --check --manifest-path launcher/Cargo.toml
-      - run: cargo clippy --all-targets --locked --manifest-path launcher/Cargo.toml -- -D warnings
-      - run: cargo test --locked --manifest-path launcher/Cargo.toml
-      - run: cargo build --release --locked --manifest-path launcher/Cargo.toml
-      - run: launcher/target/release/pila-launcher --version
-      - run: launcher/target/release/pila-bar --version
-      - run: launcher/target/release/pila-osd --version
-      - run: launcher/target/release/pila-shot --version
       - name: Staged install
         run: |
           DESTDIR="$RUNNER_TEMP/stage" PREFIX=/usr scripts/install --no-build

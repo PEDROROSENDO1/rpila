@@ -33,6 +33,13 @@ for entry in "${install_files[@]}"; do
         echo "absent   $target"
     fi
 done
+for target in "${removed_files[@]}"; do
+    target="$DESTDIR$target"
+    if [ -e "$target" ]; then
+        as_owner_of "$target" rm -f "$target"
+        echo "removed  $target"
+    fi
+done
 for dir in "${install_dirs[@]}"; do
     dir="$DESTDIR$dir"
     if [ -d "$dir" ]; then

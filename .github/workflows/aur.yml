@@ -1,15 +1,18 @@
-# Publish pila-git to the AUR when its PKGBUILD or .SRCINFO change on main. The
-# aur environment holds the SSH key (AUR_SSH_KEY), only for main, and waits for
-# the maintainer's approval: users run what this publishes. Run by hand, it
-# publishes whatever differs, and with nothing new it still tests the key.
+# Publish the AUR packages in packaging/aur (pila-git and the metapackage
+# pila-desktop) when a PKGBUILD or .SRCINFO there changes on main; each AUR
+# repository is named after its directory, and one that isn't there yet is
+# created by the first push. The aur environment holds the SSH key
+# (AUR_SSH_KEY), only for main, and waits for the maintainer's approval, once
+# for all of them: users run what this publishes. Run by hand, it publishes
+# whatever differs, and with nothing new it still tests the key.
 name: AUR
 
 on:
   push:
     branches: [main]
     paths:
-      - packaging/aur/pila-git/PKGBUILD
-      - packaging/aur/pila-git/.SRCINFO
+      - packaging/aur/*/PKGBUILD
+      - packaging/aur/*/.SRCINFO
   workflow_dispatch:
 
 permissions:
@@ -17,7 +20,7 @@ permissions:
 
 jobs:
   check:
-    name: .SRCINFO matches the PKGBUILD
+    name: Each .SRCINFO matches its PKGBUILD
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -30,11 +33,14 @@ jobs:
       - name: Compare
         run: |
           useradd --create-home builder
-          cp packaging/aur/pila-git/PKGBUILD /home/builder/
-          chown builder /home/builder/PKGBUILD
-          cd /home/builder
-          runuser -u builder -- makepkg --printsrcinfo > generated
-          diff "$GITHUB_WORKSPACE/packaging/aur/pila-git/.SRCINFO" generated
+          for dir in packaging/aur/*/; do
+            name="$(basename "$dir")"
+            mkdir "/home/builder/$name"
+            cp "$dir/PKGBUILD" "/home/builder/$name/"
+            chown -R builder "/home/builder/$name"
+            (cd "/home/builder/$name" && runuser -u builder -- makepkg --printsrcinfo) > generated
+            diff "$dir/.SRCINFO" generated
+          done
 
   publish:
     name: Publish
@@ -58,18 +64,26 @@ jobs:
             > ~/.ssh/aur_known_hosts
           echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/aur_known_hosts" \
             >> "$GITHUB_ENV"
+      # A package new to the AUR clones as an empty repository (git warns), and
+      # the push creates it.
       - name: Push
         run: |
-          git clone ssh://aur@aur.archlinux.org/pila-git.git aur
-          cp packaging/aur/pila-git/PKGBUILD packaging/aur/pila-git/.SRCINFO aur/
-          cd aur
-          git add PKGBUILD .SRCINFO
-          if git diff --cached --quiet; then
-            echo "The AUR already has this."
-            exit 0
-          fi
-          version="$(sed -n 's/^\tpkgver = //p' .SRCINFO)"
-          git -c user.name="Ignacio Galmarino" \
-            -c user.email="igalmarino@users.noreply.github.com" \
-            commit -m "Update to $version"
-          git push origin HEAD:master
+          for dir in packaging/aur/*/; do
+            name="$(basename "$dir")"
+            git clone "ssh://aur@aur.archlinux.org/$name.git" "aur-$name"
+            cp "$dir/PKGBUILD" "$dir/.SRCINFO" "aur-$name/"
+            (
+              cd "aur-$name"
+              git add PKGBUILD .SRCINFO
+              if git diff --cached --quiet; then
+                echo "The AUR already has $name."
+                exit 0
+              fi
+              version="$(sed -n 's/^\tpkgver = //p' .SRCINFO)"
+              release="$(sed -n 's/^\tpkgrel = //p' .SRCINFO)"
+              git -c user.name="Ignacio Galmarino" \
+                -c user.email="igalmarino@users.noreply.github.com" \
+                commit -m "Update to $version-$release"
+              git push origin HEAD:master
+            )
+          done

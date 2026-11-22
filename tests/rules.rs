@@ -119,7 +119,7 @@ fn opacity_blends_the_window_with_whats_behind() {
 #[test]
 fn corner_radius_cuts_the_corners() {
     let mut pila = TestPila::with_config(
-        "[[window-rule]]\napp-id = \"round\"\ncorner-radius = 24\ntitle-bar = false\n",
+        "rounded-corners = \"all\"\n[[window-rule]]\napp-id = \"round\"\ncorner-radius = 24\ntitle-bar = false\n",
     );
     let client = pila.client();
     client

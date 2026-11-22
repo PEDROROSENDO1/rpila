@@ -6,7 +6,9 @@ use std::io::IsTerminal;
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
 use pila::config::{self, Config, ModKey};
-use pila::{headless, ipc, ipc_client, state, test_control, text, udev, version, winit, Pila};
+use pila::{
+    headless, ipc, ipc_client, state, test_control, text, tool_configs, udev, version, winit, Pila,
+};
 
 const USAGE: &str = "\
 Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headless]
@@ -16,7 +18,7 @@ Usage: pila [-c|--command <CMD>] [--config <FILE>] [--backend winit|udev|headles
 
 Options:
   -c, --command <CMD>   Shell command to run at startup, instead of the
-                        config's autostart (default: pila-bar)
+                        config's autostart (default: waybar)
   --config <FILE>       Config file (default: $XDG_CONFIG_HOME/pila/config.toml
                         or ~/.config/pila/config.toml, written from
                         config.example.toml the first time it's missing)
@@ -41,7 +43,7 @@ Environment (overrides the config file):
                  installed of kitty, foot, alacritty, ghostty, wezterm,
                  konsole, gnome-terminal, xterm)
   PILA_LAUNCHER  Command for Mod+D and tapping Mod alone (default:
-                 pila-launcher)
+                 fuzzel)
   XCURSOR_THEME  Cursor theme when [cursor] sets none (default: default;
                  nested, only the one grown by shaking it)
   XCURSOR_SIZE   Cursor size when [cursor] sets none (default: 24; nested,
@@ -55,8 +57,8 @@ The config file is reloaded when it changes (all but autostart).
 
 Programs Pila starts get XDG_CURRENT_DESKTOP=pila and PILA_SOCKET (pila msg),
 and commands run by bindings PILA_OUTPUT, the name of the output under the
-pointer. On a TTY, Pila exports WAYLAND_DISPLAY, DISPLAY, XDG_CURRENT_DESKTOP,
-XDG_SESSION_TYPE and PILA_SOCKET to the D-Bus session bus (and to
+pointer. On a TTY, Pila exports WAYLAND_DISPLAY, DISPLAY, XAUTHORITY,
+XDG_CURRENT_DESKTOP, XDG_SESSION_TYPE and PILA_SOCKET to the D-Bus session bus (and to
 systemd --user when that's the bus), for the screen-sharing portals and shells
 started as services: run it as a login
 session (scripts/install) or under dbus-run-session (scripts/tty), with
@@ -264,6 +266,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop
         .handle()
         .insert_source(fonts_source, |_, _, state: &mut Pila| {
+            // None at all: nothing new to draw, but a shortcuts panel shown
+            // meanwhile would stay open with nothing on it.
+            if text::unavailable() {
+                state.hide_shortcuts();
+                return;
+            }
             // Every output: title bars, the window menu and notices on screen
             // may all show text. Logged for tests that count redraws.
             tracing::debug!("fonts in place: redrawing every output");
@@ -289,12 +297,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BackendKind::Udev | BackendKind::Headless => ModKey::Super,
     };
     // No `--config` and no file yet: start the user's from the example (the
-    // defaults, so nothing changes). A path given by hand may be a typo.
+    // defaults, so nothing changes), and welcome them with the shortcuts. A
+    // path given by hand may be a typo.
+    let mut first_run = false;
     if config_path.is_none() {
         if let Some(path) = Config::default_path() {
             match config::create_default_file(&path) {
                 Ok(true) => {
-                    tracing::info!(path = %path.display(), "created the config from the example")
+                    tracing::info!(path = %path.display(), "created the config from the example");
+                    first_run = true;
                 }
                 Ok(false) => {}
                 Err(err) => {
@@ -322,8 +333,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let display: Display<Pila> = Display::new()?;
     let mut state = Pila::new(&mut event_loop, display, config);
+    // Before the event loop: it reads the font directories. The tools the
+    // example starts get these by their command line (`Pila::spawn`).
+    if state.config.tool_configs {
+        let _ = state
+            .tool_configs_dir
+            .set(tool_configs::prepare_for_session(&state.config.colors));
+    }
     state.config_path = config_path;
     state.watch_config();
+    if first_run {
+        state.show_shortcuts(pila::shortcuts_view::Heading::Welcome);
+    }
     if let Some(err) = config_error {
         state::notify_after_startup(
             &state.loop_handle,
@@ -355,11 +376,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // `-c`, else the config's autostart (no terminal by itself: it's
-    // Mod+Return's). They get the reserved X display, so they can be X11
+    // Mod+Return's), less the example's own tools that aren't installed. They get the reserved X display, so they can be X11
     // apps: the first to connect starts Xwayland.
     let startup = match startup_command {
         Some(command) => vec![command],
-        None => state.config.autostart.clone(),
+        None => state.autostart_installed(),
     };
     state.reserve_xwayland();
     state.start_session(startup);

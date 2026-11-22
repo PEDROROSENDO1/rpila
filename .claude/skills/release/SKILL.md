@@ -11,9 +11,7 @@ and the tag and the release are made on GitHub with `gh`, which is logged in.
 0. Checks on what's about to be released, which don't run on every push:
    `gh workflow run compat.yml` and `scripts/apps`
    (real apps' windows), and wait for both to pass. Bare-metal numbers come from the user's `scripts/check` on a TTY.
-1. A commit `Release X` with `CHANGELOG.md`, `Cargo.toml`, `Cargo.lock`, `fuzz/Cargo.lock`,
-   `launcher/Cargo.toml`, `bar/Cargo.toml`, `osd/Cargo.toml`, `shot/Cargo.toml` and `launcher/Cargo.lock` (pila-launcher's, pila-bar's, pila-osd's and pila-shot's versions follow Pila's;
-   `cargo metadata --format-version 1 --manifest-path launcher/Cargo.toml >/dev/null` refreshes its line)
+1. A commit `Release X` with `CHANGELOG.md`, `Cargo.toml`, `Cargo.lock` and `fuzz/Cargo.lock`
    (its own lockfile records Pila's version: `cargo metadata --format-version 1 --manifest-path
    fuzz/Cargo.toml >/dev/null` refreshes only that line, where `cargo update -p pila` moves other
    crates too). The user pushes it;
@@ -44,9 +42,20 @@ that the AUR shows the new `pkgver` (`https://aur.archlinux.org/rpc/v5/info?arg[
 Any other change to the `PKGBUILD` that waits there is still the user's to approve. The Nix
 flake (`flake.nix`) takes its version from `Cargo.toml` and needs nothing.
 
+# pila-desktop
+
+A metapackage with no files: `pila` plus the standard tools `config.example.toml`'s defaults
+run (terminal, bar, launcher, notifications, idle and lock, the keys' programs), so `pila` alone
+stays the compositor alone. Its list is in four places that change together when a default tool
+does: `packaging/aur/pila-desktop/PKGBUILD` (raise its `pkgver`), `packaging/nfpm-desktop.yaml`
+(built and installed with its tools by `packages.yml`, with the release's version),
+`flake.nix`'s `pila-desktop` (built by `compat.yml`) and docs/INSTALL.md's "Packages for a full
+session". A release needs nothing else for it.
+
 # Arch package
 
 `packaging/aur/pila-git` holds the `PKGBUILD` and `.SRCINFO`; test with `makepkg -f` there.
+`aur.yml` publishes every directory in `packaging/aur` (`pila-desktop` too) under one approval.
 
 - Its `package()` runs `scripts/install --no-build` with `PREFIX=/usr DESTDIR=`, so files added
   to `install_files` need no change there. The docs in `share/doc/pila` are installed apart:

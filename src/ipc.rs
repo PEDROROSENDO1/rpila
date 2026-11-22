@@ -310,7 +310,7 @@ pub enum Request {
     Outputs,
     Workspaces,
     Keyboard,
-    /// `[colors]`, for clients that look like Pila (pila-bar, pila-launcher).
+    /// `[colors]`, for clients that look like Pila (a bar's or launcher's theme).
     Colors,
     /// The Mod+Tab in progress, for a program that shows it.
     Switch,

@@ -156,6 +156,9 @@ impl Pila {
         if old.workspaces != self.config.workspaces {
             self.apply_workspace_count();
         }
+        if old.gaps != self.config.gaps {
+            self.refit_to_usable_area();
+        }
         if old.xwayland != self.config.xwayland {
             self.xwayland_config_changed();
         }
@@ -195,16 +198,16 @@ impl Pila {
         if cursor_changed || old.environment != self.config.environment {
             self.export_environment();
         }
-        if old.idle != self.config.idle {
-            self.idle_config_changed();
-        }
-        // pila-bar and pila-launcher take them up.
+        // Clients that look like Pila take them up (`pila msg subscribe colors`).
         if old.colors != self.config.colors {
             self.send_colors_event();
+            // The tools' too, for their next start (`tool_configs.rs`).
+            if self.config.tool_configs && matches!(self.tool_configs_dir.get(), Some(Some(_))) {
+                crate::tool_configs::rewrite_in_background(self.config.colors);
+            }
         }
-        if old.wallpaper != self.config.wallpaper {
-            self.wallpaper_config_changed();
-        }
+        // The shortcuts shown: its keys, colors and corners as they are now.
+        self.shortcuts_config_changed();
         self.queue_redraw();
     }
 

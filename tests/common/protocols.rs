@@ -929,6 +929,21 @@ impl Client {
         (surf, popup)
     }
 
+    /// Sets a popup's window geometry (`x`, `y`, `w`, `h` within its
+    /// buffer) and commits: what's outside it is a shadow, as GTK draws one.
+    pub fn set_popup_geometry(&self, surf: Surf, (x, y, w, h): (i32, i32, i32, i32)) {
+        let xdg_surface = self
+            .lock()
+            .popup_xdg_surfaces
+            .iter()
+            .find(|(i, _)| *i == surf.0)
+            .map(|(_, x)| x.clone())
+            .expect("a popup's xdg_surface");
+        xdg_surface.set_window_geometry(x, y, w, h);
+        self.wl_surface_of(surf).commit();
+        self.flush();
+    }
+
     /// GTK 4 hides a popover this way and keeps its `wl_surface` for the
     /// next one (`popup_on`): the role objects destroyed, then a null
     /// commit.

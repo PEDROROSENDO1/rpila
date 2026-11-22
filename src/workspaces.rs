@@ -137,9 +137,20 @@ impl Pila {
         else {
             return;
         };
-        let family = self.transient_family(&window);
+        self.move_window_to_workspace(&window, index);
+    }
+
+    /// Move `window` (with its transient family) from the active workspace
+    /// to workspace `index`, staying on this one; a minimized one stays
+    /// minimized there. Not while it's being moved or resized.
+    pub(crate) fn move_window_to_workspace(&mut self, window: &Window, index: usize) {
+        let active = self.workspaces.active;
+        let family = self.transient_family(window);
         let grabbed = self.grabbed_window();
-        if index == active || grabbed.is_some_and(|grabbed| family.contains(&grabbed)) {
+        if index == active
+            || index >= self.config.workspaces
+            || grabbed.is_some_and(|grabbed| family.contains(&grabbed))
+        {
             return;
         }
         debug!(index, "moving window to workspace");
@@ -147,7 +158,11 @@ impl Pila {
         self.end_switch();
         leave_all_workspaces(&family);
         for member in &family {
-            self.park(member, index);
+            if self.is_minimized(member) {
+                leave_space(member, index, space_location(member));
+            } else {
+                self.park(member, index);
+            }
         }
         self.focus_recent_window();
         self.refresh_pointer_focus();
@@ -201,8 +216,11 @@ impl Pila {
             .filter(|w| is_on_all_workspaces(w) || Some(*w) == grabbed.as_ref())
             .cloned()
             .collect();
-        // Each output's picture of the windows leaving, for the slide.
-        self.start_workspace_slide(index, staying.clone());
+        // Each output's picture of the windows leaving, for the slide; the
+        // overview shows the new ones in their places at once.
+        if !self.overview_open() {
+            self.start_workspace_slide(index, staying.clone());
+        }
         let from = self.workspaces.active;
         let shown: Vec<Window> = self
             .space

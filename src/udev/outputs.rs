@@ -636,6 +636,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
             direct: false,
             swapchain_format: None,
             client_format: None,
+            refused_scanout: None,
             scanout_feedback: None,
             idle_until: None,
             idle_timer: false,
@@ -673,7 +674,7 @@ pub(super) fn connector_connected(state: &mut Pila, connector: connector::Info, 
     {
         set_vrr(data, id, on);
     }
-    state.refit_maximized();
+    state.refit_to_usable_area();
     state.configure_lock_surfaces();
     state.refresh_output_heads();
     state.queue_redraw();
@@ -745,6 +746,14 @@ pub(super) fn enable_output(state: &mut Pila, id: OutputId) -> bool {
             scanout_feedback(primary.dev_id(), dmabuf_formats, id.node.dev_id(), &plane)
         })
         .flatten();
+    // `false`: its primary plane and the renderer share no format, so no
+    // client is told one it could show as it is.
+    debug!(
+        target: "pila::frames",
+        name,
+        scanout_formats = surface.scanout_feedback.is_some(),
+        "direct scanout formats for clients"
+    );
     surface.drm_output = Some(drm_output);
     surface.frame_pending = false;
     surface.redraw_needed = true;
@@ -859,7 +868,7 @@ pub(super) fn keep_a_screen_on(state: &mut Pila) {
         enable_output(state, id);
     }
     state.fixup_windows();
-    state.refit_maximized();
+    state.refit_to_usable_area();
     state.configure_lock_surfaces();
     state.refresh_output_heads();
     state.queue_redraw();

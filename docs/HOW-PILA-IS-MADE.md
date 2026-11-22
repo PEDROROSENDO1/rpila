@@ -12,28 +12,20 @@ I don't think AI assistance has to mean bad software. Unverified code is the pro
 was a problem before AI. This page explains who decides what in Pila, how changes are verified
 and what has gone wrong so far. You can check all of it against the repository.
 
-## Who I am
-
-I started programming as a kid on a Commodore 64, in BASIC and 6510 assembly. I used C and
-Pascal at university and have worked in software for more than 30 years since, in PHP, classic
-ASP (VBScript), Perl, Python, Java and JavaScript/TypeScript, among others. For the last several
-years I've worked mostly as a software architect, and lately as CTO of a company.
-
-I had never written Rust or a Wayland compositor before Pila. What I do know is how to design a
-system and how to decide what has to be tested before I trust it, so the project depends on
-tests and measurements more than on me reading every line.
+## Why Pila
 
 I started Pila because I wanted a classic desktop with overlapping windows for layer-shell
 desktop shells. They usually run on tiling compositors, and the stacking compositors I tried
-didn't work with them the way I wanted ([What sets Pila apart](WHY-PILA.md) has the comparison). I also
-wanted a real project to get better at Rust.
+didn't work with them the way I wanted ([What sets Pila apart](WHY-PILA.md) has the comparison).
+
+The project depends on tests and measurements more than on anyone reading every line: what has
+to be tested before it's trusted is decided up front, and the sections below say how.
 
 ## Who decides
 
 I do. Scope, technology, architecture, which protocols Pila supports, the security model, the
 performance budget and what counts as tested are my decisions, and most of them are written
-down in [CLAUDE.md](../CLAUDE.md). I review what goes in, I use Pila as my only desktop, and I
-answer for it.
+down in [CLAUDE.md](../CLAUDE.md). I review what goes in and I answer for it.
 
 Reviewing, for me, means this. I read the code that can't be checked from outside: input
 handling, the session lock, what sandboxed clients can see, the DRM/KMS backend. For everything
@@ -46,7 +38,7 @@ don't like what Claude Code wrote, I discard it and it gets implemented again.
 Claude Code writes most of the code, the tests and the documentation from my instructions. It
 also translates what I write into English, and this page went through it too.
 
-It runs in a dev container without root, where Pila runs nested as a window on my desktop.
+It runs in a dev container without root, where Pila runs nested as a window on the host desktop.
 There it can build, run the tests, start real clients against Pila and read the logs. It can't
 see the screen and can't touch the real hardware, so anything visual and everything in the
 DRM/KMS backend comes back to me.
@@ -108,13 +100,12 @@ frame on average over five seconds, 3.6 ms for the slowest frame, and the GPU's 
 1.6 ms on average and 4.8 ms at worst. With the laptop's screen alone, on battery, where
 everything costs about twice as much: none missed in 5,246 frames, at most 2.0 ms on average
 and 7.6 ms for the slowest frame. Leaving direct scanout, which took 11.7 ms on 2026-11-12, takes
-0.06 ms (see "Late frames on my laptop" below).
+0.06 ms (see "Late frames on real hardware" below).
 
 ### Real hardware
 
-The DRM/KMS backend can't run in the container, so I run `scripts/check` on a spare TTY of my
-laptop. Pila has been my only desktop since 2026-11-03. I log into it from the greeter and
-develop it from inside, and I've also started it from GDM. Testers have reported it working on Intel GPUs, Debian with SDDM, NixOS,
+The DRM/KMS backend can't run in the container, so I run `scripts/check` on a spare TTY of the
+development laptop, which also runs Pila as its login session. Testers have reported it working on Intel GPUs, Debian with SDDM, NixOS,
 LightDM and one NVIDIA card (a GTX 1060). The README lists what nobody has tried yet: newer
 NVIDIA cards, systems without systemd, monitors on a second GPU.
 
@@ -139,7 +130,7 @@ with about 36,000 lines of Rust and 20,000 of tests. Nobody writes that by hand 
 and I'm not going to pretend I did.
 
 That speed is only useful if checking keeps up with it. Whatever goes in still has to pass the
-tests, stay within the frame budget and, when it touches rendering, run on my hardware first.
+tests, stay within the frame budget and, when it touches rendering, run on real hardware first.
 
 "Vibe coding", as I understand the term, means accepting what the AI writes because it seems to
 work. I've described above how changes get into Pila. I don't think the term fits, but you can
@@ -159,8 +150,8 @@ code states the invariant it relies on. A panic in a compositor takes the whole 
 
 ### A missing library was a panic
 
-A tester on NixOS (issue #1) got a panic when `libEGL` couldn't be loaded. It worked on my
-machine and in CI, so it took a user on another distribution to find it. Pila now checks at
+A tester on NixOS (issue #1) got a panic when `libEGL` couldn't be loaded. It worked on the
+development machine and in CI, so it took a user on another distribution to find it. Pila now checks at
 startup and says which library is missing and what to do about it. A test runs it without the
 library.
 
@@ -176,10 +167,10 @@ exist, and another that fails when the manual is missing a default binding.
 An early review of the animation and window-rule code found bugs that no test caught, because no
 test looked there: closing windows fading out over the next workspace after a switch, an X11
 window maximized by a rule opening with no animation, rules evaluated twice per window.
-`scripts/check` got scenarios for them, and the fix was checked nested and on my hardware before
+`scripts/check` got scenarios for them, and the fix was checked nested and on real hardware before
 it went in.
 
-### Late frames on my laptop
+### Late frames on real hardware
 
 When I went to update the numbers on this page, three `scripts/check` runs in a row had one late
 frame each, out of about 1,900. The previous day's run had been clean. None of this shows up in
@@ -212,7 +203,7 @@ next time. The late frames are the exception: that's timing on real hardware, an
 ### Rendering late
 
 0.6.1 draws each frame as close to the monitor's refresh as it safely can, instead of right after
-the last one, so what apps draw in the meantime still makes that refresh. On my laptop the time
+the last one, so what apps draw in the meantime still makes that refresh. On the development laptop the time
 from a redraw being asked for to the frame on screen went from 25.8 to 21.3 ms on its own screen
 and from 28.5 to 21.7 ms on the external monitor. It took about fifteen `scripts/check` runs on
 the TTY, half of them failed, and what shipped isn't the first version that passed:

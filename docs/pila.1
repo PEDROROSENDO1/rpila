@@ -34,9 +34,10 @@ X11 apps run through Xwayland, which Pila starts when the first one connects (an
 set, stops again once none is left);
 .B [xwayland] enabled = false
 turns them off.
-The monitors turn off after 10 minutes without input, and back on at any input
-.RB ( "[idle] monitors-off" ,
-in seconds, or false).
+The default
+.B autostart
+runs swayidle, which locks the screen with swaylock after 5 minutes without input and before
+the computer sleeps, and turns the monitors off after 10; any input turns them back on.
 .PP
 Started from a login screen or a TTY, Pila drives the monitors and input devices itself.
 Started inside another desktop, it opens as a window there (nested), with Alt as its Mod key.
@@ -46,21 +47,6 @@ starts Pila as a login session: with its log in
 .IR ~/.local/state/pila/pila.log ,
 and a D-Bus session bus of its own (with dbus-run-session) when the system gives none.
 Login screens run it; from a TTY, run it after logging in.
-.PP
-.B pila\-bar
-is Pila's bar: on every monitor, the workspaces (a click or the wheel switches) and a clock.
-It's the default
-.BR autostart .
-.B pila\-bar \-\-help
-lists its options.
-.PP
-.B pila\-launcher
-is Pila's app launcher: the installed apps, searched as you type.
-It's the default
-.B launcher
-(Mod+D and tapping Mod).
-.B pila\-launcher \-\-help
-lists its options.
 .PP
 .B pila\-report
 gathers what a bug report needs (version, system, GPU, monitors, whether the configuration is
@@ -84,8 +70,7 @@ Run the shell command
 .I CMD
 at startup, instead of the configuration's
 .B autostart
-(which defaults to
-.BR pila\-bar ).
+(which defaults to waybar, mako and swayidle).
 .TP
 .BR \-\-config " " \fIFILE\fR
 Read the configuration from
@@ -168,8 +153,8 @@ Open a terminal.
 .TP
 .B Mod+D
 Open the launcher: the configured one, else
-.BR pila-launcher ,
-installed with Pila (nothing where it isn't).
+.BR fuzzel
+(nothing where it isn't installed).
 .TP
 .B Mod
 Tapped alone (pressed and released with no other key, click, scroll or gesture in between):
@@ -183,6 +168,11 @@ The same, the other way.
 .TP
 .BR Alt+Tab ", " Alt+Shift+Tab
 The same as Mod+Tab and Mod+Shift+Tab, whatever Mod is.
+.TP
+.B Mod+W
+The overview: the workspace's windows spread out, none over another, under a strip of every
+workspace. Click a window, or pick it with the arrows and Enter; click a workspace to go there,
+or drag a window onto it to send it there; Escape closes it.
 .TP
 .B Mod+M
 Maximize; again, restore.
@@ -243,33 +233,32 @@ Mod and the mouse wheel: next, previous workspace, a notch each (a quick turn is
 Send the window to the next, previous workspace.
 .TP
 .B Mod+Shift+S
-Screenshot of a region to the clipboard (pila-shot).
+Screenshot of a region to the clipboard (grim, slurp, wl-copy).
 .TP
 .B Mod+Ctrl+S
-Screenshot of the monitor under the pointer to the pictures folder
-(pila-shot).
+Screenshot of the monitor under the pointer to ~/Pictures (grim).
 .TP
 .BR XF86AudioRaiseVolume ", " XF86AudioLowerVolume
-Volume up, down by 5% (wpctl), shown by
-.BR pila-osd .
+Volume up, down by 5% (wpctl).
 .TP
 .BR XF86AudioMute ", " XF86AudioMicMute
 Mute or unmute the speakers, the microphone (wpctl).
 .TP
 .BR XF86MonBrightnessUp ", " XF86MonBrightnessDown
-Screen brightness up, down by 5%, set and shown by
-.BR pila-osd .
+Screen brightness up, down by 5% (brightnessctl).
 .TP
 .BR XF86AudioPlay ", " XF86AudioPause ", " XF86AudioNext ", " XF86AudioPrev ", " XF86AudioStop
-Play or pause, next, previous, stop, in the player that's playing (MPRIS),
-shown with the track by
-.BR pila-osd .
+Play or pause, next, previous, stop, in the player that's playing (playerctl).
 .TP
 .B Mod+Shift+Q
 Close the window.
 .TP
 .B Mod+Shift+E
 Quit Pila.
+.TP
+.B Mod+Shift+slash
+Show the cheatsheet of the shortcuts, in sections (Mod+?); on its first run Pila shows the few to
+get going. Any key or click hides it.
 .TP
 .BR "Mod + left drag" ", " "Mod + right drag"
 Move a window; resize it from the nearest corner.
@@ -289,7 +278,11 @@ restores,
 .B swipe\-4\-left
 and
 .B swipe\-4\-right
-go to the next and previous workspace.
+go to the next and previous workspace,
+.B swipe\-4\-up
+and
+.B swipe\-4\-down
+open and close the overview.
 .PP
 The configuration's
 .B [bindings]
@@ -336,7 +329,10 @@ What the log shows (default: info; debug for details).
 Programs Pila starts get its
 .B WAYLAND_DISPLAY
 and Xwayland's
-.BR DISPLAY ,
+.B DISPLAY
+and
+.B XAUTHORITY
+(its cookie),
 .BR XDG_CURRENT_DESKTOP =pila,
 .BR XDG_SESSION_TYPE =wayland
 and
@@ -351,7 +347,7 @@ commands run by key bindings also get
 the name of the monitor under the pointer.
 .PP
 On a TTY, Pila exports
-.BR WAYLAND_DISPLAY ", " DISPLAY ", " XDG_CURRENT_DESKTOP ", " XDG_SESSION_TYPE
+.BR WAYLAND_DISPLAY ", " DISPLAY ", " XAUTHORITY ", " XDG_CURRENT_DESKTOP ", " XDG_SESSION_TYPE
 and
 .B PILA_SOCKET
 to the D\-Bus session bus (and to systemd \-\-user when that's the bus), for the
@@ -367,6 +363,12 @@ file (and without
 it writes that example there.
 Its active values are the defaults, and nowhere else: Pila has it built in and takes from it every
 setting the configuration leaves out.
+.TP
+.IR ~/.config/waybar/ ", " ~/.config/fuzzel/ ", " ~/.config/mako/ ", " ~/.config/swaylock/
+Where Pila writes its own configuration for those tools at startup, if they're installed and
+have none (never over a file);
+.B tool\-configs = false
+in the configuration turns it off.
 .TP
 .IR ~/.local/state/pila/pila.log " (or " $XDG_STATE_HOME/pila/pila.log )
 The log of a session started by

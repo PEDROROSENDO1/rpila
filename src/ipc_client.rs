@@ -17,7 +17,7 @@ Requests:
   outputs             The monitors
   workspaces          The workspaces
   keyboard            The keyboard layouts, and which is in use
-  colors              The colors of [colors], as pila-bar takes them
+  colors              The colors of [colors], for a bar or launcher
   switch              The Mod+Tab in progress: its windows, most recent
                       first, and the one selected
   focused             The focused window

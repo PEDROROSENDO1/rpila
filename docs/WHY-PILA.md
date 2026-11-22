@@ -1,11 +1,66 @@
 # What sets Pila apart
 
 Pila is a stacking Wayland compositor in Rust, on Smithay's main branch, made to host
-layer-shell desktops: its own bar and launcher (on by default), a bar, launcher and
-notifications from separate tools, or a full desktop shell. This page
-covers its design choices and how it differs from other compositors. Features are in the
-[README](../README.md#features), usage in the [manual](MANUAL.md), and each flow and invariant
-in [ARCHITECTURE.md](ARCHITECTURE.md).
+layer-shell desktops: standard tools for the bar, launcher and notifications (waybar,
+fuzzel and mako by default), or a full desktop shell. This page
+lists its features, then covers its design choices and how it differs from other compositors.
+Usage is in the [manual](MANUAL.md), and each flow and invariant in
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Features
+
+- **Windows:** server-side title bars (minimize, maximize, close) and resize borders, or
+  client-side decorations for apps that draw their own; Mod+drag to move and resize;
+  maximize and fullscreen; snapping to screen halves and quarters by keyboard or by dragging to
+  an edge or corner; moving, resizing and centering from the keyboard; minimize; showing the
+  desktop; keeping a window above the others or on all workspaces; moving windows and focus
+  between monitors; switching by recent use (Mod+Tab, Alt+Tab), the windows shown as live
+  previews while it's held; tapping Mod alone opens the
+  launcher (fuzzel by default); workspaces spanning all monitors (Mod+1..N, Mod and the mouse wheel,
+  four-finger swipes); a window menu on the title bar (right click); windows asking for
+  attention marked with an amber title bar; volume, brightness, media and screenshot keys bound
+  by default (wpctl, brightnessctl, playerctl, grim and slurp); the screen locked and the
+  monitors off after a while without input, by default (swayidle and swaylock); a shadow under each window (`[shadow]`); optional
+  rounded corners (`corner-radius`, `rounded-corners`: GTK's by default); your own colors (`[colors]`).
+- **Animations**, short and subtle: windows opening, closing, minimizing, maximizing and
+  snapping; launchers and notifications; workspaces sliding. Configurable, or off.
+- **Window and layer rules** by app id, title or namespace: animations, workspace, size,
+  position, maximized or fullscreen, always on top, on all workspaces, title bar, corner radius,
+  opacity, blur and shadow per app; blur and animations per panel or launcher.
+- **Monitors:** several at once, hotplugged, each with its own mode, position, rotation,
+  (fractional) scale and adaptive sync; a fullscreen app's frames sent to the screen as it drew
+  them (direct scanout, `direct-scanout`); each frame drawn as close to the refresh as it safely
+  can be, for less latency (`render-late`).
+- **Apps get their windows back:** place, size, maximized or fullscreen, for apps that ask
+  (xdg-session-management), even after Pila restarts.
+- **X11 apps** through Xwayland, with the clipboard shared both ways. Xwayland starts when an
+  X11 app needs it and, with `[xwayland] idle-timeout`, stops when none is left.
+- **Desktop tools:** layer shell (waybar, fuzzel, mako, swaybg), session lock (swaylock),
+  idle notification and inhibition (swayidle, video players), clipboard managers
+  (ext-data-control), screenshots (grim; ext-image-copy-capture and wlr-screencopy) and screen sharing
+  (xdg-desktop-portal-wlr, for browsers and OBS), taskbars that act on windows
+  (foreign-toplevel-management), night light (gamma control), screen off and monitor
+  settings (output power and management), blur behind panels and windows (background-effect),
+  workspace indicators and switchers (ext-workspace), a visual system bell, dialogs that stay
+  above their window and modal ones that keep the focus (xdg-dialog, and X11's), window rules by tag
+  (xdg-toplevel-tag), games with vsync off shown at once, torn (wp-tearing-control), surfaces an
+  app fades without drawing them again (wp-alpha-modifier),
+  the pointer moved by the app it's on (wp-pointer-warp: games, SDL 3), X11 apps that grab the
+  keyboard (xwayland-keyboard-grab: virtual machines, remote desktops),
+  Vulkan's FIFO presentation (wp-fifo, wp-commit-timing), explicit sync
+  (linux-drm-syncobj), virtual keyboards (`wtype`, on-screen keyboards). Enough for a full
+  desktop shell. Sandboxed apps (Flatpak) don't see the protocols that read the
+  screen or act on other windows and input (wp-security-context).
+- **Input:** keyboard layout, repeat and Num Lock at startup, touchpad and mouse settings (tap, natural scrolling,
+  speed, disable while typing, ...), three-finger swipes to switch windows and maximize,
+  four-finger swipes to switch workspaces (configurable), other touchpad gestures for apps,
+  pointer lock and confinement for games, shaking the pointer to find it (`[cursor]`), any key
+  bindable (media keys included, repeating while held if asked), and the mouse wheel with
+  modifiers; input methods such as fcitx5 for Chinese, Japanese and Korean (input-method-v2,
+  text-input-v3).
+- **Configuration** in one TOML file, applied live when saved.
+- **Scripting:** `pila msg` lists windows, monitors and workspaces as text or JSON and runs any
+  action ([IPC.md](IPC.md)).
 
 ## Where it fits
 
@@ -14,10 +69,10 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
   all outputs. Shells built on layer shell usually run on tiling compositors (Hyprland,
   sway); Pila gives them a floating desktop.
 - **A compositor, not a desktop environment:** bar, launcher, notifications, wallpaper and lock
-  screen are external clients (layer shell, ext-session-lock, ...). Even Pila's own bar and
-  launcher (`pila-bar`, `pila-launcher`, written with iced) are separate programs on the same
-  standard protocols, so any other one replaces them; its window switcher, with live previews,
-  is drawn by Pila, and its IPC tells another one what to show. The floating modes of KDE
+  screen are external clients (layer shell, ext-session-lock, ...): standard tools such as
+  waybar and fuzzel by default, any other one in their place. Pila draws only what a
+  compositor must or does best itself: title bars and the window switcher, with live previews
+  (its IPC tells another one what to show). The floating modes of KDE
   Plasma, GNOME and COSMIC come with their own shell; labwc keeps Openbox's model and XML
   config; Wayfire is built around Compiz-style plugins. Pila has one TOML file and an IPC
   socket.
@@ -64,7 +119,7 @@ nothing changed.
   window or layer surface appears or a window changes size (apps busy on the GPU then), nor
   with tearing or adaptive sync; a held frame is let go at once if the scene stops being
   steady, and one that still comes late turns it off on that output for two seconds. On the
-  author's laptop: 25.8 to 21.3 ms and 28.5 to 21.7 ms from a redraw asked for to the vblank
+  development laptop: 25.8 to 21.3 ms and 28.5 to 21.7 ms from a redraw asked for to the vblank
   that showed it, no refresh missed with two monitors or the laptop's screen alone on battery.
   `render-late = false` turns it off.
 - **Measured, not assumed:** `RUST_LOG=pila::frames=debug` logs, per output every 5 s, frame
@@ -163,9 +218,9 @@ manager, restarted if it dies, with selections bridged both ways.
   through any path, Pila's or a Smithay grab's; a path that tries is a panic in debug builds.
   Hit testing and the scene contain only lock surfaces, and a test runs every action, gesture,
   activation and taskbar request while locked.
-- **xdg-activation tokens** only for a serial newer than the client's keyboard focus, or its
-  pointer focus (a clicked notification), single-use and short-lived; one from before a lock
-  activates nothing.
+- **xdg-activation tokens** only for a serial newer than the client's keyboard focus, or a
+  click on it since the focus last moved (a clicked notification; hovering alone doesn't count),
+  single-use and short-lived; one from before a lock activates nothing.
 
 ## Configuration and IPC
 
@@ -206,13 +261,6 @@ session; optional tools (`systemd-cat`, `logger`, `dbus-run-session`, a per-user
 detected, and the install paths are configurable. Packages for Arch (AUR), Debian, Ubuntu,
 Fedora and Nix; CI builds on each of them, and apart with the oldest supported Rust
 (`rust-version`).
-
-## Desktop details
-
-Tap Mod alone for the launcher (Pila's own unless another is set), Alt+Tab and Mod+Tab by recency, three- and four-finger swipes,
-shake to find the pointer (named cursors drawn from the theme's larger sizes), urgency shown as
-an amber title bar, a visual bell, focus returned to the previous window, short animations that
-can be turned off globally or per app.
 
 ## Not there yet
 

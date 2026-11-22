@@ -8,7 +8,7 @@ use std::{
 use smithay::{
     backend::{
         drm::DrmNode,
-        egl::{EGLDevice, EGLSurface},
+        egl::{EGLContext, EGLDevice},
         renderer::{damage::OutputDamageTracker, gles::GlesRenderer, ImportDma},
         winit::{self, WinitEvent, WinitEventLoop, WinitGraphicsBackend},
     },
@@ -221,7 +221,7 @@ pub fn init_winit(
                         None,
                     );
                     layer_map_for_output(&output).arrange();
-                    state.refit_maximized();
+                    state.refit_to_usable_area();
                     state.configure_lock_surfaces();
                     state.refresh_output_heads();
                     full_redraw = 4;
@@ -385,18 +385,15 @@ fn redraw(
 /// do it, but it's lazy: the surface only becomes current when rendering
 /// starts, which is after the age is needed.
 fn make_surface_current(backend: &mut WinitGraphicsBackend<GlesRenderer>) -> bool {
-    let surface: *const EGLSurface = backend.egl_surface();
-    // SAFETY: `surface` points at the backend's own EGL surface, a different
-    // field than the renderer borrowed mutably here, and stays valid for the
-    // call. Changing the thread's current surface is fine: the renderer makes
-    // its context current again before every operation.
-    unsafe {
-        backend
-            .renderer()
-            .egl_context()
-            .make_current_with_surface(&*surface)
-            .is_ok()
-    }
+    let context: *const EGLContext = backend.renderer().egl_context();
+    let surface = backend.egl_surface();
+    // SAFETY: `context` points into the backend's renderer, and once
+    // `renderer()`'s mutable borrow has ended only shared borrows touch the
+    // backend, so it stays valid for the call (taking the surface first and the
+    // renderer after would read the surface through a pointer that `&mut self`
+    // invalidated). Changing the thread's current surface is fine: the renderer
+    // makes its context current again before every operation.
+    unsafe { (*context).make_current_with_surface(surface).is_ok() }
 }
 
 /// Show the client's requested cursor on the host window. Client-drawn cursor

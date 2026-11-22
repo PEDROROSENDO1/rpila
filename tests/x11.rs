@@ -31,12 +31,17 @@ struct X11 {
 
 /// Whether Xwayland is installed (else the test is skipped).
 fn xwayland_installed() -> bool {
+    installed("Xwayland")
+}
+
+/// Whether `program` is in `PATH` (else the test is skipped).
+fn installed(program: &str) -> bool {
     let installed = std::process::Command::new("sh")
-        .args(["-c", "command -v Xwayland"])
+        .args(["-c", &format!("command -v {program}")])
         .output()
         .is_ok_and(|o| o.status.success());
     if !installed {
-        eprintln!("Xwayland not installed: skipped");
+        eprintln!("{program} not installed: skipped");
     }
     installed
 }
@@ -59,8 +64,9 @@ impl X11 {
             std::thread::sleep(Duration::from_millis(10));
         }
         let state = pila.state();
-        let display = format!(":{}", state["xwayland"].as_u64().unwrap());
-        let (conn, screen) = x11rb::connect(Some(&display)).expect("connect to Xwayland");
+        let display = state["xwayland"].as_u64().unwrap() as u32;
+        let (conn, screen) =
+            pila::xauth::connect(display, &cookie(&state)).expect("connect to Xwayland");
         let root = conn.setup().roots[screen].root;
         Some(X11 {
             conn,
@@ -281,6 +287,12 @@ fn xwayland_pid(pila: &TestPila) -> u32 {
     find_xwayland(pila).expect("pila's Xwayland")
 }
 
+/// The cookie in the Xauthority file Pila gives X11 apps (`XAUTHORITY`).
+fn cookie(state: &serde_json::Value) -> Vec<u8> {
+    let path = state["xauthority"].as_str().expect("an Xauthority file");
+    pila::xauth::read_cookie(std::path::Path::new(path)).expect("a cookie in it")
+}
+
 /// The display pila reserved for X11 apps, as `DISPLAY` names it.
 fn reserved_display(pila: &mut TestPila) -> String {
     let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
@@ -365,11 +377,15 @@ fn xwayland_starts_when_an_x11_app_connects() {
         return;
     }
     let mut pila = TestPila::start_with(Options {
-        command: Some("echo $DISPLAY > $XDG_RUNTIME_DIR/ran".into()),
+        command: Some("echo $DISPLAY $XAUTHORITY > $XDG_RUNTIME_DIR/ran".into()),
         ..Options::default()
     });
     let display = reserved_display(&mut pila);
-    assert_eq!(pila.wait_file("ran").trim(), display);
+    let xauthority = pila.state()["xauthority"].as_str().unwrap().to_string();
+    assert_eq!(
+        pila.wait_file("ran").trim(),
+        format!("{display} {xauthority}")
+    );
     pila.stays(
         "no Xwayland until an X11 app comes",
         Duration::from_millis(500),
@@ -381,6 +397,37 @@ fn xwayland_starts_when_an_x11_app_connects() {
     pila.wait("its window", |s| x11_window(s, "first").is_some());
     assert!(pila.state()["xwayland_running"] == true);
     xwayland_pid(&pila);
+}
+
+/// The reserved display listens only on its socket file, whose permissions
+/// keep other users out, never on an abstract socket, which any process in
+/// the network namespace reaches: a Flatpak with network access and no X11
+/// permission, or another user, would get the clipboard and XTEST into X11
+/// apps. X11 apps still connect, through the file.
+#[test]
+fn the_x11_display_has_no_abstract_socket() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start();
+    let display = reserved_display(&mut pila);
+    let file = format!("/tmp/.X11-unix/X{}", &display[1..]);
+    let unix = std::fs::read_to_string("/proc/net/unix").unwrap();
+    let names: Vec<&str> = unix
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(7))
+        .collect();
+    assert!(names.contains(&file.as_str()), "no socket file {file}");
+    let abstract_name = format!("@{file}");
+    assert!(
+        !names.contains(&abstract_name.as_str()),
+        "the display listens on {abstract_name}"
+    );
+    let x11 = X11::connect(&mut pila).unwrap();
+    x11.window("through-the-file", (200, 200), 0xff0000);
+    pila.wait("its window", |s| {
+        x11_window(s, "through-the-file").is_some()
+    });
 }
 
 /// With `idle-timeout`, Xwayland stops once its last X11 client leaves, and
@@ -471,6 +518,68 @@ fn xwayland_comes_back_after_a_crash() {
 }
 
 /// Whether the X socket of `display` (`:n`) is there.
+/// Xwayland runs with `-auth`: a client without the cookie Pila gave its
+/// apps (another user, a sandbox without X11 permission that reached the
+/// socket) is refused, even while Xwayland runs.
+#[test]
+fn the_x11_display_takes_only_its_cookie() {
+    let mut pila = TestPila::start();
+    let Some(_x11) = X11::connect(&mut pila) else {
+        return;
+    };
+    let state = pila.state();
+    let display = state["xwayland"].as_u64().unwrap() as u32;
+    assert!(pila::xauth::connect(display, &[]).is_err(), "no cookie");
+    let mut wrong = cookie(&state);
+    wrong[0] ^= 0xff;
+    assert!(
+        pila::xauth::connect(display, &wrong).is_err(),
+        "a wrong one"
+    );
+    let path = state["xauthority"].as_str().unwrap();
+    let mode =
+        std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(path).unwrap().permissions());
+    assert_eq!(mode & 0o777, 0o600, "{path} is the user's alone");
+}
+
+/// An X11 app Pila starts gets in with the cookie, through libXau's reading
+/// of `XAUTHORITY` (xdpyinfo, as any Xlib app).
+#[test]
+fn an_x11_app_pila_starts_gets_in() {
+    if !xwayland_installed() || !installed("xdpyinfo") {
+        return;
+    }
+    let pila = TestPila::start_with(Options {
+        command: Some(
+            "xdpyinfo > $XDG_RUNTIME_DIR/info 2>&1; echo $? > $XDG_RUNTIME_DIR/ran".into(),
+        ),
+        ..Options::default()
+    });
+    let status = pila.wait_file("ran");
+    let info = pila.wait_file("info");
+    assert_eq!(status.trim(), "0", "{info}");
+    assert!(info.contains("name of display"), "{info}");
+}
+
+/// Its cookie goes with the display: the file is gone once Pila lets the
+/// display go, and turned on again, the display gets a new one.
+#[test]
+fn the_cookie_goes_with_the_display() {
+    if !xwayland_installed() {
+        return;
+    }
+    let mut pila = TestPila::start();
+    let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
+    let path = state["xauthority"].as_str().unwrap().to_string();
+    let first = cookie(&state);
+    pila.write_config("[xwayland]\nenabled = false\n");
+    pila.wait("the display given back", |s| s["xwayland"].is_null());
+    assert!(!std::path::Path::new(&path).exists(), "{path} stays");
+    pila.write_config("");
+    let state = pila.wait("a reserved X11 display", |s| s["xwayland"].is_number());
+    assert_ne!(cookie(&state), first);
+}
+
 fn x_socket_exists(display: &str) -> bool {
     std::path::Path::new(&format!("/tmp/.X11-unix/X{}", &display[1..])).exists()
 }
@@ -484,11 +593,13 @@ fn xwayland_can_be_turned_off() {
     }
     let mut pila = TestPila::start_with(Options {
         config: "[xwayland]\nenabled = false\n".into(),
-        command: Some("echo \"[$DISPLAY]\" > $XDG_RUNTIME_DIR/ran".into()),
+        command: Some("echo \"[$DISPLAY][$XAUTHORITY]\" > $XDG_RUNTIME_DIR/ran".into()),
+        env: vec![("XAUTHORITY".into(), "/somewhere/else".into())],
         ..Options::default()
     });
-    assert_eq!(pila.wait_file("ran").trim(), "[]");
+    assert_eq!(pila.wait_file("ran").trim(), "[][]");
     assert!(pila.state()["xwayland"].is_null());
+    assert!(pila.state()["xauthority"].is_null());
     assert!(pila.log().contains("Xwayland is turned off"));
     assert_eq!(find_xwayland(&pila), None);
 }
@@ -681,6 +792,99 @@ fn pila_maximizing_an_x11_window_sets_its_state() {
         );
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+/// An X11 app that restores itself maximized sets _NET_WM_STATE before it
+/// maps its window: it opens maximized.
+#[test]
+fn an_x11_window_maximized_before_it_maps_opens_maximized() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.unmapped_window("XApp", (300, 200), 0xff0000, false);
+    let states = [
+        x.atom("_NET_WM_STATE_MAXIMIZED_VERT"),
+        x.atom("_NET_WM_STATE_MAXIMIZED_HORZ"),
+    ];
+    x.conn
+        .change_property32(
+            PropMode::REPLACE,
+            id,
+            x.atom("_NET_WM_STATE"),
+            AtomEnum::ATOM,
+            &states,
+        )
+        .unwrap();
+    x.conn.map_window(id).unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("open maximized", |s| {
+        x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == (0, 28, 1280, 772))
+    });
+}
+
+/// Snapping a maximized X11 window tells X it's no longer maximized: an app
+/// that reads its state (to draw its own maximize button) doesn't think it is.
+#[test]
+fn snapping_a_maximized_x11_window_unsets_its_maximized_state() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    let id = x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        x11_window(s, "XApp").unwrap()["geometry"]["w"] == 1280
+    });
+    let maximized = |x: &X11| {
+        x.net_wm_state_of(id)
+            .iter()
+            .any(|s| s == "_NET_WM_STATE_MAXIMIZED_HORZ")
+    };
+    let started = Instant::now();
+    while !maximized(&x) {
+        assert!(started.elapsed() < TIMEOUT, "never maximized for X");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    pila.combo("Super+Left");
+    pila.wait("the left half", |s| {
+        x11_window(s, "XApp").is_some_and(|w| rect(&w["geometry"]) == (0, 28, 640, 772))
+    });
+    let started = Instant::now();
+    while maximized(&x) {
+        assert!(started.elapsed() < TIMEOUT, "still maximized for X");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// An override-redirect window (a menu, a tooltip) that moves itself is
+/// drawn where it went.
+#[test]
+fn an_override_redirect_window_that_moves_is_followed() {
+    let mut pila = TestPila::start();
+    let Some(x) = X11::connect(&mut pila) else {
+        return;
+    };
+    x.window("XApp", (300, 200), 0xff0000);
+    pila.wait_focus("XApp");
+    let menu = x.menu((100, 120), (80, 60));
+    let menu_geometry = |s: &Value| {
+        s["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|w| w["override_redirect"] == true)
+            .map(|w| rect(&w["geometry"]))
+    };
+    pila.wait("the menu", |s| menu_geometry(s) == Some((100, 120, 80, 60)));
+    x.conn
+        .configure_window(menu, &ConfigureWindowAux::new().x(300).y(250))
+        .unwrap();
+    x.conn.flush().unwrap();
+    pila.wait("the menu where it moved", |s| {
+        menu_geometry(s) == Some((300, 250, 80, 60))
+    });
 }
 
 #[test]

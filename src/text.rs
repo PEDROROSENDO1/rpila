@@ -11,11 +11,9 @@ use cosmic_text::{
     Attrs, Buffer, Color, Ellipsize, EllipsizeHeightLimit, Family, FontSystem, Metrics, Shaping,
     SwashCache, Wrap,
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
-/// Title font size, in logical pixels: that of all of pila-launcher's and
-/// pila-bar's text (`style::TEXT_SIZE` in `launcher/src/style.rs`, which a
-/// test keeps equal).
+/// Title font size, in logical pixels.
 pub const FONT_SIZE: f32 = 14.0;
 
 struct Fonts {
@@ -25,29 +23,90 @@ struct Fonts {
 
 static FONTS: OnceLock<Mutex<Fonts>> = OnceLock::new();
 
+/// Set once loading the fonts found none (or couldn't start): no text will
+/// ever be drawn, so what's only text (the shortcuts panel) isn't shown.
+static UNAVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Start loading the system fonts in the background. Call once at startup.
-/// `ready` runs on that thread once they're in place (to redraw title bars).
+/// `ready` runs on that thread once they're in place (to redraw title bars),
+/// or once it's known there are none (`unavailable`).
 pub fn init(ready: impl FnOnce() + Send + 'static) {
     let spawned = std::thread::Builder::new()
         .name("pila-fonts".into())
         .spawn(move || {
             let start = std::time::Instant::now();
-            let system = FontSystem::new();
+            let none = || {
+                UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
+                warn!("no fonts found; title bars will have no text");
+            };
+            // The tests' way to a system with no fonts (CI's has none).
+            if std::env::var_os("PILA_HEADLESS_NO_FONTS").is_some_and(|v| v == "1") {
+                none();
+                ready();
+                return;
+            }
+            let mut system = FontSystem::new();
+            let family = follow_fontconfig(&mut system);
             let loaded = start.elapsed();
             let Some(fonts) = prepare(system) else {
-                warn!("no fonts found; title bars will have no text");
+                none();
+                ready();
                 return;
             };
             let _ = FONTS.set(Mutex::new(fonts));
-            info!(elapsed = ?loaded, warm_up = ?(start.elapsed() - loaded), "fonts loaded");
+            info!(
+                elapsed = ?loaded,
+                warm_up = ?(start.elapsed() - loaded),
+                family,
+                "fonts loaded"
+            );
             ready();
         });
     if let Err(err) = spawned {
+        UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
         warn!(
             ?err,
             "failed to start font loading; title bars will have no text"
         );
     }
+}
+
+/// Make `system`'s sans-serif the family fontconfig gives (`fc-match`, the
+/// one the tools Pila starts draw their text in: waybar, fuzzel, mako,
+/// swaylock), not cosmic-text's own ("Open Sans", whether installed or not);
+/// the family it then has. Without `fc-match` (package fontconfig), or with a
+/// family the database lacks, it stays cosmic-text's. On the fonts' thread.
+fn follow_fontconfig(system: &mut FontSystem) -> String {
+    let matched = std::process::Command::new("fc-match")
+        .args(["--format=%{family[0]}", "sans-serif"])
+        .stderr(std::process::Stdio::null())
+        .output();
+    match matched {
+        Ok(out) if out.status.success() => {
+            let family = String::from_utf8_lossy(&out.stdout);
+            if !use_sans_serif(system, family.trim()) {
+                debug!(family = %family.trim(), "fontconfig's sans-serif isn't in the font database");
+            }
+        }
+        Ok(out) => debug!(status = %out.status, "fc-match failed; cosmic-text's sans-serif"),
+        Err(err) => debug!(%err, "no fc-match (package fontconfig); cosmic-text's sans-serif"),
+    }
+    system.db().family_name(&Family::SansSerif).to_string()
+}
+
+/// Make `family` `system`'s sans-serif if the database has it; whether it
+/// did.
+fn use_sans_serif(system: &mut FontSystem, family: &str) -> bool {
+    let known = !family.is_empty()
+        && system.db().faces().any(|face| {
+            face.families
+                .iter()
+                .any(|(name, _)| name.eq_ignore_ascii_case(family))
+        });
+    if known {
+        system.db_mut().set_sans_serif_family(family);
+    }
+    known
 }
 
 /// The fonts, warmed up: the usual characters shaped and rasterized once
@@ -64,7 +123,15 @@ fn prepare(system: FontSystem) -> Option<Fonts> {
         cache: SwashCache::new(),
     };
     for scale in [1, 2] {
-        let _ = render_with(&mut fonts, WARM_UP_TEXT, [1.0; 3], 4000, 28, scale);
+        let _ = render_with(
+            &mut fonts,
+            WARM_UP_TEXT,
+            [1.0; 3],
+            4000,
+            28,
+            scale,
+            Style::default(),
+        );
     }
     Some(fonts)
 }
@@ -87,6 +154,16 @@ pub struct Title {
     pub whole: bool,
 }
 
+/// Whether the fonts have loaded: until then nothing draws text.
+pub fn loaded() -> bool {
+    FONTS.get().is_some()
+}
+
+/// Whether it's known there are no fonts: no text will ever be drawn.
+pub fn unavailable() -> bool {
+    UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// `title` in `color` as one line at most `max_width` wide (ending in "…" if
 /// it doesn't fit), vertically centered in `height` (both logical), drawn
 /// at `scale` physical pixels per logical one. `None` until the fonts have
@@ -98,12 +175,41 @@ pub fn render_title(
     height: i32,
     scale: i32,
 ) -> Option<Title> {
-    let fonts = FONTS.get()?;
-    let mut fonts = fonts.lock().ok()?;
-    render_with(&mut fonts, title, color, max_width, height, scale)
+    render_text(title, color, max_width, height, scale, Style::default())
 }
 
-/// `render_title` with these fonts.
+/// How `render_text` draws: the font's size in logical pixels and whether
+/// bold. The default is the title bars'.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Style {
+    pub size: f32,
+    pub bold: bool,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            size: FONT_SIZE,
+            bold: false,
+        }
+    }
+}
+
+/// `render_title` in `style`.
+pub fn render_text(
+    text: &str,
+    color: [f32; 3],
+    max_width: i32,
+    height: i32,
+    scale: i32,
+    style: Style,
+) -> Option<Title> {
+    let fonts = FONTS.get()?;
+    let mut fonts = fonts.lock().ok()?;
+    render_with(&mut fonts, text, color, max_width, height, scale, style)
+}
+
+/// `render_text` with these fonts.
 fn render_with(
     fonts: &mut Fonts,
     title: &str,
@@ -111,6 +217,7 @@ fn render_with(
     max_width: i32,
     height: i32,
     scale: i32,
+    style: Style,
 ) -> Option<Title> {
     // Sizes from a client's window: nothing to draw rather than an overflow.
     let width = max_width.checked_mul(scale).filter(|w| *w > 0)?;
@@ -123,7 +230,7 @@ fn render_with(
     // A line as tall as the bar: cosmic-text centers the glyphs within it.
     let mut buffer = Buffer::new(
         system,
-        Metrics::new(FONT_SIZE * scale as f32, height as f32),
+        Metrics::new(style.size * scale as f32, height as f32),
     );
     let mut buffer = buffer.borrow_with(system);
     buffer.set_wrap(Wrap::None);
@@ -136,7 +243,13 @@ fn render_with(
         .collect();
     buffer.set_text(
         &title,
-        &Attrs::new().family(Family::SansSerif),
+        &Attrs::new()
+            .family(Family::SansSerif)
+            .weight(if style.bold {
+                cosmic_text::Weight::BOLD
+            } else {
+                cosmic_text::Weight::NORMAL
+            }),
         Shaping::Advanced,
         None,
     );
@@ -201,6 +314,40 @@ mod tests {
         assert!(prepare(empty).is_none());
     }
 
+    /// Title bars draw in the sans-serif family the tools Pila starts do:
+    /// fontconfig's, not cosmic-text's "Open Sans".
+    #[test]
+    fn the_title_font_is_fontconfigs_sans_serif() {
+        let Ok(out) = std::process::Command::new("fc-match")
+            .args(["--format=%{family[0]}", "sans-serif"])
+            .output()
+        else {
+            eprintln!("no fc-match: skipped");
+            return;
+        };
+        let expected = String::from_utf8(out.stdout).unwrap();
+        let mut system = FontSystem::new();
+        if system.db().is_empty() {
+            eprintln!("no fonts: skipped");
+            return;
+        }
+        assert_eq!(follow_fontconfig(&mut system), expected.trim());
+        assert_eq!(system.db().family_name(&Family::SansSerif), expected.trim());
+    }
+
+    /// A family the database doesn't have leaves the one it had.
+    #[test]
+    fn a_family_not_installed_is_not_used() {
+        let mut system = FontSystem::new_with_locale_and_db(
+            "en-US".into(),
+            cosmic_text::fontdb::Database::new(),
+        );
+        let before = system.db().family_name(&Family::SansSerif).to_string();
+        assert!(!use_sans_serif(&mut system, "No Such Family"));
+        assert!(!use_sans_serif(&mut system, ""));
+        assert_eq!(system.db().family_name(&Family::SansSerif), before);
+    }
+
     /// A title as wide as `i32::MAX` px (scaled, it overflows) or with no
     /// room: nothing to draw, not a panic.
     #[test]
@@ -214,19 +361,7 @@ mod tests {
             cache: SwashCache::new(),
         };
         let white = [1.0; 3];
-        assert!(render_with(&mut fonts, "a", white, i32::MAX, 30, 2).is_none());
-        assert!(render_with(&mut fonts, "a", white, 0, 30, 1).is_none());
-    }
-
-    #[test]
-    fn titles_are_the_size_of_pila_launchers_and_pila_bars_text() {
-        // Their own copy (`launcher/src/style.rs`: they share no code with
-        // Pila); the family is the same, sans-serif at its regular weight.
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/launcher/src/style.rs");
-        let source = std::fs::read_to_string(path).unwrap();
-        assert!(
-            source.contains(&format!("pub const TEXT_SIZE: f32 = {FONT_SIZE:?};")),
-            "launcher/src/style.rs's TEXT_SIZE isn't {FONT_SIZE:?}"
-        );
+        assert!(render_with(&mut fonts, "a", white, i32::MAX, 30, 2, Style::default()).is_none());
+        assert!(render_with(&mut fonts, "a", white, 0, 30, 1, Style::default()).is_none());
     }
 }

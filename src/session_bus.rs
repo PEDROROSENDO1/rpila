@@ -9,7 +9,7 @@
 
 use std::{collections::HashMap, time::Duration};
 
-use zbus::blocking::Connection;
+use zbus::Connection;
 
 /// Give the bus at `address` the variables `vars` (name, value) for the
 /// services it starts and, with `systemd`, `systemd --user` too, each
@@ -20,9 +20,12 @@ pub fn export(
     vars: &[(String, String)],
     timeout: Duration,
 ) -> Result<(), String> {
-    let bus = zbus::blocking::connection::Builder::address(address)
-        .and_then(|builder| builder.method_timeout(timeout).build())
-        .map_err(|err| format!("can't connect to the session bus at {address}: {err}"))?;
+    let bus = zbus::block_on(
+        zbus::connection::Builder::address(address)
+            .method_timeout(timeout)
+            .build(),
+    )
+    .map_err(|err| format!("can't connect to the session bus at {address}: {err}"))?;
     update_activation_environment(&bus, vars)?;
     if systemd {
         set_systemd_environment(&bus, vars)?;
@@ -38,13 +41,13 @@ fn update_activation_environment(
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    bus.call_method(
+    zbus::block_on(bus.call_method(
         Some("org.freedesktop.DBus"),
         "/org/freedesktop/DBus",
         Some("org.freedesktop.DBus"),
         "UpdateActivationEnvironment",
         &(vars,),
-    )
+    ))
     .map(drop)
     .map_err(|err| format!("the session bus refused the environment: {err}"))
 }
@@ -54,13 +57,13 @@ fn set_systemd_environment(bus: &Connection, vars: &[(String, String)]) -> Resul
         .iter()
         .map(|(name, value)| format!("{name}={value}"))
         .collect();
-    bus.call_method(
+    zbus::block_on(bus.call_method(
         Some("org.freedesktop.systemd1"),
         "/org/freedesktop/systemd1",
         Some("org.freedesktop.systemd1.Manager"),
         "SetEnvironment",
         &(assignments,),
-    )
+    ))
     .map(drop)
     .map_err(|err| format!("systemd --user refused the environment: {err}"))
 }
@@ -141,20 +144,24 @@ mod tests {
 
         /// The environment the bus starts its service with.
         fn service_env(&self, dir: &Path) -> Vec<String> {
-            let bus = zbus::blocking::connection::Builder::address(self.address.as_str())
-                .unwrap()
-                .method_timeout(Duration::from_millis(100))
-                .build()
-                .unwrap();
-            // The service never takes its name: the answer is an error, late,
-            // and the file is what counts.
-            let _ = bus.call_method(
-                Some("org.freedesktop.DBus"),
-                "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus"),
-                "StartServiceByName",
-                &("org.pila.EnvTest", 0u32),
-            );
+            zbus::block_on(async {
+                let bus = zbus::connection::Builder::address(self.address.as_str())
+                    .method_timeout(Duration::from_millis(100))
+                    .build()
+                    .await
+                    .unwrap();
+                // The service never takes its name: the answer is an error,
+                // late, and the file is what counts.
+                let _ = bus
+                    .call_method(
+                        Some("org.freedesktop.DBus"),
+                        "/org/freedesktop/DBus",
+                        Some("org.freedesktop.DBus"),
+                        "StartServiceByName",
+                        &("org.pila.EnvTest", 0u32),
+                    )
+                    .await;
+            });
             let out = dir.join("env-of-service");
             let started = Instant::now();
             loop {
@@ -223,17 +230,16 @@ mod tests {
         let dir = temp_dir("session-bus-systemd");
         let Some(bus) = Bus::start(&dir) else { return };
         let set = Arc::new(Mutex::new(Vec::new()));
-        let _systemd = zbus::blocking::connection::Builder::address(bus.address.as_str())
-            .unwrap()
-            .name("org.freedesktop.systemd1")
-            .unwrap()
-            .serve_at(
-                "/org/freedesktop/systemd1",
-                FakeSystemd { set: set.clone() },
-            )
-            .unwrap()
-            .build()
-            .unwrap();
+        let _systemd = zbus::block_on(
+            zbus::connection::Builder::address(bus.address.as_str())
+                .name("org.freedesktop.systemd1")
+                .serve_at(
+                    "/org/freedesktop/systemd1",
+                    FakeSystemd { set: set.clone() },
+                )
+                .build(),
+        )
+        .unwrap();
         export(&bus.address, true, &vars(), TIMEOUT).unwrap();
         let expected: Vec<String> = vars()
             .into_iter()

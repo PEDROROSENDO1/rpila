@@ -28,6 +28,8 @@ ENV TZ="${TZ}" \
 #     text-input-v3. CJK fonts to read its candidates in screenshots:
 #     wqy-microhei (small, Chinese) and noto-fonts-cjk (Japanese and Korean too)
 #   - ffmpeg: scripts/demo-video encodes the demo videos
+#   - otf-font-awesome: the symbols in the waybar config Pila writes
+#     (tool-configs), to see them in screenshots
 #   - swayidle, ironbar and nwg-panel: desktop tools to try on Pila for the
 #     manual's list of what works ("Building your desktop")
 RUN pacman -Syu --noconfirm --needed \
@@ -36,7 +38,7 @@ RUN pacman -Syu --noconfirm --needed \
         wayland wayland-protocols libxkbcommon libinput systemd-libs seatd \
         mesa libglvnd libdisplay-info pixman \
         foot kitty weston wayland-utils mesa-utils ttf-dejavu gtk4-demos \
-        fuzzel waybar swaybg mako libnotify swaylock swayidle wl-clipboard wlr-randr \
+        fuzzel waybar otf-font-awesome swaybg mako libnotify swaylock swayidle wl-clipboard wlr-randr \
         ironbar nwg-panel \
         xorg-xwayland xterm xorg-xeyes xorg-xdpyinfo \
         grim slurp wtype wlopm wlsunset ffmpeg \

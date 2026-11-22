@@ -1,0 +1,31 @@
+# Written by Pila (`tool-configs`): Pila's [colors]. Pila writes it at every
+# start and when [colors] changes: to change it, copy it to ~/.config, which
+# the tool then reads instead.
+
+color=@background@
+indicator-radius=60
+indicator-thickness=8
+font=sans-serif
+
+inside-color=@bar-inactive@ff
+inside-clear-color=@bar-inactive@ff
+inside-ver-color=@bar-inactive@ff
+inside-wrong-color=@bar-inactive@ff
+ring-color=@hover@ff
+ring-clear-color=@icon-inactive@ff
+ring-ver-color=@snap-preview@ff
+ring-wrong-color=@close-hover@ff
+key-hl-color=@snap-preview@ff
+bs-hl-color=@icon-inactive@ff
+line-color=00000000
+line-clear-color=00000000
+line-ver-color=00000000
+line-wrong-color=00000000
+separator-color=00000000
+text-color=@icon@ff
+text-clear-color=@icon@ff
+text-ver-color=@icon@ff
+text-wrong-color=@icon@ff
+layout-text-color=@icon@ff
+layout-bg-color=@bar-inactive@ff
+layout-border-color=@hover@ff

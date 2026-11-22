@@ -509,6 +509,61 @@ fn dragging_a_maximized_window_restores_it_under_the_pointer() {
     pila.release("left");
 }
 
+/// A maximized window pressed on its title bar and moved a few pixels (a
+/// click that slipped) stays maximized: it's restored only past
+/// `RESTORE_DISTANCE`.
+#[test]
+fn a_maximized_window_moved_a_few_pixels_stays_maximized() {
+    let (mut pila, client, window, _) = one_window(Decorations::Server);
+    pila.combo("Super+m");
+    pila.wait("maximized", |s| {
+        window_in(s, "a").unwrap()["geometry"]["w"] == 1280
+    });
+    pila.move_to(640.0, (BAR / 2) as f64);
+    pila.press("left");
+    pila.wait("a move or resize grab", |s| {
+        matches!(s["pointer"]["grab"].as_str(), Some("move" | "resize"))
+    });
+    pila.move_by(3.0, 4.0);
+    pila.release("left");
+    let state = pila.wait("the grab ends", |s| s["pointer"]["grabbed"] == false);
+    let a = window_in(&state, "a").unwrap();
+    assert_eq!(a["maximized"], true);
+    assert_eq!(rect(&a["geometry"]), (0, BAR, 1280, 800 - BAR));
+    client.roundtrip();
+    assert!(client.with_window(window, |w| w
+        .configures
+        .last()
+        .is_some_and(|c| c.has(states::MAXIMIZED))));
+}
+
+/// A press of the button that started a move, while it's held, means its
+/// release was lost (nested: released over the host's own title bar): the
+/// move ends there instead of following the pointer on.
+#[test]
+fn a_new_press_of_the_moving_button_ends_the_move() {
+    let (mut pila, _client, _, (x, y, w, h)) = one_window(Decorations::Server);
+    pila.move_to((x + 100) as f64, (y + 100) as f64);
+    pila.key_press("Super");
+    pila.press("left");
+    pila.wait("a move grab", |s| s["pointer"]["grab"] == "move");
+    pila.move_by(-30.0, 20.0);
+    pila.wait("moved", |s| {
+        rect(&window_in(s, "a").unwrap()["geometry"]) == (x - 30, y + 20, w, h)
+    });
+    pila.key_release("Super");
+    pila.press("left");
+    pila.wait("the move ends", |s| s["pointer"]["grabbed"] == false);
+    pila.move_by(50.0, 50.0);
+    pila.settle();
+    assert_eq!(
+        geometry(&mut pila),
+        (x - 30, y + 20, w, h),
+        "no longer moving"
+    );
+    pila.release("left");
+}
+
 #[test]
 fn dragging_a_snapped_window_restores_its_size() {
     let (mut pila, _client, _, (_, _, w, _)) = one_window(Decorations::Server);

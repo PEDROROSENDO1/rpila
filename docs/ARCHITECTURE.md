@@ -25,7 +25,29 @@ Key flows and invariants:
 - **Configuration** (`config.rs`): a TOML file (`~/.config/pila/config.toml` or
   `--config`, documented in `config.example.toml`, which `main` writes to the default path
   when nothing is there, without `--config`: `config::create_default_file`, before the event
-  loop; never over a file or a symlink, and a failure only logged) parsed by
+  loop; never over a file or a symlink, and a failure only logged; then, with `tool-configs`,
+  `tool_configs::prepare_for_session` writes waybar's, fuzzel's, mako's and swaylock's
+  configurations from `resources/tools/` into `$XDG_RUNTIME_DIR/pila-tools` (`Pila::tool_configs_dir`;
+  each file renamed into place from a temporary file of its own, `partial_path`, so a nested Pila
+  or a tool starting never reads one half written), their `@key@`s filled with `[colors]`
+  (`tool_configs::fill`; again, on a thread, when a reload changes them, one rewrite at a time:
+  `tool_configs::rewrite_in_background`, for each tool's next start),
+  text at `text::FONT_SIZE` px in sans-serif, as the title bars, waybar's with
+  Font Awesome symbols where a font file under fontconfig's default directories has "awesome"
+  in its path, `icon_font_installed`: nothing in the user's directories. With them goes
+  swaybg's wallpaper, which Pila draws (`wallpaper.rs`: `background` with a small mark in the
+  bottom-right corner, outlined rectangles piled like windows in greys between `background` and
+  `hover` and the accent, on a 1920x1080 grid drawn at 4K, a PNG of rows filtered `Up`, ~11 ms
+  in a release build, so it's paid at startup and on the rewrite's thread); swaybg reads no file
+  of the user's, so a bare `swaybg` always gets it, `-i ... -m fit -c <background>` (a tool's
+  arguments name `[colors]` keys as `@key@`, `fill`): the whole picture on any monitor's shape,
+  where `fill` would crop the corner's mark. `Pila::spawn` gives
+  them to the example's own commands as written (`config::is_example_command`: its `launcher`
+  and `autostart`), on their command line (`tool_configs::with_configs`: the tool's arguments
+  after each word that is its name, swaylock inside the swayidle line too), for each tool with
+  no configuration of the user's (`tool_configs::user_has_config`, at every spawn, so one
+  copied into place takes over); a reload that turns `tool-configs` on writes them at the
+  first such spawn) parsed by
   `Config::from_toml` (pure,
   unit-tested; `PILA_*` env vars override it), loaded at startup by `Config::load`, which
   falls back to defaults on errors (`main` notifies of them once the session has had time to
@@ -467,6 +489,14 @@ Key flows and invariants:
   (`direct scanout`, `pila::frames`, with the time that frame's render and commit took and
   `others_pending`, the device's other outputs with a commit on its way, and the format and modifier
   of the client's buffer and of the swapchain (`OutputSurface::client_format`, `swapchain_format`)).
+  Why one isn't is logged too, each when it changes: an output enabled with or without scanout
+  formats for clients (`direct scanout formats for clients`), a client's buffer Smithay tried and
+  couldn't show (`direct scanout refused`, `draw::refused_scanout`: its format and modifier, and
+  `ScanoutFailed` when GBM or the kernel refused it, as amdgpu does a buffer whose DCC isn't
+  displayable), and a surface told the plane's formats or back to the renderer's (`dmabuf
+  feedback`, `scanout`). With Mesa 26.3 (radeonsi) EGL clients (kitty, weston-simple-egl) keep
+  their render-only DCC modifier after a scanout tranche, so they're drawn, not shown as they
+  are.
   The swapchain is opaque (`COLOR_FORMATS`: XRGB8888 first) because Smithay adds a client's buffer
   shown on the primary plane as the opaque variant of its format (ARGB8888 as XRGB8888): with an
   ARGB8888 swapchain the plane's framebuffer changed format at every switch between the two, and
@@ -492,7 +522,8 @@ Key flows and invariants:
   one; a composited frame tears too, not only direct scanout. In `frame_finish` a torn frame
   (`with_pending_frame`'s mode) misses no refresh and isn't late, its presentation feedback has
   no `Vsync`, and it leaves `last_vblank_time`, the grid the next vblank is reckoned from, as it
-  was; the frame statistics count it apart (`torn`). The headless backend can't tear: the state
+  was (so a frame asked for while a torn one was in flight is due as if none had been, not a
+  period after that vblank: `draw::in_flight_shown`); the frame statistics count it apart (`torn`). The headless backend can't tear: the state
   tells what the DRM backend would ask (`tears` per output).
 - **Frame statistics** (`frame_stats.rs`, `RUST_LOG=pila::frames=debug`): every backend calls
   `Pila::record_frame` with a frame's CPU time (logged per output every 5 s: frames, average
@@ -505,7 +536,8 @@ Key flows and invariants:
   last takes the next refresh, and the gap after it counts from the frame before, less that one;
   a host that renders late draws the first frame after a pause at once and the next late). Screen captures are recorded apart
   (`record_capture`, a `captures` line), the blit into them subtracted from the output's
-  frame. The first frame after an output is set up (`OutputSurface::first_frame`: swapchain
+  frame. Clients' shm buffers copied at their commits ("Uploads") are recorded
+  apart too (`record_upload`, an `uploads` line: how many, average and worst CPU). The first frame after an output is set up (`OutputSurface::first_frame`: swapchain
   and modeset) is logged on its own and not counted. A redraw that found nothing new on an output
   (no frame queued: a commit with no new picture, the pointer moving with no cursor drawn) is counted
   apart, `idle` and its summed CPU `idle_cpu_ms` (`record_idle_frame`, udev and headless), and a
@@ -601,6 +633,29 @@ Key flows and invariants:
   has `syncobj_eventfd`: bare metal and headless with a GPU, not nested) a commit's acquire
   point takes the place of the fence, and Smithay signals the release point when the buffer
   is dropped. Pila keeps no buffer of its own: animation snapshots are textures.
+- **Uploads** (`upload.rs`, `Pila::upload_committed`, from the commit handler before
+  `redraw_committed`): a client's shm buffer reaches the GPU as a copy the CPU makes
+  (`glTexImage2D`, `glTexSubImage2D` of its damage), which Smithay makes when a frame builds its
+  elements (`import_surface`). Made in the frame, a whole-screen picture put milliseconds on it:
+  swaybg's first buffer cost 11 to 19 ms of a frame's CPU on Renoir's bare metal (a missed
+  refresh at every start), a fullscreen foot scrolling on 2560x1440 about 3 ms of every frame
+  against kitty's (dmabuf) 1 ms; and a frame held to render late (`udev/render_late.rs`) left
+  that copy its margin to fit in. The commit makes it instead (`import_surface_tree`, with the
+  renderer `Backend::renderer` lends: on bare metal the primary's `GlesRenderer`, the one
+  frames build their elements with, so Smithay's per-renderer texture is found there and not
+  copied again). Only for what a frame would copy anyway: a surface with an shm buffer that has
+  no texture yet (`needs_upload`), shown on an output (`surface_outputs`: not minimized, not on
+  another workspace; while locked, only a lock surface; a sync subsurface waits for its
+  parent's commit), and once between frames (`UploadedAfter`, by `Pila::frames_drawn`, which
+  `post_render` counts): a client committing faster than the outputs refresh leaves the rest to
+  the frame, which gets the damage since the last commit copied (`damage_since`). Smithay
+  (Pila's fork) copies in strips of at most 128 KiB, a new texture allocated empty first: one
+  call for a whole 1920x1080 buffer took radeonsi's slow path (a staging buffer of its size,
+  allocated anew while the last is busy), 10 to 22 ms about one time in three; `scripts/check`
+  fails a copy over 8 ms. Dmabufs are imported as before (no copy). The copy's time is counted apart, an `uploads` line on
+  `pila::frames` (`record_upload`), and `early_uploads` in `state_json` counts those commits.
+  On headless, whose frames wait for the GPU, the GPU's part of the copy still lands in the
+  frame that first draws the textures.
 - **Surface limits** (`surface_limits.rs`): no size or place a client gives a surface goes past
   `MAX_EXTENT` (32768 logical px; buffers in pixels), so no sum of a position and a size
   overflows, in Pila's layout and drawing or in Smithay's (bounding boxes, popup placement).
@@ -706,8 +761,10 @@ Key flows and invariants:
   hit testing goes through `Pila::under` (layers and windows in that order; `window_under`
   is windows only), and `Pila::scene` renders the same order. Placement, maximize and
   toplevel bounds use `usable_geometry_at` (the output minus exclusive zones); fullscreen
-  uses the whole output. When the zone or output size changes, `refit_maximized` re-applies
-  fill states. A mapped Top/Overlay surface with exclusive keyboard interactivity
+  uses the whole output. When the zone or output size changes, `refit_to_usable_area` re-applies
+  fill states and snapped windows' halves and quarters (`refit_snapped`), without raising them
+  (`Pila::move_window`: Smithay's `map_element` always raises, `relocate_element` doesn't);
+  hidden ones (minimized, another workspace) are fit as they come back. A mapped Top/Overlay surface with exclusive keyboard interactivity
   (`exclusive_layer`) keeps keyboard focus: `focus_window` then only raises. A Top/Overlay
   surface with on-demand interactivity gets the keyboard when it maps
   (`takes_keyboard_on_map`, `MapChange::Mapped`), as on COSMIC; else on a click. Popups may
@@ -720,110 +777,6 @@ Key flows and invariants:
   opens its next popover on the same surface, and the null commit after the destroy is no
   popup's commit any more, so without it that popover's initial commit read as a hiding one
   and got no configure, while its grab held the app's input.
-- **Launcher** (`launcher/`, the `pila-launcher` command): an app launcher of Pila's own, the
-  default `launcher` (`config.example.toml`'s; `launcher = ""`: Mod+D does nothing and isn't
-  swallowed). A separate
-  client written with iced on iced_layershell: it shares no code with Pila and reaches it only
-  through Wayland, as a layer surface (Overlay, no anchor so Pila centers it, exclusive
-  keyboard, namespace `pila-launcher`). A cargo workspace of its own with its own `Cargo.lock`:
-  iced_layershell 0.19.1 doesn't build on the winit beta Smithay pins, and one lock can't hold
-  both (`launcher/Cargo.toml` pins the older beta). It renders with tiny-skia on wl_shm (no
-  GPU), and loads libwayland-client and libxkbcommon at runtime, so it links nothing new.
-  The first run binds a socket in `XDG_RUNTIME_DIR` (`exec::socket_path`, one per Wayland
-  display) and stays as an iced_layershell daemon with no surface while hidden; a later run
-  connects, sends a `Request` (toggle, and `--terminal`) and exits (`launcher/src/main.rs`).
-  Each show creates a new layer surface (`Launcher::request`) and reads the apps again on a
-  thread (`apps::scan`: desktop entries of the XDG data directories, first ID wins,
-  `NoDisplay`/`Hidden`/`OnlyShowIn`/`NotShowIn`/`TryExec`, localized `Name`; icons by
-  `icons::find` in hicolor and pixmaps, PNG or SVG); hiding removes it. `apps::rank` orders
-  the matches (name prefix, word prefix, name substring, then generic name, keywords,
-  command). An app starts through `/bin/sh -c` with its field codes removed
-  (`exec::clean_exec`), `Terminal=true` ones in a terminal (`exec::in_terminal`): `--terminal`,
-  `$TERMINAL`, else the first installed of `exec::TERMINALS`, kitty first
-  (`exec::pick_terminal`; a copy of `config::TERMINALS`, which a test keeps equal); reaped on
-  a thread. iced_layershell speaks text-input-v3, so input
-  methods type into the search field. Its pure parts have unit tests in the crate;
-  `scripts/apps launcher` drives the real thing on a headless Pila. It and the bar share Pila's
-  look, `launcher/src/style.rs` (`style::Style`: the colors of `[colors]` as an iced theme, the
-  accent of the snap preview, opaque), and follow the user's: `launcher/src/pila_ipc.rs`
-  subscribes to the IPC's `colors` events on `PILA_SOCKET` from a thread and turns each into a
-  `Style` (`Style::from_pila`), so a saved `[colors]` reaches them at once; with no
-  `PILA_SOCKET` (another compositor) or a Pila that refuses `colors`, they keep
-  `Style::default`, the example's defaults. The bar includes both files by `#[path]`. Their surfaces are opaque (tiny-skia
-  draws into XRGB buffers), so the launcher's corners stay square; one font and size for all
-  their text (`style::FONT`, `style::TEXT_SIZE`), regular weight: the active and selected stand
-  out by color.
-- **Bar** (`bar/`, the `pila-bar` command): a bar of Pila's own, the default
-  `autostart` (`config.example.toml`'s; no terminal starts by itself): the workspaces on the left, the tray, the battery and a clock on the right. Like the launcher, a
-  separate iced client on iced_layershell in the launcher's cargo workspace (`bar/Cargo.toml`'s
-  `workspace = "../launcher"`: one lock, one target directory, one build of iced), rendered with
-  tiny-skia, reaching Pila only through Wayland, so it runs on any compositor with the same
-  protocols. An iced_layershell daemon that starts with no surface (`ui::run`) and opens a layer surface
-  per output (`Bar::open`: Top, anchored to the top or, with `--bottom`, the bottom edge and both
-  sides, `--height` high (`args::DEFAULT_HEIGHT`, text sized by `ui::text_size`) and as much
-  exclusive zone, no keyboard, namespace `pila-bar`) for each output that comes, or each that
-  `--output` names, and drops it with its output; every surface shows the same, since Pila's
-  workspaces span all outputs. The desktop comes from an event queue of the bar's own on a
-  thread (`desktop::updates`), on iced_layershell's connection (`with_connection`), so the
-  `wl_output`s it binds go straight to `OutputOption::Output`: layershellev's `AllScreens`
-  makes a surface before an output's name is known, and its `OutputName` looks names up in a
-  cache that can lag behind. That thread follows the outputs (wl_output 4's names;
-  `outputs::Outputs` says which to open and close, unit tested) and ext-workspace (by
-  coordinates, hidden ones left out; groups ignored), its only protocol besides the layer shell. `desktop::Model` applies the events as the
-  protocol says (at the manager's `done`) and knows nothing of Wayland, so it's unit tested; only a changed `Desktop` reaches iced. A click or the
-  wheel (a notch, or `PIXELS_PER_STEP` of a touchpad) activates a workspace through
-  `desktop::Switcher`, on that thread's connection (`activate` + `commit` + flush). The tray (`bar/src/tray/`, unless `--no-tray`) speaks
-  StatusNotifierItem over the D-Bus session bus with zbus's blocking API, on a thread of its own
-  (`tray::updates`; no bus, no tray): the bar serves `org.kde.StatusNotifierWatcher` when no one
-  else does (on Pila no one does; KDE or a waybar first keep theirs) and registers as a host either
-  way, follows the watcher's and the items' signals and the bus's `NameOwnerChanged`, and reads
-  each item's properties on a thread of their own (`tray::read`, with a method timeout: a hung app
-  holds only its own); `tray::model::Model` (unit tested) turns that into the items to show, sent
-  whole. Icons: a named one through `tray::icons::find` (the item's `IconThemePath`, then the
-  user's GTK icon theme, breeze, Adwaita and hicolor, any context, the best size; `-symbolic` ones
-  drawn in the text's color), else the `IconPixmap` closest to the size, as RGBA. A click calls the
-  item on a thread (`Tray::click`: `Activate`, `SecondaryActivate`, `Scroll`, or `ContextMenu` for
-  an item with no menu). Menus (com.canonical.dbusmenu) are read ahead, at each read of an item
-  with a new `Menu` and on `LayoutUpdated` (`tray::read_layout`, `tray::menu::entries`), because
-  the popup must be made while the button is still down: Smithay grants a popup's grab only
-  then, and the grab is what closes it on a click elsewhere. So a right click opens it at once
-  (`Bar::tray_click`, `AboutToShow` sent alongside): an `xdg_popup` of the bar's layer surface,
-  below the bar at the pointer, sized for its tallest level (`ui::menu_size`), a submenu shown in
-  its place with a row back; an entry chosen sends `Event` "clicked". The pointer's x comes from a
-  `mouse_area` around the whole bar, whose `on_move` fires on the pointer's entering too: a
-  pointer that enters and clicks with no motion between (warped there) has no `CursorMoved`.
-  `tray::bus_tests` runs the watcher and host against a private dbus-daemon with items of its own.
-  The battery
-  (`battery::updates`, unless `--no-battery`) is a thread that reads `/sys/class/power_supply`
-  every 5 s (batteries whose `scope` isn't `Device`, so no mouse's; together by what they hold,
-  `energy_*` or `charge_*`, else `capacity`) and wakes the bar only when what it shows changes;
-  with no battery there's no thread. Its icon and the clock's are built in (`symbols.rs`, which
-  pila-osd shares by `#[path]`: Material Design Icons' SVG files in `bar/icons/`, Apache
-  License 2.0, by `include_bytes!`, one `svg::Handle` each made once, drawn in the text's
-  color), so no icon font is looked for: the battery by tens, a charging version of each
-  (`glyphs::battery`), and `glyphs::CLOCK`. Square everywhere: each workspace is a block inset in a cell as high as the bar
-  (`ui::inset`; the margin clicks too), the active one in the accent color and bold
-  (`style::FONT_STRONG`: bold, not semibold, since iced's text takes another family for a
-  weight the user's font lacks), every label as wide as in bold so none moves; the right side
-  is spaced alone (`ui::module_padding`), and the clock, bold, keeps the width of its text with
-  every digit a `0` (`ui::clock_placeholder`, `ui::steady`), since iced has no tabular figures.
-  Sizes follow `--height` (`ui::scaled`). The clock
-  (`clock::ticks`) is a thread that reads the local time each second through strftime in the
-  user's `LC_TIME` and wakes the bar only when the text changes; a second one makes the date for
-  the clock's tooltip (`--date`). Tooltips, the clock's and the tray items' (their `ToolTip`'s
-  title and description as plain text, else their `Title`: `tray::model::tooltip_lines`, at
-  most four lines), show half a second after the pointer enters the block and go when it leaves
-  (`Message::Hover`, `Bar::hover`, `Bar::tooltip_due`; a count of hovers makes a late one stale,
-  and leaving what isn't hovered any more is ignored, since the next block's entering may come
-  first; an item gone under the pointer takes its tooltip along): a layer surface of its own
-  (namespace `pila-bar-tooltip`), not a popup, since iced_layershell asks a grab for every popup
-  it makes, with the enter's serial if no button's, and a tooltip mustn't hold the pointer; with
-  an exclusive zone of 0 so the compositor puts it below the bar, taking no input, sized from its
-  lines (`ui::tooltip_size`). The clock's is anchored to the right edge (the bar's last block); a
-  tray item's to the left one, with a margin that centers it under the pointer inside the bar
-  (`ui::tray_tooltip_left`), from the bar's width, asked for then (`window::size`:
-  iced_layershell reports no size when a surface opens). `scripts/apps bar` drives both on a
-  headless Pila.
 - **Switcher** (`switcher_view.rs`): Pila's own window switcher, drawn by Pila, that only shows
   the switch `switcher.rs` does (see "Window switching"). `Pila::switch_changed` (and
   `cycle_focus` once the switch is in place) call `switcher_view_changed`: a new switch arms a
@@ -833,8 +786,9 @@ Key flows and invariants:
   it is) is centered on the switch's output: tiles of `COLUMNS` to a row, `ROWS` rows shown
   (`first_shown` keeps the selected one's in view), each a preview over the window's title (or
   its app id), the selected one on the accent color (`[colors] snap-preview`, opaque), on
-  `bar-inactive` with a `hover` border, square. `Scene::switcher` (`SceneSwitcher`) is drawn on
-  its output in front of everything but the window menu and the cursor
+  `bar-inactive` with a `hover` border, with the windows' corners (`SceneSwitcher::rounding`:
+  `RoundedSolid`, the border's a pixel wider; the tiles square). `Scene::switcher`
+  (`SceneSwitcher`) is drawn on its output in front of everything but the window menu and the cursor
   (`render::output_elements`), and in captures. A preview is the window's surfaces (no title
   bar, no popups) drawn into an `OffscreenWindow` of its own the size of its place, scaled to
   fit as a whole (`RescaleRenderElement`: a surface element scales only its place) and never
@@ -849,80 +803,97 @@ Key flows and invariants:
   that window, which ends the switch on it, and the press and its release go nowhere else. The
   state dump has it (`switcher_view_json`) for the tests; `scripts/apps switcher` drives it with
   real apps on a headless Pila.
-- **OSD** (`osd/`, the `pila-osd` command): Pila's on-screen display, run by the default
-  bindings of the volume keys right after their change
-  (`wpctl ... && pila-osd volume`, `config.example.toml`), so a failed change (no PipeWire)
-  shows nothing, and those bindings stay plain commands a user can swap. The brightness and
-  media keys need no program of their own: `pila-osd brightness +5%` changes the backlight
-  first (`backlight::change`: the device `backlight::find` picks, a step of the maximum,
-  never down to off, `backlight::stepped`; written to its `brightness` file where the user may,
-  else logind's `SetBrightness` on the session `auto`, on the system bus with zbus), then shows
-  the level it left; `pila-osd play-pause|next|previous|stop` (`media::run`) calls that method
-  of MPRIS's player interface on the session bus, of the player that's playing, else a paused
-  one, else any (by bus name, `media::control`), then shows what it did (`media::State`: its
-  icon, `glyphs::media`) and the track's "title — artist" (`Media`, shortened to fit,
-  `ui::fit`), or that there's no player. Players change after they answer: `media::settle`
-  reads the status or track again until it changes (up to `SETTLE`, 400 ms), else play-pause
-  shows the opposite of what was and a skip the player's name. What a run shows is a `Popup`
-  (a level or a media key's, one line on the socket); the parsing is `Request` in `main.rs`. Like the launcher, an
-  iced client on iced_layershell in its cargo workspace: a run reads its level
-  (`level::read`: the volume and the microphone from `wpctl get-volume` of the default sink and
-  source, `level::wpctl_volume`; the brightness from `/sys/class/backlight`, the firmware's,
-  then the platform's, then a raw one, `backlight::find`), then hands it (a `Popup`) to the run in the
-  background over a socket in the runtime directory (`socket_path`, one per Wayland display;
-  `Popup::encode`, one line) and exits, or binds it and becomes that run (`ui::run`): an
-  iced_layershell daemon with no surface while hidden. A popup opens a surface if there's
-  none (Overlay, anchored to the bottom edge alone so Pila centers it along it, `ui::MARGIN`
-  above it and any exclusive zone; on the output Pila picks, the pointer's; no keyboard;
-  `events_transparent`, an empty input region, so clicks go through; namespace `pila-osd`)
-  and is shown until `ui::SHOWN` after the last one (a count of popups, so only the last one's
-  timer hides it): a built-in icon (`glyphs::level`, by thirds; pila-bar's `symbols.rs`, by `#[path]`); a
-  square level bar; the percentage, or "muted", dimmed. A media key's popup has its icon
-  (`glyphs::media`) and the title, on one line. Colors from `[colors]`, as the bar's
-  (`pila_ipc::styles`). `scripts/apps osd` drives it on a headless Pila.
-- **Screenshots** (`shot/`, the `pila-shot` command): Pila's screenshots, run by the default
-  bindings (`pila-shot region` on Mod+Shift+S, `pila-shot output` on Mod+Ctrl+S, which gets
-  the pointer's output as `PILA_OUTPUT` from `spawn`) and by xdg-desktop-portal-wlr's chooser
-  (`pila-shot pick-output`, `resources/xdg/xdg-desktop-portal-wlr/pila`), so neither needs
-  grim, slurp or wl-copy. An iced client in the launcher's workspace that uses only standard
-  protocols Pila already serves to its own clients, and changes nothing in the compositor: it
-  captures each output first (`capture::outputs`: ext-image-copy-capture of an
-  ext-output-image-capture-source, no cursor, on a connection of its own, which Pila gives
-  upright at its full resolution; `shm.rs`
-  waits with a deadline and makes the shm buffers), so a region is picked on the screen as it
-  was. `region` and `pick-output` then cover each output with a layer surface (`ui.rs`: an
-  Overlay anchored to every edge, exclusive zone -1 so it lies over bars, exclusive keyboard for
-  Escape, namespace `pila-shot`) showing that picture dimmed under a canvas: a drag selects a
-  rectangle (`ui::between`, the dimmed parts `ui::around`, a square frame in the accent color);
-  a click picks a monitor; Escape or a right click cancels (exit 1). The daemon exits with the
-  outcome; the region, in fractions of the surface, becomes pixels of the picture
-  (`save::rect_of`: the same at any scale), cropped (`save::crop`) and encoded as PNG without
-  alpha (`save::png`, the `image` crate). A file goes to `--file`, or the pictures folder
-  (`save::pictures_dir`: `XDG_PICTURES_DIR` from `user-dirs.dirs`, else `~/Pictures`) named by
-  the local time (pila-bar's `clock::now`). The clipboard (`clipboard::serve`:
-  ext-data-control, privileged, so not a sandboxed app's) offers `image/png` and writes it to
-  whoever pastes until the source is cancelled; a Wayland clipboard holds offers, so a
-  `serve-clipboard` process of its own does that, started detached (`setsid`) with the PNG on
-  its stdin, and the first process exits once it says the picture is offered.
-  `scripts/apps shot` drives it on a headless Pila.
-- **Wallpaper** (`wallpaper.rs`, `[wallpaper]`): a picture Pila draws itself under the lower
-  layer surfaces, so a wallpaper program's Background surface covers it. A new image (at startup,
-  from `start_session`, or a reload that changes `[wallpaper]`, `wallpaper_config_changed`) is
-  decoded on a thread of its own (the `image` crate's PNG, JPEG and WebP; shrunk once to what
-  still covers the largest output, `wallpaper::shrunk`, but at `center`) and comes back through a
-  calloop channel; a decode for an image no longer wanted (a newer request since, `generation`)
-  is dropped. It's uploaded then, outside any frame, as one texture of the renderer
-  (`import_memory`), and the decoded copy dropped (and `malloc_trim`, on glibc: the decode's
-  arena would otherwise keep tens of megabytes per picture); an error is logged and notified, and shows
-  `[colors] background`. `Pila::scene` hands it over as `Scene::wallpaper` with each output's
-  rect and scale and an element id per output (new with each picture, so every output's damage
-  tracker sees a new element); `scene_elements_from` draws it last, behind the lower layer
-  surfaces, wherever it's drawn: outputs, blur backdrops and captures alike. Where it goes on an
-  output is `wallpaper::placement` (`fill` crops the picture to the output's shape, `fit` shows
-  all of it on `background`, `stretch`, `center` at a picture's pixel per output pixel), a pure
-  function. Not drawn while locked (the scene is the lock surfaces only), and it stays put
-  through a workspace slide. The config side: `config::WallpaperConfig` (the image as an
-  absolute path, `~/` expanded; a missing file a warning, as it may come later).
+- **Overview** (`overview.rs`, the `overview` action, Mod+W): while `Pila::overview` is open the
+  active workspace's windows (no override-redirect ones; minimized ones too) are laid out per
+  output (`Pila::overview_slots`: each window on `window_output`, a minimized one where it'd come
+  back) in the output's usable area less `MARGIN` and the workspace strip (`strip`, a pure
+  function: with more than one workspace, a row of thumbnails of the output's shape on top), in rows, one scale for all, never grown
+  (`arrange`, a pure function: the row count that shows them largest). The places are computed
+  from the windows as they are each time they're asked for, so opening, closing, resizing and
+  minimizing meanwhile need nothing of their own; `overview_laid_out` (from `after_frames`)
+  redraws the outputs whose places changed (`defer_redraws`) and drops a selection that's gone.
+  Nothing is drawn anew: `Pila::scene` gives each shown window a `WindowEffect` whose `FrameMap`
+  maps its frame onto its place (`overview_scene_windows`, minimized ones built with
+  `scene_window_at` at their remembered place), so it's drawn as an animating window is, with its
+  title bar, corners and shadow, and paced by its place's output (`frame::send_frames`); windows
+  it doesn't show are left out of the scene. Behind them, above the lower layers,
+  `overview_elements` draws the selected window's outline (`snap-preview`) and the dimming; panels
+  above the windows stay, and a fullscreen window doesn't cover the Top layer while it's open
+  (`top_layer_covered`). Every commit of a shown window redraws its output
+  (`overview_committed`: a minimized one has no place of its own on the `Space`). Input:
+  `Pila::under` hits only the upper layers while it's open, so no window gets the pointer;
+  `pointer_button` gives it the press first (`overview_press`: a thumbnail switches there, a
+  window's place is held as a `Press`, a panel keeps its click, anywhere else closes it; the press
+  and release reach no app) and the release of a held one (`overview_release`, before the
+  suppressed buttons: it picks the window, or, once the pointer went past `DRAG_THRESHOLD`
+  (`overview_drag`), drops it: on another workspace's thumbnail `move_window_to_workspace`, the
+  path of `move-to-workspace`, takes it there with its transient family, a minimized one staying
+  minimized; anywhere else it goes back to its place). A dragged window's `FrameMap` maps it under
+  the pointer, in front of the others, shrinking as the drag goes on to fit `DRAGGED_MAX`
+  (`dragged_rect`: over `SHRINK_DISTANCE`, by the distance, not by a timer; the point it was taken
+  by stays under the pointer); pointer motion
+  selects the window under it, and the keyboard filter gives it every key that's no binding
+  (`overview_key`: Escape, the arrows through `step`, Enter); `run_action` closes it before any
+  action but `Action::keeps_overview`'s (the overview's own, going to a workspace, sending the
+  window there, the keyboard layout). Picking is `activate_toplevel` (raised, focused, restored).
+  Besides its binding, `hot_corner` (from `pointer_motion`) opens or closes it when the pointer
+  reaches an output's top-left pixel that's a corner of the whole layout (no output left of it or
+  above it), once until the pointer leaves it (`Overview::in_corner`); not with a button held or a
+  grab running (`is_grabbed`), over a fullscreen window, while locked, or with `[overview]
+  hot-corner = false`; and `[gestures]` binds `overview open`/`overview close` to 4-finger swipes
+  up and down.
+  A workspace switch while it's open shows the new windows in their places without a slide
+  (`show_workspace`). The strip (`Pila::overview_strip`) shows each workspace's part of the
+  output, live: `scene_thumbs` gives each thumbnail its windows as they are (the active
+  workspace's from the `Space`, the others' with `scene_window_at` at their parked place; those
+  on all workspaces in every one) and the output's Bottom and Background layer surfaces, and
+  `overview_elements` draws each into a texture of its own (`render::draw_thumbnail`: at the
+  output's scale times the thumbnail's, no blur), kept by output and workspace from one opening to
+  the next (`Overview::thumbnails`) with its own damage tracker, so a quiet workspace costs
+  nothing; their windows get frame callbacks from the output (`frame::send_frames`, as the
+  switcher's), and a commit of one redraws its thumbnail (`overview_committed`). The active
+  workspace's is bordered in the accent color, the one under the pointer in `hover`; a press on
+  one switches there and it stays open. The strip glides down from above the output and fades. Opening and closing glide (`[animations] overview`, `Overview::glide`, from
+  where a glide the other way is): each window's `FrameMap` goes `overview_shown` of the way
+  from its frame as it is to its place (minimized ones fading with it), and the dimming and
+  outline fade. Closing, it's closed to input at once and the windows glide back from the places
+  kept in `Overview::closing`; `end_finished_overview` (from `step_animations`) drops them and
+  the windows' textures (`overview_closed`). The glide counts in `animating`/`animations_held`
+  and redraws every output (`animation_outputs`); `drop_animations` stops it. The lock closes it, and it doesn't open while locked. The state dump has
+  it (`overview_json`).
+- **Shortcuts cheatsheet** (`shortcuts_view.rs`): a panel Pila draws with the bindings as
+  they're bound: a fixed list of actions looked up in `config.bindings` (`keys_for`: the
+  combination to name first, or a run of numbers or arrows as one key, `merged`), an unbound one
+  left out; `combo_caps` names the keys with Mod resolved, one keycap each; Mod's drags come
+  from `mod_key`. Two layouts (`Heading`): the welcome, the few keys to get going
+  (`welcome_rows`), centered under a large title, shown by `main.rs` when
+  `config::create_default_file` has just written the config (the first run); and the full
+  cheatsheet, `show-shortcuts` (Mod+? by default), in titled sections over two columns
+  (`sections`, `columns`), which toggles it. Its output is the one under the pointer when it was
+  shown (the first before there's one), and it's centered there (`shortcuts_layout`, computed
+  for each scene, so a changed binding shows at once; `panel_size` from the rows alone), shrunk
+  as a whole where it's bigger than its monitor with `FIT_MARGIN` around it (`fit`: its content
+  is drawn at its layout size, `SceneShortcuts::layout_size`, and shown at the panel's, its
+  corners shrunk with it). The
+  keyboard filter hides it on any press but a modifier's: a binding still runs (it's hidden
+  after the filter, unless the binding is `show-shortcuts`, which hides it itself), any other
+  key is suppressed; a Mod tap's action hides it too. A press hides it, and on the panel is
+  suppressed (`pointer_button`); `Pila::under` hits nothing over it. The lock hides it, and it's
+  never shown while locked. `Scene::shortcuts` is drawn by `render::output_elements` in front of
+  the switcher, behind the window menu, and keeps a frame from tearing. Its content (text in
+  sizes and weights, `text::render_text`, and keycaps, anti-aliased rounded rects with the text
+  blended over them) is one image the size of the panel, drawn on a thread
+  (`Pila::draw_shortcuts_text`: ~30 lines shaped and uploaded one by one cost a 7 ms frame; as
+  one image drawn off the loop, 2 ms), asked for from `after_frames` only while it has none and
+  could (`shortcuts_need_content`: an output or the fonts coming after it's shown; rebuilding
+  the key on every turn of the loop cost 18 µs a turn) and by a reload
+  (`shortcuts_config_changed`, which makes its background and border anew so that a change of
+  corners alone is drawn); one that fails with the fonts loaded isn't asked again until it
+  changes. The panel is drawn only once its content is there, never empty. Its background and
+  border have the windows' corners (`corner-radius`, `rounded-corners`: `RoundedSolid`, the
+  border's a pixel wider). The image and the solid buffers are kept in `Buffers` while it's
+  shown. The state dump has it
+  (`shortcuts_view_json`: its rows, keys joined by "+", and sections).
 - **Simple protocols** (viewporter, fractional-scale, data-control, xdg-foreign, …) live in
   `handlers/protocols.rs`: globals are created in `init_globals`, and only state a handler
   must return is kept (`Pila::globals`). Every Smithay protocol dispatches through its
@@ -1034,7 +1005,8 @@ Key flows and invariants:
   false` (`decoration::bar_hidden`: no bar drawn nor laid out, the window stays SSD),
   `corner-radius` (over the global one, in `scene_window`) and `opacity`
   (`SceneWindow::alpha`, passed to every element of the window, title bar and flash
-  included; Smithay's elements drop their opaque regions below 1), `blur` (see "Blur") and
+  included; Smithay's elements drop their opaque regions below 1), `blur`,
+  `popup-blur` and `popup-corner-radius` (see "Blur") and
   `shadow` (see "Shadows"). Hot paths read them
   through `rules::with_window_props` (no copy); a reload also re-fits filled windows
   (a bar shown or hidden moves them). Layer properties: `animations` and
@@ -1186,8 +1158,14 @@ Key flows and invariants:
   surface elements draw the multiplier themselves). Their popups that ask (menus, an input
   method's candidate window) go into `SceneWindow::popup_blur` and `SceneLayer::popup_blur`
   (`render::PopupBlur`: the popup, its place among its root's popups as
-  `PopupManager::popups_for_surface` gives them, front to back, and its region; the client's
-  region alone, but a rule's `blur = false` refuses them too). A window or layer surface with
+  `PopupManager::popups_for_surface` gives them, front to back, its region and its rounded
+  corners; the client's region, but a rule's `blur = false` refuses them too; a window rule's
+  `popup-blur` decides for its popups alone: `true` blurs behind each one's geometry, or all
+  of it without one or for an input method's (`blur::popup_frame`), and only its input region
+  there if it set one (GTK's popover is its shape, arrow and rounded corners, in strips, which
+  the mask cuts out as it does a client's blur region), that geometry rounded by
+  `popup-corner-radius` through `Shaders::up_rounded` as a window's backdrop is, `false` behind
+  none; layer surfaces' popups have no such rule). A window or layer surface with
   one has its popups drawn by hand (`render::popup_elements`, as Smithay's `render_elements`
   places them), each with its backdrop right behind it. Before an output's elements are built, `render::output_elements` (which
   the backends and captures use) calls `BlurCache::prepare`: back to front, windows (each
@@ -1262,7 +1240,7 @@ Key flows and invariants:
   another session: desktop shells pick their compositor backend by them.
   Screen sharing goes through xdg-desktop-portal + xdg-desktop-portal-wlr (PipeWire),
   which `resources/xdg/xdg-desktop-portal/pila-portals.conf` selects; xdpw's own config
-  (`resources/xdg/xdg-desktop-portal-wlr/pila`: pick the screen with `pila-shot pick-output`) must be in
+  (`resources/xdg/xdg-desktop-portal-wlr/pila`: pick the screen with slurp) must be in
   `~/.config/xdg-desktop-portal-wlr/` or `/etc/xdg` (xdpw ignores `XDG_CONFIG_DIRS`;
   `scripts/install` puts both in `/etc/xdg`). On a TTY, before the startup programs, Pila
   exports that environment to the D-Bus session bus (`export_environment`, `SESSION_ENV`, with
@@ -1281,7 +1259,11 @@ Key flows and invariants:
   its programs get (`[environment]`'s, else Pila's), and each that isn't installed gets a
   notification (`notify_missing_programs`), once a session (`Pila::missing_programs`): a key
   bound to a missing program otherwise does nothing but write to the log. A program that exits
-  127 itself, with everything installed, names none. Pila raises
+  127 itself, with everything installed, names none. The example's own `autostart` commands
+  (`config::example_autostart`, the same words in a file made from it) aren't started at all
+  where their programs are missing (`Pila::autostart_installed`, in `main`; `-c` isn't
+  filtered): they're the defaults, which a user may leave uninstalled (`pila-desktop` brings
+  them), so only the log mentions them. Pila raises
   its soft limit of open files to the hard one at startup (`state::raise_file_limit`: a
   descriptor or more per client, shm pool, dma-buf and fence), and `session_env`'s `pre_exec`
   gives what it starts the limit it was started with, since programs using `select()` break
@@ -1291,9 +1273,11 @@ Key flows and invariants:
   signal source is created first thing in `main`, before any thread, so no thread can
   take the signal instead.
 - **Activation** (`handlers/xdg_activation.rs`, xdg-activation): a token that activates
-  is issued only for a serial newer than the keyboard focus's enter to the client holding it, or newer
-  than the pointer focus's enter to the client under the pointer (a clicked notification or
-  panel, which take no keyboard); one with no
+  is issued only for a serial newer than the keyboard focus's enter to the client holding it, or
+  no older than the last button press (`InputState::last_press`) to the client under the pointer,
+  if that press came after the keyboard focus's last change (a clicked notification or panel,
+  which take no keyboard; the pointer's enter alone doesn't count, or a window would take the
+  keyboard whenever the pointer rests on it); one with no
   serial is issued too, but only marks its window urgent (`UrgentOnlyToken`, see "Urgency"). Tokens
   are single-use and expire after `TOKEN_TIMEOUT`. A request switches to the window's
   workspace (`reveal_workspace_of`), shows it if minimized and focuses it if it's mapped;
@@ -1350,15 +1334,10 @@ Key flows and invariants:
   session isn't locked; `update_idle_inhibit` re-checks in `after_frames` (after a frame,
   a client dispatch or input). A new input path
   must go through `process_input_event` (or set `input_activity`) to count as activity.
-  `[idle] monitors-off` is Pila's own idle action: one calloop timer (`MonitorsOff`), armed at
-  startup, by a reload of `[idle]` (`idle_config_changed`) and by the first input after it
-  fired (`notify_activity`), due `monitors-off` after the last activity; when it fires
-  (`monitors_off_due`) it moves itself to the new deadline if input came since, waits a whole
-  `monitors-off` while an inhibitor counts, and else turns the monitors off
-  (`power_off_monitors`: the next input wakes them, swallowed, `wake_monitors`) and drops
-  itself. Input does nothing but note the time, so a 1000 Hz mouse costs no timer work; an
-  inhibitor going away counts as activity, so the monitors don't go off as a video ends.
-  Nested the backend has no monitor power and nothing happens.
+  Pila has no idle action of its own: locking and turning the monitors off are swayidle's
+  (the example's `autostart`), through `power-off-monitors` (`power_off_monitors`: the next
+  input wakes them, swallowed, `wake_monitors`). An old file's `[idle] monitors-off` is read
+  for a warning only (`IdleFile`).
 - **Pointer constraints** (`pointer_constraints.rs`): a lock/confine activates only while
   the pointer is over its surface (inside its region) and that window has keyboard focus;
   `SeatHandler::focus_changed` releases it (`release_constraint_for_focus`), which makes
@@ -1375,9 +1354,15 @@ Key flows and invariants:
   it, clients get it as motion, and it isn't activity.
 - **X11** (`xwayland.rs`, `focus.rs`): Xwayland on demand. At launch Pila only reserves an
   X display (`reserve_xwayland`: Smithay's `XWaylandDisplay`, its number, lock file and
-  listening sockets, held until exit), unless Xwayland isn't installed or `[xwayland] enabled =
-  false`; spawned clients get its `DISPLAY` from the start (never the host's; `Pila::x11_display`,
-  none while turned off), and the startup programs don't wait for X. Turned on or off on reload
+  listening sockets, held until exit: the socket file only, never an abstract socket, which has
+  no permissions) and its cookie (`xauth::Xauthority`: one MIT-MAGIC-COOKIE-1, random, in
+  `$XDG_RUNTIME_DIR/pila-xauthority-<N>`, mode 0600, a `FamilyWild` entry as Flatpak writes them;
+  removed with the reservation, in `stop_xwayland`), unless Xwayland isn't installed or `[xwayland] enabled =
+  false`; Xwayland runs with `-auth` on that file, so a client without the cookie is refused (the
+  window manager's `-wm` connection needs none, and Pila's own XRes connection,
+  `only_pilas_x11_clients`, passes it through `xauth::connect`, as Pila's environment has no
+  `XAUTHORITY`); spawned clients get its `DISPLAY` and `XAUTHORITY` from the start (never the
+  host's; `Pila::x11_display`, `Pila::x11_authority`, none while turned off), and the startup programs don't wait for X. Turned on or off on reload
   (`xwayland_config_changed`): on, the display is reserved then; off, it's let go at once if
   Xwayland doesn't run, else when it stops (idle or crashed: `listen_for_x11` gives it up
   instead of watching again), so its apps keep running meanwhile.
@@ -1426,8 +1411,13 @@ Key flows and invariants:
   for it are housekeeping, not frame pacing: they exist only with `idle-timeout` set, and
   wake Pila once per timeout while Xwayland runs with no window.
 - **Snapping and keyboard moves** (`snap.rs`): a snapped window fills half of its output's
-  usable area, gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
-  Snapping is floating geometry, not a fill state: maximizing a snapped window
+  usable area (less `gaps`, from the edges and between halves: `snap::side_rect`; a maximized
+  window fills `snap::gapped`, the area less `gaps` all around, through `set_fill_state_on`,
+  `place_new_window` and the drag's preview, `snap_target_rect`; with `gaps` above 0 it keeps
+  a floating window's shadow and rounded corners, `scene_window`'s `fills_output`; a change of
+  `gaps` refits like a change of the area), gets xdg `Tiled*` states, and keeps its pre-snap rect in `SnapState`.
+  Snapping is floating geometry, not a fill state (but a change of the usable area refits it,
+  as `refit_to_usable_area` does filled windows): maximizing a snapped window
   (`set_fill_state_on`) or resizing it (`begin_resize`, keyboard resizes) calls
   `forget_snap`, and maximizing keeps the pre-snap rect as the restore geometry.
   `MoveSurfaceGrab` previews the edge snap target (`Pila::snap_preview`, a solid element
@@ -1511,7 +1501,7 @@ Key flows and invariants:
   every loop iteration instead (`send_keyboard_events`, before `after_frames` returns early): an
   xkb option can switch them with nothing to draw. Only against those the last event was made
   from (`keyboard_layouts_are`, nothing built): the event is made only when they changed. The
-  colors (`[colors]`, for pila-bar and pila-launcher) are sent when `apply_config` changes them
+  colors (`[colors]`, for clients that look like Pila) are sent when `apply_config` changes them
   (`send_colors_event`), the window switch in the iteration it changed
   (`send_switch_events`, see "Window switching"); `ipc_colors` writes them back as the config does (`hex`, from
   premultiplied). `keyboard_layout.rs` reads them from the
@@ -1545,18 +1535,25 @@ Key flows and invariants:
   (Mod+Tab) rasterizes nothing again. A title that fit whole is kept for any room it still fits in
   (`TitleTexture::shows`): a resize changes the room every frame, and it would be shaped and
   uploaded again each time. Titles come from `text.rs` (cosmic-text), in the system's sans-serif
-  at `text::FONT_SIZE`, the size of all of pila-launcher's and pila-bar's text
-  (`launcher/src/style.rs`, kept equal by a test): fonts load on a
-  background thread at startup, and until then `render_title` returns `None` and bars draw
+  at `text::FONT_SIZE`: fonts load on a
+  background thread at startup, which makes sans-serif the family `fc-match sans-serif` names
+  (`text::follow_fontconfig`; cosmic-text's own is Open Sans, installed or not), the one the
+  tools and GTK draw in, and until then `render_title` returns `None` and bars draw
   without text; once loaded (and warmed up: common characters shaped and rasterized on that
-  thread, `text::init`) a ping asks for a redraw (`main.rs`). The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
+  thread, `text::init`) a ping asks for a redraw (`main.rs`). With no fonts at all (CI's system,
+  or `PILA_HEADLESS_NO_FONTS=1` for the tests) `text::unavailable` is set and the ping asks for
+  nothing but to hide a shortcuts panel shown meanwhile, which isn't shown then: it's all text.
+  The title texture is at most `MAX_TITLE_WIDTH` (8192 px) wide, however wide
   the window, and `render_with` returns `None` on sizes that overflow.
-- **Rounded corners** (`rounded.rs`, `corner-radius`, default 0): `Pila::scene` gives each
+- **Rounded corners** (`rounded.rs`, `corner-radius`, default 8, and `rounded-corners`, `"top"`
+  by default as GTK rounds its own windows, or `"all"`: `rounded::Corners`, whose `radii` gives
+  each corner's radius, top-left first, to every shader through a vec4): `Pila::scene` gives each
   window a `Rounding` (geometry plus title bar; none when maximized or fullscreen; the global
   radius not for a client that draws its own shadow, `bbox` past its geometry, as for shadows,
   since it draws its own corners: a rule's radius still applies; a blur behind it still gets
-  the configured radius, `SceneWindow::backdrop_rounding`, as the corners it leaves clear would
-  show a square backdrop; radius
+  the configured radius, on all four corners whatever `rounded-corners` says (such an app,
+  libadwaita's, rounds them all), `SceneWindow::backdrop_rounding`, as the corners it leaves
+  clear would show a square backdrop; radius
   at most half the shorter side and, with a bar, its height). `render::single_window_elements`
   then builds the window's elements itself (`rounded_window_elements`: popups first and unclipped, as
   `Window::render_elements` does, and an X11 window's own opacity, `render::own_opacity`, as
@@ -1566,7 +1563,8 @@ Key flows and invariants:
   keep it in step with Smithay). Elements away from the corners stay plain (direct
   scanout). Content outside the geometry (CSD shadows) is not clipped. Opaque regions
   lose the corner squares. The bar background, bell flash and snap preview are
-  `RoundedSolid` (pixel shader over a `SolidColorBuffer`'s element); the close button is
+  `RoundedSolid` (pixel shader over a `SolidColorBuffer`'s element; the bar always its top
+  corners, the flash and the preview the window's); the close button is
   rasterized with its corner cut. `ShapeDamage` (draws nothing, in front of the window)
   damages a window whose shape changed without a commit (e.g. a reload). Shaders are
   compiled once per EGL context; on failure corners stay square.

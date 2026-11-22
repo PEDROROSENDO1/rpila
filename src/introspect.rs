@@ -305,6 +305,8 @@ impl Pila {
             "focus_history": focus_history,
             "switch": switch,
             "switcher_view": self.switcher_view_json(),
+            "shortcuts_view": self.shortcuts_view_json(),
+            "overview": self.overview_json(),
             "workspace": self.workspaces.active + 1,
             "workspaces": self.config.workspaces,
             "outputs": outputs,
@@ -382,6 +384,8 @@ impl Pila {
                 "layer_ghosts": layer_ghosts,
                 "resizing": resizing,
             },
+            // Commits whose shm buffers were uploaded at once (`upload.rs`).
+            "early_uploads": self.early_uploads,
             // A redraw asked for from `after_frames` is queued by an idle
             // callback (`defer_redraws`): pending until it runs.
             "redraw_pending": self.deferred_redraw_idles > 0
@@ -400,6 +404,7 @@ impl Pila {
                 "housekeeping": self.loop_stats.total.1,
             },
             "xwayland": self.xwayland.display(),
+            "xauthority": self.xwayland.authority.as_ref().map(|a| a.path()),
             "xwayland_running": self.xwayland.running(),
             "children": self.children.len(),
         })

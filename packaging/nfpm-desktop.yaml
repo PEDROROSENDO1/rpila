@@ -1,0 +1,62 @@
+# pila-desktop: no files of its own, only Pila and the standard tools its default
+# configuration runs (config.example.toml), so that installing it gives a whole
+# desktop, and installing `pila` alone the compositor alone. Built with the .deb
+# and .rpm of a release (.github/workflows/packages.yml) and installed on clean
+# systems there with what it depends on. The same list is in
+# packaging/aur/pila-desktop, flake.nix and docs/INSTALL.md.
+name: pila-desktop
+version: ${VERSION}
+release: "1"
+arch: all
+section: x11
+priority: optional
+maintainer: Ignacio Galmarino <igalmarino@gmail.com>
+description: |-
+  Pila with a desktop's tools: wallpaper, bar, launcher, notifications, lock
+  The stacking Wayland compositor Pila with the programs its default
+  configuration runs: swaybg (Pila's wallpaper), waybar, fuzzel, mako,
+  swayidle and swaylock, kitty, and what the volume, brightness, media and
+  screenshot keys use.
+homepage: https://github.com/igalmarino/pila
+license: GPL-3.0-or-later
+
+overrides:
+  deb:
+    depends:
+      - pila
+      # The wallpaper (Pila's, drawn by swaybg), terminal, bar, launcher and
+      # notifications.
+      - swaybg
+      - kitty
+      - waybar
+      - fuzzel
+      - mako-notifier
+      # The symbols in the waybar configuration Pila writes.
+      - fonts-font-awesome
+      # Locking and the monitors off after a while.
+      - swayidle
+      - swaylock
+      # The volume, brightness, media and screenshot keys.
+      - wireplumber
+      - brightnessctl
+      - playerctl
+      - grim
+      - slurp
+      - wl-clipboard
+  rpm:
+    depends:
+      - pila
+      - swaybg
+      - kitty
+      - waybar
+      - fuzzel
+      - mako
+      - fontawesome-6-free-fonts
+      - swayidle
+      - swaylock
+      - wireplumber
+      - brightnessctl
+      - playerctl
+      - grim
+      - slurp
+      - wl-clipboard

@@ -1,41 +1,144 @@
 # Changelog
 
-## Unreleased
+## 0.8.3 (2026-11-22)
 
-- **A wallpaper, set in the config:** `[wallpaper] image` (a PNG, JPEG or WebP file) and `fit`
-  (`fill`, `fit`, `stretch` or `center`) put a picture behind everything on every monitor, and a
-  saved change shows at once. Pila draws it itself, from the first frame, as one texture on the
-  GPU (a picture decoded on a thread, shrunk to what the largest monitor needs); without an
-  image, `[colors] background` shows as before. A wallpaper program (swaybg) draws over it.
-- **The screens turn off by themselves:** after 10 minutes without input the monitors turn off,
-  and any key, click or move of the pointer turns them back on (that first key or click does
-  nothing else). `[idle] monitors-off` sets the seconds, or `false` for never; a video playing
-  in a visible window keeps them on, as it keeps the session from idling. swayidle is still the
-  way to lock the screen after a while; a setup that turns the monitors off through it keeps
-  working.
-- **Pila's own tools are defaults, never requirements:** `pila-launcher`, `pila-bar`,
-  `pila-osd` and `pila-shot` are named in the default configuration alone, and
-  the manual's "Building your desktop" says where each is set and what to put in its place; the
-  example configuration shows other tools next to the screenshot and media keys too.
-- **Screenshots with nothing else installed, `pila-shot`:** Mod+Shift+S and Mod+Ctrl+S run
-  `pila-shot`, a new program installed with Pila, instead of grim, slurp and wl-copy. For a
-  region the monitors hold still and dim while you drag it, shown as it is in a square frame
-  (Escape or a right click cancels), and it goes to the clipboard as a PNG image; Mod+Ctrl+S
-  saves the monitor under the pointer to your pictures folder (`XDG_PICTURES_DIR`, else
-  `~/Pictures`). The cursor is left out. From a terminal, `pila-shot output [NAME]` and
-  `pila-shot region` take `--file PATH` (`-` for a pipe) or `--clipboard`. It also picks the
-  monitor to share for screen sharing (`pila-shot pick-output`, in the portal's configuration
-  Pila installs), so slurp isn't needed there either. A copy of that configuration in
-  `~/.config/xdg-desktop-portal-wlr/pila` still runs slurp until you change its `chooser_cmd`;
-  `scripts/tty` changes the copy it made itself. The packages no longer recommend grim, slurp and wl-clipboard, and
-  `pila-report` says whether `wpctl` is installed instead of `wl-copy`.
+- **Gaps:** `gaps` leaves room around maximized windows and the halves and quarters windows are
+  snapped to, and between snapped ones, in logical pixels (0, none, by default). With room
+  around it a maximized window keeps its shadow and rounded corners; fullscreen windows still
+  take the whole monitor.
+- **Windows no longer end up under a bar that comes after them:** a window snapped to a half or
+  a quarter stayed where it was when a bar appeared or grew (an app snapped at login, before
+  waybar was up), its top under the bar; it now moves below it, as maximized windows already
+  did. And a maximized window refit to a bar no longer comes in front of the other windows.
+- **No refresh missed when a fullscreen shm app opens:** a client's buffer drawn with the CPU
+  (foot, swaybg's wallpaper, Xwayland apps without GPU acceleration) is now copied to the GPU in
+  strips, not all at once: on AMD's driver a whole 1920x1080 buffer in one copy took 10 to 22 ms
+  about one time in three, and a fullscreen foot's first buffer made the screen miss a refresh;
+  in strips the worst copy takes under 5 ms. `pila-check` now judges each copy (within 8 ms).
+- **Why a fullscreen app isn't shown as it is** (direct scanout, bare metal) is logged on
+  `pila::frames`: the format and modifier of a buffer the screen refused, and whether its app
+  was told the screen's formats. With Mesa 26.3 on AMD, OpenGL apps keep a buffer layout the
+  screen can't read, so their frames are drawn by Pila (docs/ROADMAP.md).
+
+## 0.8.2 (2026-11-21)
+
+- **Security: X11 apps can no longer be reached from a sandbox:** the X display Pila reserves
+  for Xwayland listened on an abstract socket too, which has no permissions and needs no
+  authorization, so a Flatpak app with network access but no X11 permission (or another user
+  on the machine) could connect to it: replace the clipboard, read it while an X11 app had the
+  focus, and type into X11 apps. It now listens only on its socket file in `/tmp/.X11-unix`.
+- **Security: X11 apps need Xwayland's cookie:** Xwayland now runs with `-auth`, and only
+  clients with its cookie get in: programs Pila starts get it as `XAUTHORITY` (a file in
+  `$XDG_RUNTIME_DIR` only the user can read, made anew for each session), and so does the
+  D-Bus session bus on a TTY. A process that can reach the X socket without it (another user, a
+  sandbox without X11 permission) is refused.
+- **Security: no focus stealing by hovering:** an app could take the keyboard focus (and what
+  was typed next, such as a password in a terminal) whenever the pointer merely rested on one of
+  its windows, by asking for an activation token with the serial of the pointer entering it.
+  Only a click on it counts now, and only until the keyboard focus moves elsewhere.
+- **Blur behind any app's menus:** a window rule's `popup-blur = true` blurs behind its menus
+  and other popups even when the app doesn't ask (GTK's menus don't), in the shape the app gives
+  them (GTK's rounded corners and popover arrows) and not behind the shadow it draws around
+  them; for apps that don't give it, `popup-corner-radius` rounds that blur to the menu's own
+  corners. With `opacity` in the same rule, the window and its menus are both translucent and
+  blurred. `popup-blur = false` refuses popups the blur they ask for.
+- **Smoother with apps that draw in shared memory:** a picture an app draws with the CPU
+  (swaybg's wallpaper, foot, Xwayland apps without GPU acceleration) is now copied to the GPU as
+  the app sends it, not in the middle of the frame that shows it. The wallpaper's first frame
+  took up to 19 ms on a laptop and was shown a refresh late at every start; it now takes under
+  4 ms. A fullscreen foot scrolling on a 2560x1440 monitor costs Pila about half as much per
+  frame. The copies' time is logged apart (`uploads` on `pila::frames`) and reported by
+  `pila-check`, which also runs a fullscreen foot where it's installed.
+- **For packagers: zbus 6.** Pila's D-Bus crate moves up a major version, which takes in the
+  `zvariant` and `zbus_names` crates `cargo audit` reported unmaintained (RUSTSEC-2026-0370 to
+  0372): 14 fewer crates to build. No new system library.
+
+## 0.8.1 (2026-11-20)
+
+- **An overview:** **Mod+W** (the new action `overview`; `overview open` and `overview close`
+  do only one), the top-left corner of the screen (`[overview] hot-corner`) or a 4-finger swipe
+  up (down closes it) spreads the workspace's windows out on their monitors, none over another, shrunk
+  where they don't fit, live, over the dimmed wallpaper, minimized ones included; the bar stays.
+  A strip on top shows every workspace, live; click one to go there, or drag a window onto one
+  to send it there.
+  Click a window to go to it, or select one with the arrows (or the pointer) and press Enter;
+  Escape, Mod+W again or a click beside the windows close it. Going to another workspace shows
+  that one's windows in it; any other binding closes it first. The cheatsheet lists it. The
+  windows glide to their places and back (`[animations] overview`, 250 ms).
+- **Fixed:** on bare metal, a game that tore (vsync off, fullscreen) and then left fullscreen
+  made the frame statistics count as many missed refreshes as it had torn frames' vblanks
+  (`scripts/check` and `pila::frames`): the frame after the last torn one was judged against
+  the vblank before tearing started.
+
+## 0.8.0 (2026-11-20)
+
+- **Rounded corners as GTK's:** windows Pila decorates now have their top corners rounded by
+  8 logical pixels, as GTK apps round their own windows, so a terminal next to a GTK app looks
+  the same; the bottom corners stay square. The new `rounded-corners = "all"` rounds all four
+  (as before, with `corner-radius`), and `corner-radius = 0` keeps them square. A configuration
+  written by an earlier Pila has `corner-radius = 0` of its own: delete the line to take the new
+  default. A blur behind an app that rounds its own corners (libadwaita's, on all four) is
+  rounded on all four too.
+- **A wallpaper of Pila's:** the default `autostart` runs `swaybg`, and Pila gives it its own
+  wallpaper: `[colors] background`, plain, with a small mark in the bottom-right corner (three
+  outlined rectangles piled like windows, in greys just above the background, the accent along
+  the front one's top edge), drawn in your `[colors]` (again when they change, for swaybg's next
+  start) and shown whole on any monitor's shape. For a picture of your own,
+  put `swaybg -i FILE -m fill` in its place. A configuration written by an earlier Pila has an
+  `autostart` of its own: add `"swaybg"` to it. `pila-desktop` now brings swaybg.
+- **A welcome screen and a cheatsheet:** the first time Pila starts, when it writes your
+  configuration file, it welcomes you with the few keys to get going (a terminal, the launcher,
+  switching and closing windows, quitting), as keycaps, as they're bound (your Mod key, your own
+  keys; an action you unbound isn't listed). Any key or click hides it, and a binding still runs
+  (Mod+Return hides it and opens a terminal). **Mod+?** (`Mod+Shift+slash`, the new action
+  `show-shortcuts`) shows all the shortcuts at any time, in sections: windows, workspaces, the
+  mouse and Pila. Both panels have the windows' corners.
+- **`pila-desktop`, or the compositor alone:** a new metapackage (APT, DNF, the AUR and the
+  flake) brings Pila with every tool its default configuration runs: kitty, waybar, fuzzel,
+  mako, swayidle and swaylock, Font Awesome, and the volume, brightness, media and screenshot
+  keys' programs. `pila` itself no longer recommends them, only what apps want in any session
+  (Xwayland, the portals, xdg-utils), so installing `pila` gives the compositor alone; on
+  Debian and Fedora, install `pila-desktop` to keep the tools an earlier `pila` brought in
+  (`apt autoremove` or `dnf autoremove` would otherwise take them away). The default
+  `autostart`'s own commands (waybar, mako, swayidle) are skipped, with a line in the log,
+  where they aren't installed, rather than reported in a notification; a command of your own
+  that isn't installed is still reported.
+- **The screen locks and the monitors turn off by themselves:** the default `autostart` runs
+  swayidle, which locks the screen with swaylock after 5 minutes without input and before the
+  computer sleeps, and turns the monitors off after 10 (`pila msg action power-off-monitors`:
+  any key, click or move of the pointer turns them back on, and that first key or click does
+  nothing else). A video playing in a visible window keeps the session from idling. A
+  configuration with its own `autostart` adds the swayidle line from the example or the manual;
+  a shell with its own idle settings needs none. `pila-desktop` brings swayidle and swaylock.
+- **Standard tools in place of Pila's own:** `pila-launcher` and `pila-bar` are gone, so that
+  Pila is the compositor alone; the default `launcher` is now fuzzel and the default `autostart`
+  waybar, both packaged by every major distribution (`pila-desktop` brings them, and the
+  manual's waybar configuration shows Pila's workspaces). A configuration that still names
+  `pila-launcher` or `pila-bar` gets the notification that it isn't installed: put fuzzel and
+  waybar, or any launcher and bar, in their place. `scripts/install` and `scripts/uninstall`
+  remove the binaries an older install left. The screenshot keys keep running grim, slurp and
+  wl-copy, and screen sharing keeps picking the monitor with slurp.
+- **One look for the tools:** the default configuration's tools (waybar, mako, fuzzel, and
+  swaylock from the swayidle line) start with a configuration of Pila's where you have none of
+  your own, so a session looks like one desktop: your `[colors]` (a change reaches each tool at
+  its next start), the title bars' font at their size, and the windows' 8 px corners on what
+  floats (notifications, fuzzel, waybar's tooltips; the bar stays square). waybar shows the
+  apps' own icons in its window list, and symbols for the volume, battery and clock where Font
+  Awesome is installed (`pila-desktop` brings it), words where it
+  isn't. Pila writes nothing in `~/.config`: the files are in `$XDG_RUNTIME_DIR/pila-tools`
+  and the default commands name them as they start (`waybar -c ...`), so the same tools in
+  another session keep their looks; copy one to `~/.config` to change it. fuzzel is sized by the
+  monitor's scale, as Pila is, so it's the same size on a laptop's panel and a monitor beside it.
+  `tool-configs = false` turns it off. mako, the notification daemon, joins waybar in the
+  default `autostart`.
+- **Title bars in the system's font:** title bars and the window switcher draw in fontconfig's
+  sans-serif (`fc-match sans-serif`), as GTK apps and the tools do; before, they asked for Open
+  Sans, and got whichever font came first where it isn't installed.
 - **Fewer programs to install:** Pila sends its notifications over D-Bus itself, so `notify-send`
-  (libnotify) is no longer needed, only a notification daemon such as mako; and the brightness
-  and media keys need nothing but `pila-osd` (below), so brightnessctl and playerctl are no
-  longer recommended by the packages. A daemon started after Pila still gets the next
-  notification. `pila-report` names the GPU from `/sys` and the system's `pci.ids`, without
-  `lspci`, so the packages no longer suggest pciutils. On a TTY, Pila gives the session bus
-  and `systemd --user` its environment over D-Bus too, without
+  (libnotify) is no longer needed, only a notification daemon such as mako; a daemon started
+  after Pila still gets the next notification. `pila-report` names the GPU from `/sys` and the
+  system's `pci.ids`, without `lspci`, so the packages no longer suggest pciutils. On a TTY,
+  Pila gives the session bus and `systemd --user` its environment over D-Bus too, without
   `dbus-update-activation-environment` (which some distros package apart, such as Fedora's
   dbus-tools), and again when a reload changes `[cursor]`'s theme or size.
 - **A key whose program isn't installed says so:** when a command Pila runs (a binding, the
@@ -43,45 +146,24 @@
   notification names it ("wpctl isn't installed") and the command, once a session per
   program, where before only the log said so and the key did nothing.
 - **The volume, brightness and media keys work out of the box:** default bindings for the volume
-  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (never quite
-  off) and play, pause, next, previous and stop, the volume and brightness ones repeating while
-  held. The brightness and media keys need no other program: `pila-osd brightness +5%` sets the
-  backlight (in `/sys/class/backlight`, else through logind or elogind, with no permissions of
-  your own) and `pila-osd play-pause|next|previous|stop` tells the player that's playing over
-  MPRIS and shows what it did with the track's title and artist. Each change shows for a moment at the bottom of the monitor:
-  `pila-osd`, a new program installed with Pila, with an icon, a level bar and the percentage
-  (dimmed while muted). They come with a configuration Pila wrote before too (defaults are added
-  to the file's bindings, unless `default-bindings = false`); your own bindings of those keys
-  still win. Without wpctl the volume keys do nothing, as before; the packages recommend it.
+  keys and mute (wpctl, PipeWire), the microphone's mute key, the brightness keys (brightnessctl,
+  never quite off) and play, pause, next, previous and stop (playerctl), the volume and
+  brightness ones repeating while held. They come with a configuration Pila wrote before too
+  (defaults are added to the file's bindings, unless `default-bindings = false`); your own
+  bindings of those keys still win. Without the program a key does nothing; `pila-desktop`
+  brings all three.
 - **A window switcher you can see:** held a moment, Mod+Tab or Alt+Tab shows the windows it
   goes through in the middle of the monitor, most recently used first: a live preview of each (a
   video keeps playing in it, minimized windows and those on another monitor too), with its
   title, the one it's on highlighted; a click on one switches to it. A quick Mod+Tab, there and
-  back, shows nothing. Pila draws it itself: nothing to start or install, and the previews are
-  the windows' own pictures, with no capture.
+  back, shows nothing. Pila draws it itself, with the windows' corners: nothing to start or
+  install, and the previews are the windows' own pictures, with no capture.
 - **The window switch over IPC:** `pila msg switch` and the `switch` event (`pila msg subscribe
   switch`) tell the windows of a Mod+Tab or Alt+Tab in progress, most recently used first, and
   the one it's on, at each step, and null when it ends: for a program that shows it.
-- **A tray in `pila-bar`:** the icons apps put in the tray (StatusNotifierItem: fcitx5, network
-  and Bluetooth applets, Steam, Discord, ...), with their clicks, wheel and menus, the menus
-  opening below the bar. The bar is the session's StatusNotifierWatcher when nothing else is.
-  `--no-tray` leaves it out; `--clock ''` no longer leaves room for the clock.
-- **`pila-bar` and `pila-launcher` follow `[colors]`:** they take the colors of Pila's title bars
-  from the configuration, and change as soon as it's saved (they had the defaults whatever the
-  configuration said). `pila msg colors` lists them, and `pila msg subscribe colors` follows them
-  (a new request and event in the IPC).
-- **A battery in `pila-bar`:** on a laptop the bar shows how full its batteries are, an icon
-  of the level by tens (a bolt inside while charging) and the percentage, amber at 15% or less
-  while running down (a mouse's battery isn't counted); `--no-battery` leaves it out. The clock
-  has a clock icon before it. The icons of `pila-bar` and `pila-osd` are built in (Material
-  Design Icons, Apache License 2.0): no icon font to install.
-- **The clock is the time alone, the date in its tooltip:** `pila-bar`'s clock shows `%H:%M` by
-  default, and the date (`%A %e %B %Y`, in your language) shows below it while the pointer rests
-  on it; `--date FORMAT` sets it (`''` for none), and `--clock '%a %e %b  %H:%M'` puts the date
-  back in the bar.
-- **`pila-bar --height` and `--output`:** the bar can be 16 to 96 pixels high (28 by default),
-  its text growing with it, and shown only on the monitors `--output NAME` names (once per
-  monitor), including when one is plugged in later.
+- **`pila msg colors`:** lists `[colors]`, and `pila msg subscribe colors` follows them as the
+  configuration is saved (a new request and event in the IPC), for programs that want to look
+  like Pila's title bars.
 - **Fix: a nested Pila quits when its host goes.** When the session it ran in as a window ended
   or crashed, it ran on with no window, printing `Io error: Broken pipe` nonstop; it now quits
   with "lost the host compositor".
@@ -166,7 +248,7 @@
   the last few seconds of frames took, CPU and GPU, and is never under half a refresh; a frame
   that comes late anyway makes Pila draw at once on that monitor for two seconds. Not during
   Pila's animations, nor for a moment after a window or panel opens or a window changes size (its
-  app is busy on the GPU then), nor while a game tears or with adaptive sync. On the author's
+  app is busy on the GPU then), nor while a game tears or with adaptive sync. On an AMD
   laptop with an external monitor, from a redraw asked for to the refresh that showed it: 25.8 to
   21.3 ms on the laptop's screen, 28.5 to 21.7 ms on the monitor, no refresh missed.
   `render-late = false` turns it off.
@@ -731,7 +813,7 @@ All of this was tried on one AMD laptop with an external monitor; other GPUs are
 - **Windows:** dialogs and other transient windows stay above their parent and follow
   it to other workspaces.
 - **Monitors:** make, model and serial come from the monitor's EDID, for clients and for
-  `[[output]]` sections that name a monitor (`name = "LEN P27h-30"`) instead of a
+  `[[output]]` sections that name a monitor (`name = "GSM 27GL850"`) instead of a
   connector. A monitor plugged in while on another VT comes on when you're back.
 - **Security:** sandboxed apps (Flatpak) no longer see ext-workspace,
   keyboard-shortcuts-inhibit or ext-idle-notify: they can't switch workspaces, take

@@ -39,6 +39,11 @@
 //! its own line, `captures`, with the same fields (`passes` for frames), so
 //! the outputs' own budget stays readable.
 //!
+//! Clients' shm buffers are copied to the GPU at their commits rather than
+//! in the frame that shows them (`upload.rs`): CPU time outside the frames,
+//! logged on its own line, `uploads`, with how many commits and their CPU
+//! time, average and worst.
+//!
 //! The event loop's own bookkeeping after each iteration (`Pila::after_frames`:
 //! taskbars, IPC events, the `Space`'s refresh, animations; captures left out)
 //! runs as often as events come (input, clients), not once per frame: a
@@ -611,6 +616,17 @@ fn log_capture_report(report: &Report) {
     );
 }
 
+fn log_upload_report(report: &Report) {
+    debug!(
+        target: "pila::frames",
+        secs = (report.secs * 10.0).round() / 10.0,
+        uploads = report.frames,
+        cpu_avg_ms = ms(report.cpu_avg),
+        cpu_max_ms = ms(report.cpu_max),
+        "uploads"
+    );
+}
+
 fn log_loop_report(report: &LoopReport) {
     debug!(
         target: "pila::frames",
@@ -676,6 +692,14 @@ impl Pila {
         }
     }
 
+    /// A client's buffers, uploaded at its commit (`upload.rs`), took `cpu`.
+    pub fn record_upload(&mut self, cpu: Duration) {
+        let now = self.animation_time();
+        if let Some(report) = self.upload_stats.record(now, cpu) {
+            log_upload_report(&report);
+        }
+    }
+
     /// An event-loop iteration's `after_frames` took `cpu` (captures left
     /// out), `housekeeping` whether it did all of it (see the module docs).
     pub fn record_loop(&mut self, housekeeping: bool, cpu: Duration) {
@@ -696,6 +720,9 @@ impl Pila {
         }
         if let Some(report) = self.capture_stats.take(now) {
             log_capture_report(&report);
+        }
+        if let Some(report) = self.upload_stats.take(now) {
+            log_upload_report(&report);
         }
         if let Some(report) = self.loop_stats.take(now) {
             log_loop_report(&report);

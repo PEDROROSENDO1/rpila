@@ -13,7 +13,7 @@
 use std::{collections::HashMap, sync::mpsc, time::Duration};
 
 use tracing::warn;
-use zbus::{blocking::Connection, zvariant::Value};
+use zbus::{Connection, Variant};
 
 /// How long the daemon has to answer: a hung one only holds up the thread.
 const TIMEOUT: Duration = Duration::from_secs(5);
@@ -100,16 +100,18 @@ fn run(receiver: mpsc::Receiver<Notification>) {
 }
 
 fn connect(address: &str) -> zbus::Result<Connection> {
-    zbus::blocking::connection::Builder::address(address)?
-        .method_timeout(TIMEOUT)
-        .build()
+    zbus::block_on(
+        zbus::connection::Builder::address(address)
+            .method_timeout(TIMEOUT)
+            .build(),
+    )
 }
 
 /// `Notify`, as notify-send calls it: app name `pila`, no icon or actions.
 fn notify(bus: &Connection, notification: &Notification) -> Result<(), String> {
-    let hints: HashMap<&str, Value<'_>> = HashMap::new();
+    let hints: HashMap<&str, Variant<'_>> = HashMap::new();
     let timeout = i32::try_from(notification.milliseconds).unwrap_or(i32::MAX);
-    bus.call_method(
+    zbus::block_on(bus.call_method(
         Some("org.freedesktop.Notifications"),
         "/org/freedesktop/Notifications",
         Some("org.freedesktop.Notifications"),
@@ -124,7 +126,7 @@ fn notify(bus: &Connection, notification: &Notification) -> Result<(), String> {
             hints,
             timeout,
         ),
-    )
+    ))
     .map(drop)
     .map_err(|err| err.to_string())
 }

@@ -80,9 +80,37 @@ fn hovering_the_close_button_highlights_it() {
     );
 }
 
+/// The defaults: GTK's own windows' corners, 8 px at the top, square at the
+/// bottom; the bar's top corners are the window's.
+#[test]
+fn by_default_only_the_top_corners_are_rounded_as_gtks() {
+    let example = pila::config::Config::from_toml("", &|_| None).unwrap();
+    assert_eq!(example.corner_radius, 8);
+    // The harness squares corners unless the test sets a radius: the
+    // example's, so `rounded-corners` is the example's too.
+    let mut pila = TestPila::with_config("corner-radius = 8\n");
+    let client = pila.client();
+    client.window("a").size(400, 300).color(RED).create();
+    pila.wait_focus("a");
+    let (x, y, w, h) = rect(&pila.window("a")["geometry"]);
+    pila.settle();
+    assert_eq!(pila.pixel((x + 1) as f64, (y - BAR + 1) as f64), BACKGROUND);
+    assert_eq!(
+        pila.pixel((x + w - 2) as f64, (y - BAR + 1) as f64),
+        BACKGROUND
+    );
+    for (cx, cy) in [(x + 1, y + h - 2), (x + w - 2, y + h - 2)] {
+        assert_eq!(
+            pila.pixel(cx as f64, cy as f64),
+            [255, 0, 0, 255],
+            "bottom corner at {cx},{cy}"
+        );
+    }
+}
+
 #[test]
 fn rounded_corners_include_the_bar_and_go_square_when_maximized() {
-    let mut pila = TestPila::with_config("corner-radius = 12\n");
+    let mut pila = TestPila::with_config("corner-radius = 12\nrounded-corners = \"all\"\n");
     let client = pila.client();
     client.window("a").size(400, 300).color(RED).create();
     pila.wait_focus("a");
@@ -558,7 +586,10 @@ fn a_resized_windows_backdrop_keeps_its_rounded_corners() {
     // The window's left edge is just left of the red/green edge: its left
     // corners are cut over red, and stay where they are as it grows.
     let radius = "corner-radius = 20\nblur = true";
-    let mut pila = TestPila::with_config(&glass_window_rule(638, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(638, 300, radius)
+    ));
     let client = pila.client();
     let window = halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 639.0, 400.0);
@@ -994,7 +1025,10 @@ fn a_windows_backdrop_has_its_rounded_corners() {
     // The edge between the halves runs through the corners: of its left side,
     // over red, with the window almost all right of the edge...
     let radius = "corner-radius = 20\nblur = true";
-    let mut pila = TestPila::with_config(&glass_window_rule(638, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(638, 300, radius)
+    ));
     let client = pila.client();
     halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 639.0, 400.0);
@@ -1004,7 +1038,10 @@ fn a_windows_backdrop_has_its_rounded_corners() {
     assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
     drop(pila);
     // ... and of its right side, with the window just right of it, over green.
-    let mut pila = TestPila::with_config(&glass_window_rule(442, 300, radius));
+    let mut pila = TestPila::with_config(&format!(
+        "rounded-corners = \"all\"\n{}",
+        glass_window_rule(442, 300, radius)
+    ));
     let client = pila.client();
     halves_and_a_glass_window(&mut pila, &client);
     wait_mixed(&mut pila, 641.0, 400.0);
@@ -1292,7 +1329,7 @@ fn corner_radius_leaves_an_app_that_draws_its_own_shadow_to_it() {
 #[test]
 fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
     let config = format!(
-        "corner-radius = 20\n{}",
+        "corner-radius = 20\nrounded-corners = \"all\"\n{}",
         glass_window_rule(638, 300, "blur = true")
     );
     let mut pila = TestPila::with_config(&config);
@@ -1312,6 +1349,33 @@ fn the_backdrop_of_an_app_that_draws_its_own_shadow_has_rounded_corners() {
     assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
     assert_eq!(pila.pixel(639.0, (y + h - 2) as f64), CLEAR, "bottom left");
     assert!(mixed(pila.pixel(639.0, 330.0)), "below the corner");
+}
+
+/// With the windows' top corners only (the default), the backdrop of an app
+/// that draws its own corners still has all four rounded: such an app
+/// (libadwaita's) rounds its bottom corners too, and a square backdrop would
+/// show there.
+#[test]
+fn the_backdrop_of_an_app_that_draws_its_own_corners_is_rounded_at_the_bottom_too() {
+    let config = format!(
+        "corner-radius = 20\n{}",
+        glass_window_rule(638, 300, "blur = true")
+    );
+    let mut pila = TestPila::with_config(&config);
+    let client = pila.client();
+    two_halves(&client);
+    client
+        .window("glass")
+        .color([0, 0, 0, 0])
+        .decorations(Decorations::Client)
+        .csd_shadow(20)
+        .create();
+    pila.wait_focus("glass");
+    let (_, y, _, h) = rect(&pila.window("glass")["geometry"]);
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(639.0, 301.0), CLEAR, "top left");
+    assert_eq!(pila.pixel(639.0, (y + h - 2) as f64), CLEAR, "bottom left");
 }
 
 /// A clear popup of `parent` at 10,10 of it, of `size`: over the red/green
@@ -1415,6 +1479,116 @@ fn a_candidate_window_can_ask_for_blur_behind_it() {
     wait_mixed(&mut pila, 636.0, 400.0);
 }
 
+/// `popup-blur = true` blurs behind a window's popups that don't ask (GTK's
+/// menus), over their geometry: not behind the shadow the app draws around it.
+#[test]
+fn a_popup_blur_rule_blurs_behind_a_windows_popups() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = true"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    // Its geometry from 550,310 to 750,490, in a 20 px shadow.
+    let popup = clear_popup(&client, Ok(window), (240, 220));
+    client.set_popup_geometry(popup, (20, 20, 200, 180));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(636.0, 302.0), CLEAR, "in its shadow");
+    // Its window, outside it: still clear.
+    assert_eq!(pila.pixel(560.0, 305.0), CLEAR);
+}
+
+/// A popup's corners are the app's own (a GTK 4 menu's are rounded): a square
+/// backdrop would show in them, so `popup-corner-radius` rounds it.
+#[test]
+fn popup_corner_radius_rounds_the_blur_behind_popups() {
+    for (rest, rounded) in [
+        ("popup-blur = true", false),
+        ("popup-blur = true\npopup-corner-radius = 20", true),
+    ] {
+        let mut pila = TestPila::with_config(&glass_window_rule(628, 300, rest));
+        let client = pila.client();
+        let window = halves_and_a_glass_window(&mut pila, &client);
+        // From 638,310, over the red/green edge.
+        clear_popup(&client, Ok(window), (200, 180));
+        wait_mixed(&mut pila, 639.0, 400.0);
+        pila.settle();
+        let corner = pila.pixel(639.0, 311.0);
+        if rounded {
+            assert_eq!(corner, CLEAR, "rounded off");
+        } else {
+            assert!(mixed(corner), "square: {corner:?}");
+        }
+    }
+}
+
+/// GTK gives a popover's shape (its arrow, its rounded corners) as its input
+/// region: `popup-blur = true` blurs behind that, not all of its geometry.
+#[test]
+fn a_popup_blur_rule_follows_the_shape_a_popup_takes_input_in() {
+    let mut pila = TestPila::with_config(&glass_window_rule(628, 300, "popup-blur = true"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    // From 638,310, over the red/green edge: an arrow on top, then its body.
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    let compositor: WlCompositor = client.lock().compositor.clone().unwrap();
+    let region = compositor.create_region(&client.qh, "region".into());
+    region.add(90, 0, 20, 20);
+    region.add(0, 20, 200, 160);
+    let surface = client.wl_surface_of(popup);
+    surface.set_input_region(Some(&region));
+    surface.commit();
+    client.flush();
+    wait_mixed(&mut pila, 639.0, 400.0);
+    pila.settle();
+    assert_eq!(pila.pixel(639.0, 311.0), CLEAR, "beside its arrow");
+}
+
+/// An input method's candidate window is a popup of the window it types into:
+/// `popup-blur = true` blurs behind all of it.
+#[test]
+fn a_popup_blur_rule_blurs_behind_a_candidate_window() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = true"));
+    let app = pila.client();
+    halves_and_a_glass_window(&mut pila, &app);
+    let ime = pila.client();
+    let input_method = ime.input_method();
+    let text_input = app.text_input();
+    app.wait_logged("text_input", "Enter");
+    // Below the text cursor: from 630,370, over the red/green edge.
+    app.enable_text_input(&text_input, (90, 50, 2, 20));
+    ime.wait_logged("input_method", "Activate");
+    ime.ime_popup(&input_method, [0, 0, 0, 0], (200, 50));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    // Its window, outside it: still clear.
+    assert_eq!(pila.pixel(560.0, 305.0), CLEAR);
+}
+
+#[test]
+fn a_popup_blur_rule_can_refuse_what_popups_ask() {
+    let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "popup-blur = false"));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    let popup = clear_popup(&client, Ok(window), (200, 180));
+    set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
+    assert_eq!(pila.pixel(636.0, 400.0), CLEAR);
+    assert_eq!(pila.state()["blur"]["entries"], 0);
+}
+
+/// `popup-blur` is the popups' alone: with it, `blur = false` refuses the
+/// window its blur but not them theirs.
+#[test]
+fn a_popup_blur_rule_beats_a_windows_blur_false() {
+    let mut pila = TestPila::with_config(&glass_window_rule(
+        540,
+        300,
+        "blur = false\npopup-blur = true",
+    ));
+    let client = pila.client();
+    let window = halves_and_a_glass_window(&mut pila, &client);
+    clear_popup(&client, Ok(window), (200, 180));
+    wait_mixed(&mut pila, 636.0, 400.0);
+    assert_eq!(pila.state()["blur"]["entries"], 1, "the popup's alone");
+}
+
 #[test]
 fn a_rule_refusing_a_window_its_blur_refuses_its_popups_theirs() {
     let mut pila = TestPila::with_config(&glass_window_rule(540, 300, "blur = false"));
@@ -1424,118 +1598,4 @@ fn a_rule_refusing_a_window_its_blur_refuses_its_popups_theirs() {
     set_blur_region(&mut pila, &client, popup, &[(0, 0, 200, 180)]);
     assert_eq!(pila.pixel(636.0, 400.0), CLEAR);
     assert_eq!(pila.state()["blur"]["entries"], 0);
-}
-
-// --- [wallpaper] -------------------------------------------------------------
-
-/// A picture of one color, `width` x `height`, in a directory of the test's.
-fn picture(name: &str, file: &str, (width, height): (u32, u32), rgb: [u8; 3]) -> String {
-    let dir = std::env::temp_dir().join(format!("pila-wallpaper-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join(file);
-    image::RgbImage::from_pixel(width, height, image::Rgb(rgb))
-        .save(&path)
-        .unwrap();
-    path.display().to_string()
-}
-
-fn wallpaper_config(image: &str, fit: &str) -> String {
-    format!("[wallpaper]\nimage = \"{image}\"\nfit = \"{fit}\"\n")
-}
-
-#[test]
-fn the_wallpaper_covers_every_output_and_follows_the_saved_config() {
-    let red = picture("follows", "red.png", (64, 48), [200, 20, 20]);
-    let blue = picture("follows", "blue.jpg", (64, 48), [20, 20, 200]);
-    let mut pila = TestPila::start_with(Options {
-        outputs: Some("A:1280x800,B:1024x768".into()),
-        config: wallpaper_config(&red, "fill"),
-        ..Default::default()
-    });
-    for (x, y) in [(5.0, 5.0), (640.0, 400.0), (1280.0 + 512.0, 384.0)] {
-        pila.wait_pixel_is(x, y, "the red wallpaper", |px| {
-            near(px, [200, 20, 20, 255], 3)
-        });
-    }
-    // A JPEG saved in its place: there at once, on both.
-    pila.write_config(&wallpaper_config(&blue, "fill"));
-    for (x, y) in [(640.0, 400.0), (1280.0 + 512.0, 384.0)] {
-        pila.wait_pixel_is(x, y, "the blue wallpaper", |px| {
-            near(px, [20, 20, 200, 255], 6)
-        });
-    }
-    // None: the background color again.
-    pila.write_config("");
-    pila.wait_pixel_is(640.0, 400.0, "the background", |px| near(px, BACKGROUND, 2));
-}
-
-#[test]
-fn fit_shows_the_whole_picture_on_the_background() {
-    let square = picture("fit", "square.png", (100, 100), [200, 20, 20]);
-    let mut pila = TestPila::with_config(&wallpaper_config(&square, "fit"));
-    // 1280 x 800: an 800 x 800 square in the middle.
-    pila.wait_pixel_is(640.0, 400.0, "the picture", |px| {
-        near(px, [200, 20, 20, 255], 3)
-    });
-    let px = pila.pixel(100.0, 400.0);
-    assert!(near(px, BACKGROUND, 2), "left of it: {px:?}");
-    let px = pila.pixel(1180.0, 400.0);
-    assert!(near(px, BACKGROUND, 2), "right of it: {px:?}");
-}
-
-#[test]
-fn a_background_layer_surface_draws_over_the_wallpaper() {
-    let red = picture("over", "red.png", (64, 48), [200, 20, 20]);
-    let mut pila = TestPila::with_config(&wallpaper_config(&red, "fill"));
-    pila.wait_pixel_is(640.0, 400.0, "the wallpaper", |px| {
-        near(px, [200, 20, 20, 255], 3)
-    });
-    let client = pila.client();
-    let (wallpaper, _) = client.layer_surface(
-        "wallpaper",
-        &LayerSpec {
-            layer: Layer::Background,
-            anchor: Anchor::Left | Anchor::Top,
-            size: (200, 200),
-            ..LayerSpec::default()
-        },
-        BLUE,
-    );
-    client.wait_surface_configured(wallpaper);
-    pila.wait_pixel_is(100.0, 100.0, "the layer surface", |px| {
-        near(px, [0, 0, 255, 255], 2)
-    });
-    let px = pila.pixel(640.0, 400.0);
-    assert!(
-        near(px, [200, 20, 20, 255], 3),
-        "beside it, the wallpaper: {px:?}"
-    );
-}
-
-#[test]
-fn a_blur_shows_the_wallpaper_behind_it() {
-    let red = picture("blur", "red.png", (64, 48), [200, 20, 20]);
-    let mut pila =
-        TestPila::with_config(&format!("{}{GLASS_RULE}", wallpaper_config(&red, "fill")));
-    let client = pila.client();
-    let (glass, _) = client.layer_surface(
-        "glass",
-        &LayerSpec {
-            layer: Layer::Top,
-            size: (200, 200),
-            ..LayerSpec::default()
-        },
-        [0, 0, 0, 0],
-    );
-    client.wait_surface_configured(glass);
-    wait_near(&mut pila, 640.0, 400.0, [200, 20, 20, 255]);
-}
-
-#[test]
-fn a_wallpaper_that_cant_be_read_says_so_and_shows_the_background() {
-    let mut pila = TestPila::with_config(&wallpaper_config("/nonexistent/picture.png", "fill"));
-    pila.wait_log("no wallpaper");
-    let px = pila.pixel(640.0, 400.0);
-    assert!(near(px, BACKGROUND, 2), "{px:?}");
-    assert!(pila.alive());
 }

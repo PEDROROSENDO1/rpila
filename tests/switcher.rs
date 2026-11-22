@@ -458,3 +458,31 @@ fn a_preview_of_a_window_on_another_output_is_live_too() {
     pila.wait_pixel_is(x, y, "a's new picture", |px| near(px, [30, 30, 200, 255]));
     pila.key_release("Super");
 }
+
+/// The switcher's panel has the windows' corners: by default the top two
+/// rounded, as GTK's; square with no radius. Its border (`[colors] hover`)
+/// shows at a corner that's square and not at one that's rounded.
+#[test]
+fn the_switcher_has_the_windows_corners() {
+    const BORDER: [u8; 4] = [0x3f, 0x42, 0x49, 255];
+    for (config, top_cut) in [("corner-radius = 8\n", true), ("", false)] {
+        let mut pila = TestPila::with_config(config);
+        let client = pila.client();
+        for (name, color) in [("a", RED), ("b", GREEN)] {
+            client.window(name).size(200, 150).color(color).create();
+            pila.wait_focus(name);
+        }
+        pila.settle();
+        pila.key_press("Super");
+        pila.key("Tab");
+        let state = pila.wait("the switcher", |s| s["switcher_view"]["shown"] == true);
+        let r = &state["switcher_view"]["rect"];
+        let f = |k: &str| r[k].as_f64().unwrap();
+        let (x, y, h) = (f("x"), f("y"), f("h"));
+        // The bottom corner stays square: its border is there.
+        pila.wait_pixel(x - 1.0, y + h, BORDER);
+        let top = pila.pixel(x - 1.0, y - 1.0);
+        assert_eq!(top != BORDER, top_cut, "{config:?}: top corner {top:?}");
+        pila.key_release("Super");
+    }
+}

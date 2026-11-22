@@ -516,8 +516,8 @@ fn scripts_check_and_tty_say_when_the_given_binary_is_missing() {
 
 /// scripts/tty gives xdg-desktop-portal-wlr Pila's settings in ~/.config,
 /// where it reads them: a missing copy is made, a copy of an older one
-/// (slurp picking the screen) moves to pila-shot, and one of the user's own
-/// is left alone.
+/// (pila-shot picking the screen, gone from Pila) goes back to slurp, and one
+/// of the user's own is left alone.
 #[test]
 fn scripts_tty_keeps_the_screen_sharing_settings_current() {
     use std::os::unix::fs::PermissionsExt;
@@ -550,11 +550,11 @@ fn scripts_tty_keeps_the_screen_sharing_settings_current() {
     let ours = std::fs::read_to_string(dir.join(shipped)).unwrap();
     assert_eq!(tty(), ours);
     // An older copy.
-    let older = "[screencast]\nchooser_type=simple\nchooser_cmd=slurp -f 'Monitor: %o' -or\n";
+    let older = "[screencast]\nchooser_type=simple\nchooser_cmd=pila-shot pick-output\n";
     std::fs::write(&settings, older).unwrap();
     assert_eq!(
         tty(),
-        "[screencast]\nchooser_type=simple\nchooser_cmd=pila-shot pick-output\n"
+        "[screencast]\nchooser_type=simple\nchooser_cmd=slurp -f 'Monitor: %o' -or\n"
     );
     // The user's own.
     let own = "[screencast]\nchooser_type=dmenu\nchooser_cmd=fuzzel -d\n";
@@ -654,8 +654,8 @@ fn scripts_check_gives_a_verdict_on_a_log_that_stops_early() {
 /// scripts/check installed as `pila-check` with its helpers, laid out under
 /// `root` as scripts/install (and the packages made from it) lays them out with
 /// `PREFIX=/usr`, next to a fake `pila` that writes its arguments to `ran` and
-/// a scenario's last line to its log. The built binaries are left out: CI runs
-/// the tests before it builds pila-launcher and pila-bar. Returns `root`.
+/// a scenario's last line to its log. The built binary is left out: CI runs
+/// the tests before the release build. Returns `root`.
 fn installed_check(name: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
     let root = std::env::temp_dir().join(format!("pila-installed-{}-{name}", std::process::id()));

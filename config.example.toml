@@ -24,41 +24,72 @@
 # of foot, alacritty, ghostty, wezterm, konsole, gnome-terminal and xterm.
 # terminal = "foot"                # e.g.
 
-# Mod+D and tapping Mod alone; "" for none (they then do nothing).
-# pila-launcher, installed with Pila, lists the installed apps, searched as you
-# type; apps that run in a terminal start in kitty (--terminal COMMAND for
-# another; the others as for `terminal` where kitty isn't installed). Any other
-# launcher works too, such as fuzzel.
-# launcher = "fuzzel"              # e.g.
-launcher = "pila-launcher"
+# Mod+D and tapping Mod alone; "" for none (they then do nothing). fuzzel
+# lists the installed apps, searched as you type; any other launcher works too.
+# launcher = "wofi --show drun"    # e.g.
+launcher = "fuzzel"
 
 # Commands run at startup (`pila -c` replaces them); [] for none. X11 apps
 # among them start Xwayland as they connect. No terminal starts unless it's
-# listed (Mod+Return opens one). pila-bar, installed with Pila, is a bar on
-# every monitor with the workspaces (a click or the wheel switches), the tray,
-# the battery and a clock (--bottom for the bottom edge, --clock FORMAT as
-# strftime writes it). Any other bar works too, such as waybar. Only one
-# `autostart` line can be active: to use the longer example, put it in place
-# of the active one.
+# listed (Mod+Return opens one). waybar is a bar on every monitor and mako
+# shows notifications. swayidle locks the screen (swaylock) after 5 minutes
+# without input and before the computer sleeps, and turns the monitors off
+# after 10: any input turns them back on, and that first key or click does
+# nothing else; not while a shown window asks to stay awake (a video playing).
+# Without the lock: "swayidle -w timeout 600 'pila msg action power-off-monitors'".
+# swaybg draws Pila's wallpaper, in [colors]; for a picture of your own, give
+# it one ("swaybg -i ~/Pictures/wallpaper.jpg -m fill"). Without a wallpaper
+# program, [colors] background shows. These four, as written here, are skipped
+# where they aren't installed (package pila-desktop brings them); a command of
+# your own that isn't says so in a notification. Any others work too. Only one
+# `autostart` can be active: to use the longer example, put it in place of the
+# active one.
 # autostart = [                    # e.g.
-#     "swaybg -i ~/Pictures/wallpaper.png",
-#     "pila-bar --bottom",
+#     "waybar",
 #     "mako",
+#     "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+#     "swaybg -i ~/Pictures/wallpaper.jpg -m fill",  # fill, fit, center, ...
 #     "fcitx5 -d",                 # an input method (Chinese, Japanese, ...)
 #     "kitty",
 # ]
-autostart = ["pila-bar"]
+autostart = [
+    "swaybg",
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+]
+
+# The tools of the defaults above, as written (swaybg, waybar, mako, fuzzel,
+# and swaylock in the swayidle line), start with a configuration of Pila's in
+# [colors] and the title bars' font (swaybg with Pila's wallpaper), where you
+# have none of your own: by their command line, from
+# $XDG_RUNTIME_DIR/pila-tools, so nothing is written in ~/.config and other
+# sessions' tools look as before (a change to [colors] reaches each at its
+# next start). Copy one to ~/.config to change it. false: they keep their own
+# looks.
+tool-configs = true
 
 # How many workspaces (virtual desktops) there are, 1 to 32. They span all
 # screens; Mod+1..N goes to one, Mod+Shift+1..N moves the window there.
 workspaces = 4
 
-# Rounded window corners: the radius in logical pixels, 0 (square) to 64.
+# Rounded window corners: the radius in logical pixels, 0 (square) to 64, and
+# which corners: "top" (as GTK apps round their own windows) or "all".
 # Maximized and fullscreen windows stay square, and so do apps that draw their
 # own shadow and corners (GTK apps; a window rule's corner-radius rounds them).
 # The radius is at most half the window's shorter side, and with a title bar at
 # most the bar's height (28).
-corner-radius = 0
+# corner-radius = 0                # square, e.g.
+# rounded-corners = "all"          # e.g.
+corner-radius = 8
+rounded-corners = "top"
+
+# Room around maximized windows and windows snapped to a half or quarter (Mod+
+# arrows), and between snapped ones, in logical pixels, 0 to 128. With room
+# around it a maximized window keeps its shadow and rounded corners;
+# fullscreen windows still take the whole monitor.
+# gaps = 12                        # e.g.
+gaps = 0
 
 # Monitors on the seat's other GPUs (a laptop's HDMI or DisplayPort wired to
 # its dedicated GPU, a dock with a GPU of its own): drawn with the main GPU
@@ -153,6 +184,7 @@ minimize = 200                   # and restoring
 maximize = 220                   # also fullscreen and snapping
 layer = 150                      # launchers, notifications
 workspace = 250                  # slide sideways
+overview = 250                   # windows glide to their places and back
 
 # The cursor's theme and size, and shake to find it: the cursor grows while
 # it's shaken, and shrinks back a moment after. All read as soon as the file
@@ -166,6 +198,13 @@ workspace = 250                  # slide sideways
 shake-to-find = true             # false: never grow it
 shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 
+# The overview (the `overview` action, Mod+W): the workspace's windows spread
+# out under a strip of every workspace. hot-corner: pushing the pointer into
+# the top-left corner of a monitor opens it, or closes it (not over a
+# fullscreen window).
+[overview]
+hot-corner = true
+
 # X11 apps run through Xwayland, which Pila starts when the first one
 # connects. Unset, it then runs until Pila exits; with idle-timeout, it stops
 # that many seconds (1 to 3600) after its last X11 client leaves, and starts
@@ -176,26 +215,6 @@ shake-magnification = 3.0        # how much bigger at most: 1.5 to 5
 [xwayland]
 # idle-timeout = 10                # e.g.
 enabled = true
-
-# Without input (a key, a click, a move of the pointer) for monitors-off
-# seconds, 1 to 86400, the monitors turn off; any input turns them back on, and
-# that first key or click does nothing else. Not while a window that's shown
-# asks to stay awake (a video playing); false: never. On a TTY. Read as soon as
-# the file is saved.
-[idle]
-# monitors-off = false             # e.g.: never
-monitors-off = 600                 # 10 minutes
-
-# The wallpaper behind everything, on every monitor, drawn by Pila: a PNG,
-# JPEG or WebP file, as an absolute path or starting with ~/. Unset,
-# [colors] background shows. fit: fill (the whole monitor, the image cropped
-# to its shape), fit (the whole image, [colors] background around it),
-# stretch, or center (the image at its size). A saved change shows at once.
-# A wallpaper program in `autostart` (swaybg -i FILE) draws over it.
-[wallpaper]
-# image = "~/Pictures/wallpaper.jpg"  # e.g.
-# fit = "fit"                      # e.g.
-fit = "fill"
 
 # The keymap, passed to xkbcommon. Unset (or empty), xkbcommon's defaults or
 # the XKB_DEFAULT_* variables. `localectl list-x11-keymap-layouts` (and
@@ -258,6 +277,11 @@ tap = true                       # tap to click
 # shrink-width, grow-height, shrink-height, center,
 # toggle-always-on-top (above the others), toggle-all-workspaces,
 # show-desktop (minimize the workspace's windows; again, bring them back),
+# show-shortcuts (all the shortcuts, in sections; on its first run Pila
+# shows the few to get going; any key or click hides it),
+# overview (the workspace's windows spread out, none over another: click one,
+# or pick it with the arrows and Enter; Escape closes it; again, close it),
+# overview <open|close> (only open it, only close it),
 # focus-output <next|prev>, move-to-output <next|prev>,
 # workspace <n|next|prev> (go to a workspace; next/prev don't wrap around),
 # move-to-workspace <n|next|prev> (move the window there; "workspace-next" and
@@ -287,6 +311,7 @@ tap = true                       # tap to click
 "Mod+Shift+Tab" = "cycle-focus-back"
 "Alt+Tab" = "cycle-focus"          # as on other desktops, whatever Mod is
 "Alt+Shift+Tab" = "cycle-focus-back"
+"Mod+W" = "overview"
 "Mod+M" = "maximize"
 "Mod+N" = "minimize"
 "Mod+F" = "fullscreen"
@@ -308,36 +333,30 @@ tap = true                       # tap to click
 "Mod+H" = "show-desktop"
 "Mod+O" = "focus-output next"
 "Mod+Shift+O" = "move-to-output next"
-# Screenshots with pila-shot (installed with Pila): a region dragged on a
-# monitor to the clipboard, and the monitor under the pointer to a file in
-# the pictures folder (XDG_PICTURES_DIR, else ~/Pictures). Any other
-# screenshot tool works too, in place of these lines: grim with slurp and
-# wl-clipboard, for instance. (pila-shot also picks the screen to share: that's
-# in xdg-desktop-portal-wlr's settings, see the manual.)
-# "Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"   # e.g.
-"Mod+Shift+S" = "spawn pila-shot region"
-"Mod+Ctrl+S" = "spawn pila-shot output"
-# The volume and brightness keys, held to go on, each change shown for a
-# moment by pila-osd (installed with Pila); the volume with wpctl (PipeWire's
-# WirePlumber), up to 100%, the brightness by pila-osd itself, never quite
-# off. The media keys tell the player that's playing, through pila-osd too
-# (MPRIS). Without wpctl the volume keys do nothing. Other tools work too, in
-# place of these lines: pactl on PulseAudio, brightnessctl and playerctl, for
-# instance.
+# A region to the clipboard (needs grim, slurp and wl-clipboard), and the
+# screen under the pointer to a file (needs grim). Any other screenshot tool
+# works too, in place of these lines.
+"Mod+Shift+S" = "spawn grim -g \"$(slurp)\" - | wl-copy"
+"Mod+Ctrl+S" = "spawn mkdir -p ~/Pictures && grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"
+# The volume and brightness keys, held to go on: the volume with wpctl
+# (PipeWire's WirePlumber), up to 100%, the brightness with brightnessctl,
+# never quite off. The media keys control the player that's playing
+# (playerctl). Without the program a key does nothing. Other tools work too,
+# in place of these lines: pactl on PulseAudio, or swayosd to see each change
+# on screen, for instance.
 # "XF86AudioRaiseVolume" = { action = "spawn pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat = true }  # e.g.
-# "XF86MonBrightnessUp" = { action = "spawn brightnessctl set 5%+", repeat = true }  # e.g.
-# "XF86AudioPlay" = "spawn playerctl play-pause"   # e.g.
-"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && pila-osd volume", repeat = true }
-"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && pila-osd volume", repeat = true }
-"XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && pila-osd volume"
-"XF86AudioMicMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle && pila-osd mic"
-"XF86MonBrightnessUp" = { action = "spawn pila-osd brightness +5%", repeat = true }
-"XF86MonBrightnessDown" = { action = "spawn pila-osd brightness -5%", repeat = true }
-"XF86AudioPlay" = "spawn pila-osd play-pause"
-"XF86AudioPause" = "spawn pila-osd play-pause"
-"XF86AudioNext" = "spawn pila-osd next"
-"XF86AudioPrev" = "spawn pila-osd previous"
-"XF86AudioStop" = "spawn pila-osd stop"
+# "XF86AudioRaiseVolume" = { action = "spawn swayosd-client --output-volume raise", repeat = true }  # e.g.
+"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }
+"XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-", repeat = true }
+"XF86AudioMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+"XF86AudioMicMute" = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"
+"XF86MonBrightnessUp" = { action = "spawn brightnessctl -q set 5%+", repeat = true }
+"XF86MonBrightnessDown" = { action = "spawn brightnessctl -q -n set 5%-", repeat = true }
+"XF86AudioPlay" = "spawn playerctl play-pause"
+"XF86AudioPause" = "spawn playerctl play-pause"
+"XF86AudioNext" = "spawn playerctl next"
+"XF86AudioPrev" = "spawn playerctl previous"
+"XF86AudioStop" = "spawn playerctl stop"
 "Mod+Page_Down" = "workspace-next"
 "Mod+Page_Up" = "workspace-prev"
 "Mod+Shift+Page_Down" = "move-to-workspace-next"
@@ -348,6 +367,7 @@ tap = true                       # tap to click
 "Mod+Shift+WheelScrollUp" = "move-to-workspace-prev"
 "Mod+Shift+Q" = "close"
 "Mod+Shift+E" = "quit"
+"Mod+Shift+slash" = "show-shortcuts"  # Mod+?
 
 [gestures]
 # Touchpad swipes Pila handles itself (on a TTY), as "swipe-<fingers>-<way>"
@@ -361,8 +381,8 @@ tap = true                       # tap to click
 #
 # Examples:
 # "swipe-3-down" = "minimize"
-# "swipe-4-up" = "snap-left"
-# "swipe-4-down" = "snap-right"
+# "swipe-5-left" = "snap-left"
+# "swipe-5-right" = "snap-right"
 #
 "swipe-3-left" = "cycle-focus"
 "swipe-3-right" = "cycle-focus-back"
@@ -370,6 +390,8 @@ tap = true                       # tap to click
 "swipe-3-down" = "restore"
 "swipe-4-left" = "workspace-next"
 "swipe-4-right" = "workspace-prev"
+"swipe-4-up" = "overview open"
+"swipe-4-down" = "overview close"
 
 # Monitors, matched by connector name (shown in the log as "output connected",
 # e.g. eDP-1, DP-1, HDMI-A-1). Without an entry, a monitor uses its preferred
@@ -377,9 +399,9 @@ tap = true                       # tap to click
 # "winit", and only its scale applies. Tools using wlr-output-management
 # (wlr-randr, a shell's display settings) change these at runtime; editing a
 # monitor's entry here puts the file back in charge of that monitor.
-# A section names a connector or a monitor: its make and model ("LEN P27h-30"),
-# for any monitor of that model on any connector, or with its serial too ("LEN
-# P27h-30 ABC123"), for that one monitor. The most specific section wins, and
+# A section names a connector or a monitor: its make and model ("GSM 27GL850"),
+# for any monitor of that model on any connector, or with its serial too ("GSM
+# 27GL850 ABC123"), for that one monitor. The most specific section wins, and
 # only that one applies. wlr-randr lists them; `pila.log` has the make and model
 # ("monitor"). Without an EDID a monitor only answers to its connector.
 # The entries below are examples: take the `#` off a whole one, header included.
@@ -441,6 +463,16 @@ tap = true                       # tap to click
 #                                  # included (false: never; unset: where the
 #                                  # app asks for it)
 # shadow = false                   # (true: even if the app draws its own)
+#
+# [[window-rule]]
+# app-id = "org.gnome.Nautilus"
+# opacity = 0.9                    # its menus too
+# popup-blur = true                # blur behind its menus, which don't ask for
+#                                  # it, in their shape where the app gives it
+#                                  # (GTK does; false: never; unset: where they
+#                                  # ask, unless blur = false)
+# popup-corner-radius = 8          # rounds it where the app doesn't (unset:
+#                                  # square)
 #
 # [[window-rule]]
 # app-id = "thunderbird"

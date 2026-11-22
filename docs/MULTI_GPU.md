@@ -122,7 +122,7 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
   `wait_for_client_rendering` (implicit fences, syncobj points) is for the primary only.
 - **Drivers.** NVIDIA's proprietary driver's GBM on either side of a copy (as the only GPU it
   works: a tester's GTX 1060), and a dGPU that sleeps (runtime PM: an output on it wakes it).
-  Hybrid laptops are the common case; the author's (AMD Renoir) has one GPU.
+  Hybrid laptops are the common case; the development one (AMD Renoir) has one GPU.
 - **Pacing.** Each output already paces itself by its own vblanks; a secondary's vblank also
   waits for the copy. `idle_wait` and `late_refreshes` are per output and carry over.
 
@@ -130,7 +130,7 @@ Each step keeps the suite green and `scripts/check --nested` at the same numbers
 
 - Nothing with a second GPU: the container has no seat, and its headless backend has one
   renderer. Step 1 needs `scripts/check` on a TTY (one GPU); steps 2 and 3 need a machine with
-  two GPUs and monitors on both, which the author doesn't have: they need a tester.
+  two GPUs and monitors on both, which the development machine doesn't have: they need a tester.
 - CI covers part of step 2: `vkms.yml` runs the udev backend on the kernel's virtual KMS driver
   with a second vkms device (configfs) added and removed as a second GPU: device handling and
   outputs on it (rendering on llvmpipe, copied through memory, scanning out on vkms), not real

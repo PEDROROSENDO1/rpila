@@ -5,7 +5,8 @@
     scripts/demo-scenes encode WORK OUT_DIR
 
 `play` runs inside the sealed headless Pila that scripts/demo-video starts:
-it sets the desktop up (pila-bar, swaybg on WORK/wallpaper.png, mako), then plays each
+it sets the desktop up (swaybg, waybar and mako, started by Pila as its
+defaults are, with its configuration for them and its wallpaper), then plays each
 scene with real input, the pointer and Pila's bindings through the headless
 backend's control socket and text through wtype (virtual keyboard), waiting
 on Pila's state for what must happen and pausing for what must be seen.
@@ -360,6 +361,14 @@ def scenes():
         typed("Opened from the launcher.", delay=55)
         pause(1.0)
 
+    with Scene("shortcuts", "Mod+? shows every shortcut"):
+        combo("Super+Shift+slash")
+        wait("the shortcuts", lambda s: s["shortcuts_view"]["shown"])
+        pause(3.0)
+        key("Escape")
+        wait("the shortcuts to go", lambda s: not s["shortcuts_view"]["shown"])
+        pause(0.6)
+
     with Scene("workspaces", "Workspaces", short=True):
         # The editor is seen before it goes, the short video's first sight
         # of it too (it skips the launcher scene).
@@ -380,7 +389,7 @@ def scenes():
         click(g["x"] + g["w"] / 2, g["y"] + g["h"] / 2)
         settled("pila-config", focused=True)
         pause(0.4)
-        typed("/radius", "<Return>", "$", "s", "12", "<Escape>")
+        typed("/radius", "<Return>", "$", "ciw", "16", "<Escape>")
         pause(0.4)
         typed(":w", "<Return>")
         reloaded()
@@ -470,12 +479,13 @@ def play(record):
     ctl = Control()
     # Apps write what they like where they start (Print Editor its settings).
     os.chdir(os.path.expanduser("~"))
-    spawn(["swaybg", "-m", "fill", "-i", os.path.join(WORK, "wallpaper.png")])
-    spawn(["pila-bar"])
-    spawn(["mako"])
+    # Started by Pila, as the example's autostart is: then they get Pila's
+    # configuration and wallpaper (tool-configs).
+    for command in ("swaybg", "waybar", "mako"):
+        ctl("spawn", command=command)
     wait("the wallpaper", lambda s: any(l["namespace"] == "wallpaper" for l in s["layers"]),
          timeout=20)
-    wait("pila-bar", lambda s: any(l["namespace"] == "pila-bar" for l in s["layers"]),
+    wait("waybar", lambda s: any(l["namespace"] == "waybar" for l in s["layers"]),
          timeout=20)
     # The bar and the wallpaper fade in.
     pause(1.5)

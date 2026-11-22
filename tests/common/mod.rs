@@ -33,10 +33,11 @@ pub const TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Default)]
 pub struct Options {
     /// The config file (TOML). `[animations]` defaults to off, so results
-    /// don't depend on timing; `[shadow]` to off, so pixels near a window are
-    /// its own; `[cursor]` to no shake to find, so a test's moves never grow
-    /// the cursor; `[keyboard]` to the US layout; `autostart` to nothing, so
-    /// the example's `pila-bar` is never one of the children a test counts.
+    /// don't depend on timing; `[shadow]` to off and `corner-radius` to 0, so
+    /// pixels near a window are its own; `[cursor]` to no shake to find, so a
+    /// test's moves never grow the cursor; `[keyboard]` to the US layout;
+    /// `autostart` to nothing, so the example's `waybar` is never one of the
+    /// children a test counts.
     pub config: String,
     /// `--headless-outputs`.
     pub outputs: Option<String>,
@@ -72,12 +73,22 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// The config as written: the test's, plus the defaults it doesn't set.
 fn full_config(config: &str) -> String {
-    // A top-level key, so before the test's sections.
+    // Top-level keys, so before the test's sections.
     let mut text = if config.contains("autostart") {
         config.to_string()
     } else {
         format!("autostart = []\n{config}")
     };
+    // Square windows, so pixels at a window's corners are its own, unless
+    // the test sets the radius itself (a window rule's doesn't count).
+    let config_lines = format!("\n{config}");
+    let top_level = config_lines.split("\n[").next().unwrap_or_default();
+    if !top_level
+        .lines()
+        .any(|line| line.trim_start().starts_with("corner-radius"))
+    {
+        text = format!("corner-radius = 0\n{text}");
+    }
     if !config.contains("[animations]") {
         text.push_str("\n[animations]\nenabled = false\n");
     }

@@ -8,11 +8,12 @@
 # Pila user manual
 
 Pila is a stacking Wayland compositor: windows overlap and you move them around, as on most
-desktops. Pila draws the windows, their title bars and shadows, the wallpaper and the window switcher,
-and handles the keyboard, mouse, touchpad and monitors. It comes with a bar and a launcher of its
-own (`pila-bar` and `pila-launcher`, on by default); the rest of a desktop (notifications, a lock
-screen), or another bar and launcher, comes from separate programs, or from a desktop shell that
-has them all.
+desktops. Pila draws the windows, their title bars and shadows and the window switcher, and
+handles the keyboard, mouse, touchpad and monitors. The rest of a desktop (a bar, a launcher,
+notifications, a wallpaper, a lock screen) comes from separate, standard programs: by default waybar,
+fuzzel, mako and swayidle with swaylock, where they're installed (the package `pila-desktop`
+brings them all; `pila` alone is the compositor alone). A desktop shell that has them all works
+too.
 
 This manual says how to use Pila and set it up. Every configuration option is described in
 [`config.example.toml`](https://github.com/igalmarino/pila/blob/main/config.example.toml) (installed by Pila's packages, usually in
@@ -30,6 +31,7 @@ This manual says how to use Pila and set it up. Every configuration option is de
 - [The configuration file](#the-configuration-file)
 - [Building your desktop](#building-your-desktop)
 - [Screenshots and screen sharing](#screenshots-and-screen-sharing)
+- [Portals, polkit and the keyring](#portals-polkit-and-the-keyring)
 - [Locking the screen and idling](#locking-the-screen-and-idling)
 - [Games and X11 apps](#games-and-x11-apps)
 - [Window and layer rules](#window-and-layer-rules)
@@ -46,8 +48,12 @@ This manual says how to use Pila and set it up. Every configuration option is de
   your system changes, so it's a safe way to try a config. Nested, the Mod key is Alt (the
   desktop around it keeps Super), and the mouse, touchpad and monitors belong to that desktop.
 
-At startup Pila runs the programs in `autostart`, by default its own bar, `pila-bar`; no
-terminal opens by itself: Mod+Return opens one.
+At startup Pila runs the programs in `autostart`, by default the bar `waybar`; no terminal
+opens by itself: Mod+Return opens one. The first time, when it writes your configuration file
+(below), Pila welcomes you with the few keys to get going (a terminal, the launcher, switching and
+closing windows, quitting), as they're bound; any key or click hides it (a binding still runs:
+Mod+Return hides it and opens the terminal). **Mod+Shift+/** (Mod+?) shows all the shortcuts at
+any time, in sections (windows, workspaces, the mouse, Pila), with your own keys.
 
 **With systemd**, `pila-session` runs Pila as the user service `pila.service`, bound to
 `graphical-session.target` as GNOME's and KDE's sessions are: once Pila is ready, the
@@ -71,11 +77,12 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | Keys | What they do |
 |---|---|
 | `Mod+Return` | Open a terminal (`terminal`, or the first one installed of kitty, foot, alacritty and others) |
-| `Mod+D` | Open the launcher (`launcher`, by default `pila-launcher`) |
+| `Mod+D` | Open the launcher (`launcher`, by default `fuzzel`) |
 | `Mod` | Tapped alone (pressed and released with nothing else in between): open the launcher too |
 | `Mod+Tab`, `Mod+J` | Switch to the previous window; keep Mod held and press again for older ones |
 | `Mod+Shift+Tab` | The same, the other way |
 | `Alt+Tab`, `Alt+Shift+Tab` | The same as `Mod+Tab` and `Mod+Shift+Tab`, whatever Mod is |
+| `Mod+W` | The overview: the workspace's windows spread out; click one, or pick it with the arrows and Enter; Escape closes it |
 | `Mod+M` | Maximize; again, restore |
 | `Mod+N` | Minimize |
 | `Mod+F` | Fullscreen, or leave it |
@@ -97,33 +104,24 @@ Most bindings use the Mod key: **Super** (the Windows key) from the login screen
 | `Mod+Shift+Page_Down`, `Mod+Shift+Page_Up` | Send the window to the next, previous workspace |
 | `Mod+WheelScrollDown`, `Mod+WheelScrollUp` | Mod and the mouse wheel: next, previous workspace, a notch each (a quick turn is one) |
 | `Mod+Shift+WheelScrollDown`, `Mod+Shift+WheelScrollUp` | Send the window to the next, previous workspace |
-| `Mod+Shift+S` | Screenshot of a region you drag, to the clipboard |
-| `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to your pictures folder |
+| `Mod+Shift+S` | Screenshot of a region you drag, to the clipboard (needs grim, slurp and wl-clipboard) |
+| `Mod+Ctrl+S` | Screenshot of the monitor under the pointer, to `~/Pictures` (needs grim) |
 | `XF86AudioRaiseVolume`, `XF86AudioLowerVolume` | Volume up, down by 5% (up to 100%), held to go on (needs wpctl) |
 | `XF86AudioMute`, `XF86AudioMicMute` | Mute the speakers, the microphone; again, unmute (needs wpctl) |
-| `XF86MonBrightnessUp`, `XF86MonBrightnessDown` | Screen brightness up, down by 5%, held to go on, never quite off |
-| `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, `XF86AudioPrev`, `XF86AudioStop` | Play or pause, next, previous, stop, in the player that's playing (MPRIS), shown with the track |
+| `XF86MonBrightnessUp`, `XF86MonBrightnessDown` | Screen brightness up, down by 5%, held to go on, never quite off (needs brightnessctl) |
+| `XF86AudioPlay`, `XF86AudioPause`, `XF86AudioNext`, `XF86AudioPrev`, `XF86AudioStop` | Play or pause, next, previous, stop, in the player that's playing (needs playerctl) |
 | `Mod+Shift+Q` | Close the window |
 | `Mod+Shift+E` | Quit Pila |
+| `Mod+Shift+slash` | Mod+?: show the cheatsheet of these shortcuts, in sections (as you've bound them); any key or click hides it |
 | `Mod` + left drag | Move a window from anywhere in it |
 | `Mod` + right drag | Resize a window from its nearest corner |
 | `Ctrl+Alt+F1` to `F12` | Switch to another virtual terminal (not nested) |
 
-**Volume, brightness and media keys** show each change for a moment at the bottom of the
-monitor (`pila-osd`, installed with Pila): for the volume, the microphone and the brightness an
-icon, a level bar and the percentage, dimmed while muted; for a media key what it did (playing,
-paused, the next or previous track, stopped) and the track's title and artist, or that there's
-no player. Its icons are built in, as the bar's.
-
-The volume keys run wpctl (PipeWire's WirePlumber), then `pila-osd volume` or `pila-osd mic`,
-which shows what wpctl left; without wpctl they do nothing, and with PulseAudio you bind them to
-`pactl` instead. The brightness and media keys need no other program: `pila-osd brightness +5%`
-(or `-5%`) changes the backlight's brightness, writing it in `/sys/class/backlight` where you
-may, else asking logind (or elogind) to, which needs no permissions of your own; `pila-osd
-play-pause`, `next`, `previous` and `stop` tell the media player that's playing (else a paused
-one) over MPRIS, as playerctl does. A binding of your own can show a level after its change
-(`pila-osd volume`, `pila-osd mic` or `pila-osd brightness`), and yours that run brightnessctl or
-playerctl keep working.
+**Volume, brightness and media keys** run wpctl (PipeWire's WirePlumber), brightnessctl and
+playerctl; without the program a key does nothing (and Pila says so, the first time, in a
+notification). With PulseAudio, bind the volume keys to `pactl` instead. Nothing is shown on
+screen by Pila; to see each change, bind the keys to an on-screen display such as swayosd
+(`swayosd-client --output-volume raise`, in place of the wpctl command).
 
 Any of these but the two drags and the VT switch can be changed or removed (the drags follow
 the `mod` setting), and any key bound to an action or a command, in `[bindings]`: see
@@ -169,6 +167,15 @@ one again restores). For the arrows as they used to be, halves and maximize only
 any bar), `Mod+F` makes it fullscreen; pressing them again restores the window. Maximized and fullscreen windows have square corners and
 no shadow.
 
+**Gaps.** `gaps` in the configuration leaves room, in logical pixels, around maximized windows and
+the halves and quarters snapped windows fill, and between those: a little desktop shows around
+them, and a maximized window keeps its shadow and rounded corners, like a floating one.
+Fullscreen windows still take the whole monitor. It's 0 (none) unless you set it:
+
+```toml
+gaps = 12
+```
+
 **From the keyboard.** `Mod+Shift` with an arrow moves the focused window, `Mod+Ctrl` with an
 arrow resizes it (right and down grow it, left and up shrink it), and `Mod+C` centers it.
 
@@ -182,6 +189,18 @@ way. `Alt+Tab` and `Alt+Shift+Tab` do the same whatever Mod is, as on other desk
 no longer get them; `"Alt+Tab" = "none"` and `"Alt+Shift+Tab" = "none"` in `[bindings]` give
 them back. Clicking a
 window, or a taskbar entry in your bar, focuses it too.
+
+**The overview.** `Mod+W`, pushing the pointer into the top-left corner of the screen (not
+over a fullscreen window; `[overview] hot-corner = false` turns it off) or a 4-finger swipe up
+spreads the workspace's windows out, each on its own monitor, none over
+another, shrunk where they don't fit, live, over the dimmed wallpaper; minimized ones are among
+them, and your bar stays where it is. Click a window to go to it, or move with the arrows (the
+pointer selects too) and press Enter; Escape, `Mod+W` again, the corner again, a 4-finger swipe
+down or a click beside the windows close it. Any other binding closes it and does its job, but going to another workspace
+(`Mod+1`..`Mod+9`, ...) shows that workspace's windows in it. With more than one workspace, a
+strip on top of each monitor shows them all, live, the one you're on in the accent color: click
+one to go there, or drag a window onto one to send it there (it shrinks as you drag it, to aim
+easily; dropped anywhere else, it goes back to its place).
 
 **Windows asking for attention.** An app can ask for your attention without taking the focus
 (a chat message, a finished download): its title bar turns amber (`[colors] bar-urgent`), and
@@ -214,29 +233,40 @@ them (`icon`, `icon-inactive`); a button under the pointer (`hover`, `hover-icon
 `close-hover`, `close-hover-icon` for the close button). `background` is what shows behind the
 windows without a wallpaper, and `snap-preview` the area a dragged window would snap to (it may
 be translucent: `#rrggbbaa`). Apps that draw their own title bar keep their own colors. Pila's
-bar and launcher (`pila-bar`, `pila-launcher`) take the same colors, and change with them as
-soon as the file is saved.
+window switcher takes the same colors; other programs can read them with `pila msg colors`.
 
-**Wallpaper.** `[wallpaper]` sets the picture behind everything, on every monitor: `image`, a
-PNG, JPEG or WebP file (an absolute path, or starting with `~/`), and `fit`, how it covers a
-monitor: `fill` (the whole monitor, the picture cropped to its shape; the default), `fit` (the
-whole picture, `[colors] background` around it), `stretch` or `center` (at its size). It
-changes as soon as the file is saved; without an image, `background` shows.
+**Wallpaper.** A wallpaper program draws it: swaybg (package swaybg), or a shell's. The default
+`autostart` runs `swaybg` as it is, and Pila gives it its own wallpaper: `background`, plain,
+with a small mark in the bottom-right corner, three outlined rectangles piled like windows in
+greys between `background` and `hover`, the front one's top edge in the `snap-preview` color.
+It's drawn in your `[colors]` (and again when they change, for swaybg's next start), and shown
+whole on any monitor's shape (`-m fit`, `background` around it). For a picture of your own, give swaybg
+one, with `-m` for how it covers each monitor: `fill` (the whole monitor, the picture cropped to
+its shape), `fit` (the whole picture, `-c` color around it), `stretch`, `center` or `tile`:
 
 ```toml
-[wallpaper]
-image = "~/Pictures/wallpaper.jpg"
-fit = "fill"
+autostart = [
+    "swaybg -i ~/Pictures/wallpaper.jpg -m fill",
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+]
 ```
 
-Pila draws it itself, under everything else: a wallpaper program in `autostart` (`swaybg -i
-FILE`, or a shell's) draws over it. A file Pila can't read is said in a notification.
+`autostart` runs at startup: to change the picture now, `pkill swaybg` and start it again
+(`swaybg -i FILE -m fill &` from a terminal). Without swaybg (a list without it, or where it
+isn't installed), `[colors] background` shows. A configuration with `[wallpaper]`, which
+development builds read for a while, still loads, with a warning that gives the swaybg line
+doing the same.
 
-**Rounded corners.** `corner-radius` rounds every window's corners: 0 (square, the default) to
-64 logical pixels, at most half the window's shorter side and, with Pila's title bar, the bar's
-height (28). Maximized and fullscreen windows stay square, and so do apps that draw their own
-shadow (GTK apps): they draw their own corners too, and rounding them as well would leave a
-double corner. A window rule sets it per app, those included.
+**Rounded corners.** Windows have rounded top corners, as GTK apps round their own: 8 logical
+pixels on the top two, the bottom ones square. `corner-radius` sets the radius, 0 (square) to
+64, at most half the window's shorter side and, with Pila's title bar, the bar's height (28);
+`rounded-corners = "all"` rounds all four instead of only the top ones (`"top"`). Maximized and
+fullscreen windows stay square, and Pila leaves apps that draw their own shadow (GTK apps) to
+round themselves: rounding them as well would leave a double corner. A window rule sets the
+radius per app, those included. The shadow, a blur behind the window, the bell's flash and the
+snap preview take the same corners.
 
 **Shadows.** Each window casts a shadow, darker under the focused one. Maximized and fullscreen
 windows have none, and neither do those whose app draws its own (GTK apps do). `[shadow]` sets
@@ -245,7 +275,7 @@ as `#rrggbbaa`); `enabled = false` turns it off. A window rule's `shadow` turns 
 app.
 
 **Animations.** Windows opening, closing, minimizing and maximizing (snapping and fullscreen
-too), launchers and notifications, and workspace switches animate briefly. `[animations]`
+too), launchers and notifications, workspace switches and the overview animate briefly. `[animations]`
 changes them:
 
 ```toml
@@ -264,9 +294,13 @@ false }`) or for a panel or launcher. Shells that animate their own panels need 
 (ext-background-effect; some terminals and shells' panels do, and fcitx5's candidate window),
 and Pila blurs it, behind menus and other popups too. A rule with `blur = true` blurs behind a
 whole window (its title bar included) or panel that doesn't ask, and `blur = false` refuses an
-app's request, its popups' included. Panels are blurred above the windows (the top and
-overlay layers), not below them. A window rule's `opacity` (0.1 to 1) makes a whole window
-translucent. Rules are in [Window and layer rules](#window-and-layer-rules).
+app's request, its popups' included. Most apps' menus don't ask (GTK's don't): a window rule's
+`popup-blur = true` blurs behind them all the same, and `popup-blur = false` refuses its popups
+what they ask. The blur takes a menu's shape (its rounded corners, a popover's arrow) where the
+app gives it, as GTK does; elsewhere it's square unless `popup-corner-radius` gives it the
+menu's radius. Panels are blurred above the windows (the top and overlay layers), not below
+them. A window rule's `opacity` (0.1 to 1) makes a whole window translucent, its menus included.
+Rules are in [Window and layer rules](#window-and-layer-rules).
 
 **The bell.** An app ringing the system bell (xdg-system-bell) makes its window flash briefly;
 Pila plays no sound.
@@ -321,8 +355,8 @@ and which monitors are on another one.
 `Mod+O` moves the pointer and the focus to the next monitor, and `Mod+Shift+O` sends the focused
 window there, keeping its place, or still filling the monitor or the same half.
 
-Pila turns the monitors off after a while without input (`[idle] monitors-off`, in "Locking the
-screen and idling"). To turn them off at once, run
+The monitors turn off after a while without input (swayidle, in "Locking the screen and
+idling"). To turn them off at once, run
 `pila msg action power-off-monitors` (or bind the action to a key): any key, click or move of the
 pointer turns them back on, and that first key or click does nothing else. Through `pila msg` it
 works with the screen locked too, as idling usually locks first; a key binding doesn't run while
@@ -368,6 +402,7 @@ turn of the wheel one (`wheel-binding-cooldown` under `[input]`, see [Workspaces
 | `swipe-3-up` | Maximize, or restore |
 | `swipe-3-down` | Restore a snapped or maximized window |
 | `swipe-4-left`, `swipe-4-right` | Next, previous workspace |
+| `swipe-4-up`, `swipe-4-down` | Open the overview, close it |
 
 `[gestures]` changes them, with any action a key binding can have, for 3, 4 or 5 fingers. Other
 gestures (pinching, finger counts Pila doesn't use) reach the apps.
@@ -484,18 +519,45 @@ The environment variables `PILA_MOD`, `PILA_TERMINAL` and `PILA_LAUNCHER` overri
 ## Building your desktop
 
 Pila starts the programs listed in `autostart` once it's ready (X11 apps too: the first starts
-Xwayland); by default its own bar, `pila-bar`, and no terminal. `autostart = []` starts
-nothing.
+Xwayland); by default the bar `waybar`, the notification daemon `mako` and `swayidle`, and no
+terminal. `autostart = []` starts nothing. The defaults are skipped, with only a line in the log,
+where they aren't installed: Pila without them is a bare compositor, and the package
+`pila-desktop` brings them all (see [INSTALL.md](https://github.com/igalmarino/pila/blob/main/docs/INSTALL.md#packages-for-a-full-session)). A
+command you wrote yourself whose program isn't installed says so in a notification.
 
-**Pila's own tools are defaults, never requirements.** Each is named in the default configuration
-alone, and Pila works the same with another in its place:
+**Pila ships no bar, launcher or on-screen display of its own.** Its defaults are standard
+programs, packaged by most distributions, each named in the default configuration alone; Pila
+works the same with another in its place:
 
-| Tool | Where it's set | Swap it for |
+| Default | Where it's set | Swap it for |
 |---|---|---|
-| `pila-launcher` | `launcher` | `launcher = "fuzzel"`, or any launcher |
-| `pila-bar` | `autostart` | waybar or any other bar (a list without `pila-bar`) |
-| `pila-osd` | the volume, brightness and media keys' bindings | bindings of your own (wpctl or pactl alone, brightnessctl, playerctl, ...) |
-| `pila-shot` | `Mod+Shift+S` and `Mod+Ctrl+S`; the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own (grim, slurp and wl-copy, ...); `chooser_cmd` in those settings |
+| `fuzzel` | `launcher` | any launcher (`wofi --show drun`, `rofi -show drun`, ...) |
+| `swaybg` (Pila's wallpaper), `waybar`, `mako` | `autostart` | a picture of your own (`swaybg -i FILE -m fill`), any other bar or notification daemon (a list without them) |
+| `wpctl`, `brightnessctl`, `playerctl` | the volume, brightness and media keys' bindings | bindings of your own (`pactl`, `swayosd-client`, ...) |
+| `grim`, `slurp`, `wl-copy` | `Mod+Shift+S` and `Mod+Ctrl+S`; `slurp` picks the screen to share, in xdg-desktop-portal-wlr's settings | bindings of your own; `chooser_cmd` in those settings |
+
+**A look that matches Pila's.** The tools of the default configuration start with a
+configuration of Pila's where you have none of your own: your `[colors]`, the title bars' font
+(fontconfig's sans-serif, the one `fc-match sans-serif` names) at their size, and the windows'
+8 px corners on what floats over them (mako's notifications, fuzzel, waybar's tooltips; the bar
+itself stays square along the screen's edge); swaybg gets Pila's wallpaper. Its waybar has
+Pila's workspaces and windows (with the apps' own icons) on the left and the tray, the volume
+(a click mutes), the battery and the clock on the right, with symbols where Font Awesome is
+installed (package otf-font-awesome, fonts-font-awesome or
+fontawesome-6-free-fonts; `pila-desktop` brings it), words where it isn't. Pila writes nothing
+where the tools look for yours: the files are in `$XDG_RUNTIME_DIR/pila-tools` (written at each
+start, gone at logout), and the defaults' commands name them as they start (`waybar -c ... -s
+...`, `mako -c ...`, `fuzzel --config=...`, `swaybg -i ... -m fit -c ...`, and `swaylock -C ...` in
+the swayidle line), so the
+same tools in another session look as before, and nothing is left behind.
+
+This is only for the default commands as written (`waybar`, not `waybar -l debug`) and only
+for a tool with no configuration of yours anywhere it reads one (`~/.config/waybar/config` or
+`config.jsonc`, `~/.mako/config`, ...), checked each time it starts. To change one, copy it
+from `$XDG_RUNTIME_DIR/pila-tools` (e.g. `cp -r $XDG_RUNTIME_DIR/pila-tools/waybar ~/.config/`)
+and edit it there: from then on the tool reads yours. A change to `[colors]` writes the files
+again: each tool takes it the next time it starts (fuzzel at once, swaybg, waybar and mako
+when you log in again or restart them). `tool-configs = false` starts the tools with their own looks.
 
 A binding of your own wins over the default one for the same keys, `"Key" = "none"` takes a
 default away, and `default-bindings = false` all of them. With systemd, a program with a user service can start with the session that way
@@ -517,7 +579,7 @@ QT_QPA_PLATFORMTHEME = false
 A saved change reaches the programs started from then on. On a TTY the variables also go to the
 D-Bus session bus and, in a login session, to systemd's user manager, so the services they start
 (portals, apps started over D-Bus) get them too. The variables Pila sets itself (`WAYLAND_DISPLAY`,
-`DISPLAY`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, `PILA_SOCKET`, `PILA_OUTPUT`) stay as Pila
+`DISPLAY`, `XAUTHORITY`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, `PILA_SOCKET`, `PILA_OUTPUT`) stay as Pila
 sets them, with a warning if the section names one, and so do `XCURSOR_THEME` and `XCURSOR_SIZE`
 when `[cursor]` sets them. Pila itself doesn't read the section: its own settings (such as the
 keymap) are in the rest of the file.
@@ -532,8 +594,8 @@ left alone: GTK picks Wayland by itself, and games that bring an older SDL fail 
 `SDL_VIDEODRIVER = "wayland,x11"`.
 
 **A full desktop shell** gives you the bar, launcher, notifications, wallpaper and lock screen
-in one program: start it from `autostart` (in place of `pila-bar`), and point
-`launcher` at its launcher command so Mod+D opens it instead of `pila-launcher`. If it animates its own panels, turn Pila's animations off for them with a layer rule
+in one program: start it from `autostart` (in place of `waybar`), and point
+`launcher` at its launcher command so Mod+D opens it instead of `fuzzel`. If it animates its own panels, turn Pila's animations off for them with a layer rule
 on their namespace:
 
 ```toml
@@ -551,65 +613,19 @@ systemd or elogind runs it; elsewhere, or to quit Pila directly, set its command
 a keyboard layout switcher) are missing until it knows Pila; Pila's own bindings still work
 (a binding to `switch-layout next` switches layouts).
 
-**With separate tools**, for example (these replace Pila's bar and launcher):
+**With separate tools**, for example:
 
 ```toml
 launcher = "fuzzel"
 autostart = [
-    "swaybg -i ~/Pictures/wallpaper.png",
     "waybar",
     "mako",
-    "swayidle -w timeout 300 'swaylock -f' before-sleep 'swaylock -f'",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
 ]
 ```
 
-**Pila's own launcher**, `pila-launcher`, installed with Pila, is the default `launcher`: a
-search over the installed apps (their `.desktop` files) with their icons. Type to
-filter, then Return (or a click) starts the one selected; the arrows, Tab and Page Up/Down move
-the selection, and Escape or Mod+D again closes it. With `launcher = ""`, Mod+D and tapping Mod do
-nothing.
-
-Apps that run in a terminal (`Terminal=true`, such as htop) start in kitty, or the first installed
-of the terminals Pila itself tries for `terminal` where kitty isn't; `$TERMINAL`, or
-`--terminal COMMAND` (`launcher = "pila-launcher --terminal foot"`), picks another. The first
-Mod+D starts it, and it then stays in the background, so it opens at once afterwards. Its layer
-surface's namespace is `pila-launcher`, for a `[[layer-rule]]`. It shows the icons apps install
-in the `hicolor` theme or `pixmaps`, not those of your icon theme. Input methods such as fcitx5
-type into its search field.
-
-**Pila's own bar**, `pila-bar`, installed with Pila: a bar on every monitor with the
-workspaces on the left and the tray, the battery (on a laptop) and a clock on the right, in the colors of Pila's own title bars (`[colors]`). A click on a workspace goes to it, and the
-wheel over the bar to the next or previous one. It's the default `autostart`; with other
-programs, list it among them:
-
-```toml
-autostart = ["pila-bar --bottom", "mako"]
-```
-
-`--bottom` puts it along the bottom edge, and `--clock FORMAT` sets the clock as strftime(3)
-writes it, in your `LC_TIME` language (default `'%H:%M'`; `''` leaves the clock out). The date
-shows in a tooltip below the clock while the pointer rests on it: `--date FORMAT`, the same way
-(default `'%A %e %B %Y'`; `''` for none). For the date in the bar itself, as before:
-`--clock '%a %e %b  %H:%M'`.
-`--height PIXELS` makes it 16 to 96 pixels high instead of 28, its text growing with it, and
-`--output NAME` puts it on that monitor alone (named as `pila msg outputs` shows; once per
-monitor for several). A monitor connected later gets its bar too, if it's one of those. The
-battery shows how full the laptop's batteries are together, an icon of its level by tens (with a
-bolt inside while charging) and the percentage, and turns amber at 15% or less while running
-down; a mouse's or a headset's battery isn't counted, and `--no-battery` leaves it out. The
-clock has a clock icon before it. The icons are built in (Material Design Icons): no icon font
-to install. The tray shows the icons apps put there (fcitx5,
-network and Bluetooth applets, Steam, Discord, ...: StatusNotifierItem, over D-Bus): a click
-does what the app does on a click, the middle button its second action, the wheel what it does
-with the wheel, and the right button opens its menu below the bar (a click elsewhere closes it);
-resting the pointer on an icon shows its tooltip.
-`--no-tray` leaves it out; with no D-Bus session bus there's no tray. Apps that only have the old
-X11 tray (XEmbed) don't show there. Its layer surfaces' namespace is `pila-bar`, for a
-`[[layer-rule]]`. It has no network or volume of its own (the apps' icons in the tray do): for
-those, waybar.
-
 **The window switcher** is drawn by Pila itself: a `Mod+Tab` or `Alt+Tab` held for a moment shows
-its windows (see "Switching windows") as live previews in the bar's colors; a quick one, there
+its windows (see "Switching windows") as live previews in the title bars' colors; a quick one, there
 and back, shows nothing. Another program can show the switch too, from `pila msg subscribe
 switch`.
 
@@ -633,7 +649,7 @@ A bar that uses standard protocols and fails on Pila is a bug: please
 
 **Waybar** shows Pila's workspaces with its `ext/workspaces` module (the active one marked, a
 click switches) and the windows with `wlr/taskbar` (a click focuses one, a middle click closes
-it). In `~/.config/waybar/config.jsonc`:
+it); the configuration Pila writes has both. In a `~/.config/waybar/config.jsonc` of your own:
 
 ```jsonc
 {
@@ -679,25 +695,19 @@ a daemon they only reach the log.
 
 ## Screenshots and screen sharing
 
-`Mod+Shift+S` lets you drag a region and puts it on the clipboard, as a PNG image: the monitors
-hold still and dim, and the region you drag shows as it is, in a square frame (Escape or a right
-click cancels). `Mod+Ctrl+S` saves the monitor under the pointer to your pictures folder
-(`XDG_PICTURES_DIR` in `~/.config/user-dirs.dirs`, else `~/Pictures`) as
-`screenshot-YYYYMMDD-HHMMSS.png`. The cursor is left out. Both run `pila-shot`, installed with
-Pila, which needs no other program; from a terminal, `pila-shot output [NAME] [--file PATH |
---clipboard]` and `pila-shot region [--file PATH | --clipboard]` do the same with another
-destination (`--file -` writes the PNG to its output, for a pipe). A picture on the clipboard
-is kept by a `pila-shot` process of its own until something else is copied, as `wl-copy` does.
-Other screenshot tools (grim, slurp) work on their own too, and so do a shell's own screenshot
-features. Its layer surfaces' namespace is `pila-shot`.
+`Mod+Shift+S` lets you drag a region (with slurp) and puts it on the clipboard as a PNG image;
+`Mod+Ctrl+S` saves the monitor under the pointer to `~/Pictures` as
+`screenshot-YYYYMMDD-HHMMSS.png`. They need `grim`, and the first also `slurp` and
+`wl-clipboard`. `grim` and other screenshot tools work on their own too, and so do a shell's own
+screenshot features.
 
 **Screen sharing** in browsers, OBS and video calls goes through the desktop portal:
 `xdg-desktop-portal-wlr` for the screen, and `xdg-desktop-portal-gtk` for everything else (the
 file chooser, for instance). Pila installs their configuration for a Pila session. When an app
-asks to share, the monitors hold still and dim: click the one to share (`pila-shot
-pick-output`; Escape cancels).
+asks to share, the pointer becomes a crosshair: click the monitor to share (this uses `slurp`,
+which comes with xdg-desktop-portal-wlr; Escape cancels).
 
-**Sharing a single window** needs a menu to pick it from, since `pila-shot` only picks
+**Sharing a single window** needs a menu to pick it from, since `slurp` can only click
 monitors. With `fuzzel` installed (`wofi`, `rofi`, `bemenu` or `wmenu` work too), copy
 `/etc/xdg/xdg-desktop-portal-wlr/pila` to `~/.config/xdg-desktop-portal-wlr/pila` if it isn't
 there yet, change its two `chooser_` lines to:
@@ -714,34 +724,97 @@ covered, minimized or on another workspace.
 Screen sharing needs the session's D-Bus bus, which the login screen and `pila-session` set up;
 a nested Pila doesn't have it.
 
+## Portals, polkit and the keyring
+
+Apps ask the session for a few things a full desktop starts for them: a file chooser and other
+dialogs (the desktop portal), a password prompt for administrator tasks (a polkit agent), and a
+place to keep the passwords they save (a keyring). Pila draws none of them; standard programs
+do. On a TTY Pila hands the session bus and systemd its environment by itself (`WAYLAND_DISPLAY`,
+`DISPLAY`, `XAUTHORITY`, `XDG_CURRENT_DESKTOP=pila` and `[environment]`'s), so nothing like
+`dbus-update-activation-environment` is needed in `autostart`.
+
+**Portals.** xdg-desktop-portal picks its backends from `pila-portals.conf` (named after
+`XDG_CURRENT_DESKTOP`). Pila's, in `/etc/xdg/xdg-desktop-portal/`, uses `xdg-desktop-portal-gtk`
+for everything (a GTK file chooser) but screen sharing and screenshots
+(`xdg-desktop-portal-wlr`). For GNOME's file chooser, install `xdg-desktop-portal-gnome` and
+Nautilus, and write your own `~/.config/xdg-desktop-portal/pila-portals.conf`. It replaces Pila's
+whole, so keep its two `wlr` lines, or screen sharing stops working:
+
+```ini
+[preferred]
+default=gnome;gtk
+org.freedesktop.impl.portal.ScreenCast=wlr
+org.freedesktop.impl.portal.Screenshot=wlr
+# These need GNOME Shell in the GNOME backend.
+org.freedesktop.impl.portal.Access=gtk
+org.freedesktop.impl.portal.Notification=gtk
+org.freedesktop.impl.portal.Inhibit=gtk
+```
+
+Log in again, or `systemctl --user restart xdg-desktop-portal`. Qt apps use the portal's file
+chooser with `QT_QPA_PLATFORMTHEME = "xdgdesktopportal"` under `[environment]`; Firefox with
+`widget.use-xdg-desktop-portal.file-picker` set to `1` in `about:config`. GTK 4 apps follow the
+dark style through the portal: `gsettings set org.gnome.desktop.interface color-scheme
+prefer-dark` (either backend reads it).
+
+**Polkit.** An app that needs an administrator's password (`pkexec`, a disk utility, a software
+center) asks a polkit agent for it, which a desktop starts in its session. Pila doesn't, and
+`pila-desktop` doesn't bring one: without one, those apps fail with no prompt. Start one from
+`autostart`, as the last of your list (an `autostart` of yours replaces the default one, so keep
+the default's programs in it), e.g. GNOME's:
+
+```toml
+autostart = [
+    "swaybg",
+    "waybar",
+    "mako",
+    "swayidle -w timeout 300 'swaylock -f' timeout 600 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
+    "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
+]
+```
+
+Its path depends on the distribution (that one is Arch's; package polkit-gnome).
+`lxqt-policykit-agent` and `mate-polkit` work too; run one agent at a time.
+
+**The keyring.** Passwords apps save (browsers, mail, Git's credential helper over libsecret)
+go to a Secret Service: GNOME Keyring, or KeePassXC with its Secret Service on. GNOME Keyring
+unlocks with your login password through PAM: in the login screen's PAM file
+(`/etc/pam.d/greetd` for greetd), `auth optional pam_gnome_keyring.so` and `session optional
+pam_gnome_keyring.so auto_start`. It starts when an app first asks for it (D-Bus activation);
+where it doesn't, add `gnome-keyring-daemon --start --components=secrets` to `autostart`.
+
 ## Locking the screen and idling
 
 Lock screens that use ext-session-lock work: `swaylock`, or your shell's own.
 While the screen is locked, only the lock screen gets the keyboard and the mouse, and Pila's
 bindings don't run; `Ctrl+Alt+F1` to `F12` still switch virtual terminals.
 
-Pila turns the screens off by itself after 10 minutes without input (a key, a click, a move of
-the pointer); any input turns them back on, and that first key or click does nothing else.
-`[idle] monitors-off` sets how long, in seconds, or `false` for never:
-
-```toml
-[idle]
-monitors-off = 300                 # 5 minutes
-```
-
-A video playing in a visible window keeps the screens on, and the session from idling, if the
-player asks for it, as most do.
-
-To lock the screen after a while too, use `swayidle` (or your shell's idle settings):
+What happens without input is swayidle's job, which the default `autostart` runs: it locks the
+screen with swaylock after 5 minutes without input (a key, a click, a move of the pointer) and
+before the computer sleeps, and turns the monitors off after 10. Any input turns them back on,
+and that first key or click does nothing else. A video playing in a visible window keeps the
+session from idling, if the player asks for it, as most do. To change the times, or not lock,
+put your own swayidle line in `autostart` (it's read at startup: log in again, or start swayidle
+again yourself):
 
 ```toml
 autostart = [
-    "swayidle -w timeout 300 'swaylock -f' before-sleep 'swaylock -f'",
+    "waybar",
+    "mako",
+    # Lock after 15 minutes, monitors off after 20, lock before sleeping.
+    "swayidle -w timeout 900 'swaylock -f' timeout 1200 'pila msg action power-off-monitors' before-sleep 'swaylock -f'",
 ]
 ```
 
-A tool that turns the screens off itself works as before (`pila msg action power-off-monitors`
-from swayidle, a shell's idle settings); set `monitors-off = false` to leave it to that tool.
+`man swayidle` has the rest (`idlehint`, `lock` and `unlock` from logind). Locking before the
+computer sleeps (`before-sleep`) needs logind (systemd or elogind); the timeouts work without
+it. A shell with its own idle settings takes swayidle's place: leave it out of `autostart`.
+Monitors that `pila msg action power-off-monitors` turned off come back at any input; `wlopm
+--off '*'` works too, with a `resume` that runs `wlopm --on '*'`, as monitors a tool turned off
+stay off until it turns them on.
+
+A configuration with `[idle] monitors-off`, which development builds read for a while, still
+loads, with a warning that gives the swayidle line doing the same.
 
 If the lock screen crashes, the session stays locked, for safety. Switch to a free virtual
 terminal (`Ctrl+Alt+F3`, or another free one: F1 and F2 may be the login screen or this very
@@ -753,8 +826,10 @@ you the session back.
 
 X11 apps (older programs, many games, Steam) run through Xwayland, which Pila starts by itself
 when the first X11 app opens: `DISPLAY` is set from the start, but a session with no X11 app
-runs no X server. The clipboard works between X11 and Wayland apps. Games can lock and confine
-the pointer.
+runs no X server. Only apps with the X server's cookie get in: Pila gives it to what it starts as
+`XAUTHORITY`, a file in `$XDG_RUNTIME_DIR` only you can read, made anew each session (Flatpak
+apps with X11 permission get it through Flatpak). The clipboard works between X11 and Wayland
+apps. Games can lock and confine the pointer.
 
 Once started, Xwayland runs until Pila exits. To have it stop when no X11 app is left, set a
 timeout in seconds; the next X11 app starts it again:
@@ -770,7 +845,7 @@ server itself (`xrdb`, `setxkbmap`, `xmodmap`): leave the timeout unset if your 
 any of those.
 
 For a session with no X11 at all, turn it off; Pila then reserves no X display and sets no
-`DISPLAY`, so apps that can use either pick Wayland:
+`DISPLAY` nor `XAUTHORITY`, so apps that can use either pick Wayland:
 
 ```toml
 [xwayland]
@@ -828,7 +903,7 @@ Rules change how particular windows or panels behave. A `[[window-rule]]` matche
 app id, title or tag, with `*` for any text, and can set: animations, the workspace and monitor
 to open on, opening without the keyboard focus, size, position, opening maximized or
 fullscreen, staying above the others or on all workspaces, the title bar, corner radius,
-opacity, blur and shadow. A window's rules follow its
+opacity, blur (its own and its menus') and shadow. A window's rules follow its
 title as it changes (a browser's page title), except what applies when it opens. A
 `[[layer-rule]]` matches bars, launchers and notifications by namespace, and sets their
 animations and blur.
@@ -906,17 +981,18 @@ does the same in a window of your session, `PILA_CHECK_RENDER_LATE=false pila-ch
 | A notification says the configuration is invalid | It gives the line and the problem; fix it and save. `pila --check-config` checks it again. A key binding must be under `[bindings]`. |
 | A change to the configuration does nothing (another setting stopped working too) | The file is invalid, and Pila keeps the last valid one; the notification saying so needs a notification daemon. `pila --check-config` shows the line and the problem. |
 | Holding a volume or brightness key changes it only once | Write its binding as a table with `repeat = true`: `"XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+", repeat = true }`. |
-| The volume, brightness or media keys do nothing | The volume keys run `wpctl` (package wireplumber, PipeWire's): install it, or bind them to your own commands (`pactl` on PulseAudio). The brightness keys need a backlight in `/sys/class/backlight` and either write access to it or logind (elogind); the media keys a player that speaks MPRIS; `pila-osd brightness +5%` or `pila-osd play-pause` run from a terminal says what's wrong. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "wpctl isn't installed"); any binding, the terminal, the launcher or `autostart` too. |
-| `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | `pila-shot region` or `pila-shot output` run from a terminal says what's wrong. A configuration of your own that binds them to grim needs grim (and slurp and wl-clipboard): Pila tells you when one of its programs isn't installed. |
+| The volume, brightness or media keys do nothing | Their defaults run `wpctl` (package wireplumber, PipeWire's), `brightnessctl` and `playerctl`: install them, or bind the keys to your own commands (`pactl` on PulseAudio). The media keys need a player that speaks MPRIS. `default-bindings = false` leaves them out. Pila tells you, the first time, when a key's program isn't installed (a notification: "brightnessctl isn't installed"); any binding, the terminal, the launcher or `autostart` too, except the default `autostart`'s own tools, skipped quietly. |
+| `Mod+Shift+S` or `Mod+Ctrl+S` does nothing | They need `grim`, and `Mod+Shift+S` also `slurp` and `wl-clipboard` (`wl-copy`): Pila tells you when one of them isn't installed. |
 | Clicking a link in the terminal does nothing | Install `xdg-utils`. |
 | No notifications from Pila | Run a notification daemon (mako, or your shell's) on the session bus; the log says once when there's none. |
-| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `slurp`: change its `chooser_cmd` to `pila-shot pick-output`, or delete it (`scripts/tty` does the first by itself). |
+| An app's administrator password prompt never shows (`pkexec` fails at once) | No polkit agent runs: start one from `autostart` ([Portals, polkit and the keyring](#portals-polkit-and-the-keyring)). |
+| Screen sharing shows nothing | Install `xdg-desktop-portal-wlr`, and start Pila from the login screen or `pila-session`. An older copy of its configuration in `~/.config/xdg-desktop-portal-wlr/pila` runs `pila-shot`, which Pila no longer has: change its `chooser_cmd` to `slurp -f 'Monitor: %o' -or`, or delete it (`scripts/tty` does the first by itself). |
 | The shell doesn't turn the screens off | Some shells run `wlr-randr --off` without a monitor name, which fails; use `pila msg action power-off-monitors` (any input turns them back on). |
 | X11 apps don't start | Install Xwayland; the log says if it couldn't start. |
 | Title bars have no text | Install a font (any TrueType or OpenType font). |
 | Stuck on a locked screen after the locker crashed | See [Locking the screen and idling](#locking-the-screen-and-idling). |
-| `Mod+D` or tapping Mod does nothing | `launcher` is `""`, or names a launcher that isn't installed: set it to one that is, such as `pila-launcher` (see [Building your desktop](#building-your-desktop)). |
-| No bar, or no terminal, at login | Pila starts only what `autostart` lists, no terminal by itself (Mod+Return opens one): list `pila-bar` (or your bar) and any terminal you want there. |
+| `Mod+D` or tapping Mod does nothing | `launcher` is `""`, or names a launcher that isn't installed (by default `fuzzel`): install it, or set `launcher` to one that is (see [Building your desktop](#building-your-desktop)). |
+| No bar, or no terminal, at login | Pila starts only what `autostart` lists, no terminal by itself (Mod+Return opens one): install `waybar` (the default) or list your bar, and any terminal you want, there. |
 | An app needs Mod with the mouse wheel, which switches workspaces | `"Mod+WheelScrollDown" = "none"` and `"Mod+WheelScrollUp" = "none"` under `[bindings]` give it back (nested, Mod is Alt). |
 | Tapping Mod opens the launcher and you don't want it | `"Mod" = "none"` under `[bindings]` (nested, Mod is Alt, so tapping Alt opens it). |
 | A fullscreen window flickers or shows wrong colors | `direct-scanout = false` in the configuration (Pila then draws those frames itself), and report it with `pila-report`'s file. |

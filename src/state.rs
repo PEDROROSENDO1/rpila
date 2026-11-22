@@ -123,6 +123,11 @@ pub struct Pila {
     /// Programs that commands needed and weren't installed, each told once
     /// (`missing_program.rs`).
     pub missing_programs: std::collections::HashSet<String>,
+    /// Where Pila's configurations for the default tools are, once written
+    /// (`tool_configs::prepare_for_session`): at startup with `tool-configs`,
+    /// else the first time a reload turns it on; `None` inside if that
+    /// failed (not tried again).
+    pub tool_configs_dir: std::cell::OnceCell<Option<std::path::PathBuf>>,
     /// Desktop notifications, sent from a thread (`notifications.rs`).
     pub notifier: crate::notifications::Notifier,
 
@@ -137,6 +142,12 @@ pub struct Pila {
     /// An output was drawn this event-loop iteration: `after_frames` has
     /// housekeeping to do.
     pub frame_drawn: bool,
+    /// Frames drawn, on any output (`post_render`): a client's buffer is
+    /// uploaded at its commit once between them (`upload.rs`).
+    pub frames_drawn: u64,
+    /// Commits whose shm buffers were uploaded right away (`upload.rs`), for
+    /// the tests.
+    pub early_uploads: u64,
     /// Clients or input were handled this iteration: `after_frames` does its
     /// housekeeping even if no output was drawn (the change may show on
     /// none: a minimized window's title for the taskbar, a capture's window).
@@ -193,6 +204,9 @@ pub struct Pila {
     pub settling_since: Option<std::time::Duration>,
     /// The screen captures' frames (`frame_stats.rs`, `Pila::record_capture`).
     pub capture_stats: crate::frame_stats::FrameStats,
+    /// The uploads of clients' buffers at their commits (`upload.rs`,
+    /// `Pila::record_upload`).
+    pub upload_stats: crate::frame_stats::FrameStats,
     /// The event loop's own work after each iteration (`frame_stats.rs`,
     /// `Pila::record_loop`).
     pub loop_stats: crate::frame_stats::LoopStats,
@@ -214,12 +228,12 @@ pub struct Pila {
     /// State of the simpler protocols (`handlers/protocols.rs`).
     pub globals: Globals,
     pub idle_inhibitors: IdleInhibitors,
-    /// `[idle] monitors-off`'s timer (`idle.rs`).
-    pub monitors_off: crate::idle::MonitorsOff,
-    /// `[wallpaper]`'s picture (`wallpaper.rs`).
-    pub wallpaper: crate::wallpaper::Wallpaper,
     /// The window switcher Pila draws (`switcher_view.rs`).
     pub switcher_view: crate::switcher_view::SwitcherView,
+    /// The shortcuts cheatsheet Pila draws (`shortcuts_view.rs`).
+    pub shortcuts_view: crate::shortcuts_view::ShortcutsView,
+    /// The overview Pila draws (`overview.rs`).
+    pub overview: crate::overview::Overview,
 
     pub seat: Seat<Self>,
     /// The cursor shown: the last the client under the pointer asked for, or
@@ -349,9 +363,10 @@ pub struct Protocols {
 /// picks its backends from `pila-portals.conf` by it.
 const DESKTOP_NAME: &str = "pila";
 /// What `export_environment` hands the session bus.
-const SESSION_ENV: [&str; 5] = [
+const SESSION_ENV: [&str; 6] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
+    "XAUTHORITY",
     "XDG_CURRENT_DESKTOP",
     "XDG_SESSION_TYPE",
     // For a shell started by systemd or D-Bus to find `pila msg`'s socket.
@@ -561,12 +576,15 @@ impl Pila {
             pending_startup: Vec::new(),
             children: Vec::new(),
             missing_programs: Default::default(),
+            tool_configs_dir: Default::default(),
             notifier: Default::default(),
             snap_preview: None,
             snap_preview_buffer: SolidColorBuffer::default(),
             config_path: None,
             config_reload_pending: false,
             frame_drawn: false,
+            frames_drawn: 0,
+            early_uploads: 0,
             housekeeping: false,
             input_activity: false,
             capture_due: false,
@@ -587,15 +605,16 @@ impl Pila {
             frame_stats: HashMap::new(),
             settling_since: None,
             capture_stats: Default::default(),
+            upload_stats: Default::default(),
             loop_stats: Default::default(),
             space: Space::default(),
             popups,
             session_lock: SessionLock::default(),
             globals,
             idle_inhibitors: IdleInhibitors::default(),
-            monitors_off: Default::default(),
-            wallpaper: Default::default(),
             switcher_view: Default::default(),
+            shortcuts_view: Default::default(),
+            overview: Default::default(),
             seat,
             cursor_status: CursorImageStatus::default_named(),
             dnd_icon: None,
@@ -678,13 +697,17 @@ impl Pila {
                 .map(|(surface, origin)| Under::Lock(surface, origin));
         }
         // Pila's switcher is in front of everything, and no client's.
-        if self.switcher_view_covers(pos) {
+        if self.switcher_view_covers(pos) || self.shortcuts_view_covers(pos) {
             return None;
         }
         let layer = |layers| {
             crate::layers::layer_surface_under(layers, pos)
                 .map(|(layer, surface, origin)| Under::Layer(layer, surface, origin))
         };
+        // The overview's windows are its own: only panels above it are hit.
+        if self.overview_open() {
+            return layer(self.upper_layers());
+        }
         layer(self.upper_layers())
             .or_else(|| {
                 self.window_under(pos)
@@ -768,6 +791,10 @@ impl Pila {
         }
         let now = self.animation_time();
         let (mut windows, ghosts) = self.scene_windows(now);
+        let overview = self.scene_overview();
+        if overview.is_some() {
+            windows = self.overview_scene_windows(windows, self.focused_window().as_ref());
+        }
         let slide = self.scene_slide(now);
         if let Some(slide) = &slide {
             for entry in &mut windows {
@@ -813,8 +840,10 @@ impl Pila {
                 .filter_map(|window| Some(window.wl_surface()?.into_owned()))
                 .collect(),
             corner_radius: self.config.corner_radius,
-            wallpaper: self.scene_wallpaper(),
+            rounded_corners: self.config.rounded_corners,
             switcher: self.scene_switcher(),
+            shortcuts: self.scene_shortcuts(),
+            overview,
             ..Scene::blank(self.config.colors)
         }
     }
@@ -860,8 +889,25 @@ impl Pila {
         now: Option<std::time::Duration>,
     ) -> Option<SceneWindow> {
         let loc = self.space.element_location(window)?;
+        self.scene_window_at(window, loc, focused, hovered, now)
+    }
+
+    /// `scene_window` for a window whose geometry is at `loc`, on the
+    /// `Space` or not (a minimized one the overview shows).
+    pub(crate) fn scene_window_at(
+        &self,
+        window: &Window,
+        loc: Point<i32, Logical>,
+        focused: Option<&Window>,
+        hovered: Option<&(Window, TitleBarPart)>,
+        now: Option<std::time::Duration>,
+    ) -> Option<SceneWindow> {
         let bar_rect = decoration::title_bar_rect(window, loc);
         let (maximized, fullscreen) = fill_state(window);
+        // Square and without a shadow when it fills the output to its edges:
+        // maximized with room around it (`gaps`), it looks like a floating
+        // window.
+        let fills_output = fullscreen || (maximized && self.config.gaps == 0);
         // Past its geometry a client draws what a shadow would be (GTK), and
         // its own corners with it: the global radius leaves it to them, or
         // Pila's rounded cut and the client's shadow make a double corner.
@@ -874,23 +920,36 @@ impl Pila {
                 props.shadow,
             )
         });
-        let shape = |radius| {
+        let shape = |radius, corners| {
             crate::rounded::Rounding::new(
                 Rectangle::new(loc, window.geometry().size),
                 bar_rect,
                 radius,
-                maximized || fullscreen,
+                corners,
+                fills_output,
             )
         };
+        let corners = self.config.rounded_corners;
         let radius = rule_radius.unwrap_or(self.config.corner_radius);
-        let rounding = shape(if draws_own_shadow && rule_radius.is_none() {
-            0
-        } else {
-            radius
-        });
+        let rounding = shape(
+            if draws_own_shadow && rule_radius.is_none() {
+                0
+            } else {
+                radius
+            },
+            corners,
+        );
         // A blur behind it still has rounded corners: the app leaves its own
-        // corners clear, and a square backdrop would show there.
-        let backdrop_rounding = shape(radius);
+        // corners clear, and a square backdrop would show there; all four of
+        // them, as such an app (libadwaita's) rounds its bottom ones too.
+        let backdrop_rounding = shape(
+            radius,
+            if draws_own_shadow {
+                crate::rounded::Corners::All
+            } else {
+                corners
+            },
+        );
         let title_bar = bar_rect.map(|rect| SceneTitleBar {
             rect,
             focused: focused == Some(window),
@@ -906,12 +965,11 @@ impl Pila {
         let wanted = shadow_rule.unwrap_or(config.enabled && !draws_own_shadow);
         let shadow = (wanted
             && config.size > 0
-            && !maximized
-            && !fullscreen
+            && !fills_output
             && !crate::workspaces::is_override_redirect(window))
         .then(|| crate::rounded::Shadow {
             frame,
-            radius: rounding.map_or(0.0, |r| r.radius),
+            radii: rounding.map_or([0.0; 4], |r| r.corners.radii(r.radius)),
             size: config.size,
             offset: config.offset.into(),
             color: if focused == Some(window) {
@@ -1084,7 +1142,7 @@ impl Pila {
                 }
             }
         }
-        self.refit_maximized();
+        self.refit_to_usable_area();
     }
 
     /// The usable area (minus panels) of the output a window is mostly on.
@@ -1123,10 +1181,14 @@ impl Pila {
 
     /// Put a window at `loc`: in the `Space` if it's there, else where it
     /// comes back to when shown again. Nothing for an unmapped window.
-    fn place_window(&mut self, window: &Window, loc: Point<i32, Logical>) {
+    fn place_window(&mut self, window: &Window, loc: Point<i32, Logical>, raise: bool) {
         if self.space.element_location(window).is_some() {
-            self.map_window(window.clone(), loc, true);
-            self.keep_transients_above(window);
+            if raise {
+                self.map_window(window.clone(), loc, true);
+                self.keep_transients_above(window);
+            } else {
+                self.move_window(window, loc);
+            }
         } else if self.off_space_windows().any(|w| w == window) {
             crate::workspaces::set_space_location(window, loc);
         }
@@ -1208,8 +1270,10 @@ impl Pila {
 
         // Room for the title bar above the window, if pila draws one.
         let bar = decoration::layout_offset(&window, fullscreen);
-        let location = if maximized || fullscreen {
+        let location = if fullscreen {
             output_geo.loc + Point::from((0, bar))
+        } else if maximized {
+            crate::snap::gapped(output_geo, self.config.gaps).loc + Point::from((0, bar))
         } else if let Some((x, y)) = props.position {
             debug!(target: "pila::rules", x, y, "placed by rule");
             output_geo.loc + Point::from((x, y + bar))
@@ -1457,9 +1521,10 @@ impl Pila {
         }
     }
 
-    /// Fit maximized windows to the usable area again after it changed (a
-    /// panel appeared, resized or went away, or the output was resized).
-    pub fn refit_maximized(&mut self) {
+    /// Fit maximized, fullscreen and snapped windows to the usable area again
+    /// after it changed (a panel appeared, resized or went away, or the
+    /// output was resized).
+    pub fn refit_to_usable_area(&mut self) {
         let windows: Vec<Window> = self
             .space
             .elements()
@@ -1468,8 +1533,10 @@ impl Pila {
             .collect();
         for window in windows {
             let (maximized, fullscreen) = fill_state(&window);
-            self.set_fill_state(&window, maximized, fullscreen);
+            // Where it is in the stack stays.
+            self.apply_fill_state(&window, maximized, fullscreen, None, false);
         }
+        self.refit_snapped();
     }
 
     pub fn close_focused(&mut self) {
@@ -1511,6 +1578,19 @@ impl Pila {
         fullscreen: bool,
         output: Option<&Output>,
     ) {
+        self.apply_fill_state(window, maximized, fullscreen, output, true);
+    }
+
+    /// `set_fill_state_on`, raising the window only with `raise` (a refit
+    /// leaves it where it is in the stack).
+    fn apply_fill_state(
+        &mut self,
+        window: &Window,
+        maximized: bool,
+        fullscreen: bool,
+        output: Option<&Output>,
+        raise: bool,
+    ) {
         let toplevel = window.toplevel();
         let x11 = window.x11_surface();
         if toplevel.is_none() && x11.is_none() {
@@ -1539,6 +1619,9 @@ impl Pila {
                 debug!("no output to fill");
                 return;
             };
+            if !fullscreen {
+                output_geo = crate::snap::gapped(output_geo, self.config.gaps);
+            }
             // A maximized window's title bar stays visible above it.
             let bar = decoration::layout_offset(window, fullscreen);
             output_geo.loc.y += bar;
@@ -1575,7 +1658,7 @@ impl Pila {
                 let _ = x11.set_fullscreen(fullscreen);
                 let _ = x11.configure(output_geo);
             }
-            self.place_window(window, output_geo.loc);
+            self.place_window(window, output_geo.loc, raise);
         } else {
             // The saved geometry, or (if the window started out filled, as
             // a terminal configured to open maximized) two thirds of its
@@ -1603,7 +1686,7 @@ impl Pila {
                 }
             }
             if let Some(saved) = saved {
-                self.place_window(window, saved.loc);
+                self.place_window(window, saved.loc, raise);
             }
         }
 
@@ -1754,6 +1837,7 @@ impl Pila {
         layer_map_for_output(output).cleanup();
         self.signal_barriers_on(output);
         self.frame_drawn = true;
+        self.frames_drawn += 1;
     }
 
     /// Called after every event-loop iteration (`main.rs`), once all the
@@ -1784,6 +1868,11 @@ impl Pila {
         self.send_keyboard_events();
         // So can the window switch end (its window was already in front).
         self.send_switch_events();
+        // The cheatsheet's content, once it can be drawn: an output or the
+        // fonts can come after it's shown (a reload asks for it itself).
+        if self.shortcuts_need_content() {
+            self.draw_shortcuts_text();
+        }
         let drawn = std::mem::take(&mut self.frame_drawn);
         let capture_due = std::mem::take(&mut self.capture_due);
         if !std::mem::take(&mut self.housekeeping) && !drawn && !capture_due {
@@ -1813,6 +1902,7 @@ impl Pila {
         self.update_idle_inhibit();
         self.popups.cleanup();
         self.step_animations();
+        self.overview_laid_out();
         self.schedule_hidden_frames();
         self.prepare_slide_textures();
         (true, captures)
@@ -1841,6 +1931,9 @@ impl Pila {
         if self.is_locked() && !allowed {
             debug!(?action, "refused while locked");
             return;
+        }
+        if !action.keeps_overview() {
+            self.close_overview();
         }
         match action {
             Action::Spawn(command) => self.spawn(&command),
@@ -1900,6 +1993,8 @@ impl Pila {
                 }
             }
             Action::ShowDesktop => self.show_desktop(),
+            Action::ShowShortcuts => self.toggle_shortcuts(),
+            Action::Overview(what) => self.overview_action(what),
             Action::FocusOutput(target) => self.focus_output(target),
             Action::MoveToOutput(target) => self.move_focused_to_output(target),
             Action::SwitchLayout(target) => self.switch_layout(target),
@@ -1960,8 +2055,6 @@ impl Pila {
     /// (for portals), or `EXPORT_TIMEOUT` if that hangs. The X display is
     /// reserved already (`reserve_xwayland`), so X11 apps among them work.
     pub fn start_session(&mut self, commands: Vec<String>) {
-        self.idle_config_changed();
-        self.wallpaper_config_changed();
         self.pending_startup = commands;
         if !self.export_environment() {
             self.run_pending_startup();
@@ -1978,8 +2071,8 @@ impl Pila {
         self.spawn_all(&commands);
     }
 
-    /// Give the D-Bus session bus pila's `WAYLAND_DISPLAY`, `DISPLAY` and
-    /// desktop name, so services it activates (xdg-desktop-portal and its
+    /// Give the D-Bus session bus pila's `WAYLAND_DISPLAY`, `DISPLAY` (and
+    /// its `XAUTHORITY`) and desktop name, so services it activates (xdg-desktop-portal and its
     /// wlr backend, for screen sharing) talk to pila.
     ///
     /// Only on bare metal; nested, apps use the host's portals. On the
@@ -2057,7 +2150,6 @@ impl Pila {
     /// Xwayland) isn't sent; one `[environment]` removes stays as the bus
     /// has it.
     fn exported_env(&self) -> Vec<(String, String)> {
-        let env = self.spawned_env();
         let mut names: Vec<&str> = SESSION_ENV.to_vec();
         names.extend(
             self.config
@@ -2072,21 +2164,7 @@ impl Pila {
         if self.config.cursor.size.is_some() {
             names.push("XCURSOR_SIZE");
         }
-        let mut vars: Vec<(String, String)> = Vec::new();
-        for name in names {
-            if vars.iter().any(|(known, _)| known == name) {
-                continue;
-            }
-            // The last word on it is Pila's; else the program inherits it.
-            let value = match env.iter().rev().find(|(known, _)| known == name) {
-                Some((_, value)) => value.clone(),
-                None => std::env::var(name).ok(),
-            };
-            if let Some(value) = value {
-                vars.push((name.to_string(), value));
-            }
-        }
-        vars
+        exported_vars(&names, &self.spawned_env(), |name| std::env::var(name).ok())
     }
 
     /// The variables everything Pila starts gets set (`Some`) or removed
@@ -2118,6 +2196,12 @@ impl Pila {
         set(
             "DISPLAY",
             self.x11_display().map(|display| format!(":{display}")),
+        );
+        // Its cookie, which Xwayland asks for (`xauth.rs`).
+        set(
+            "XAUTHORITY",
+            self.x11_authority()
+                .map(|path| path.to_string_lossy().into_owned()),
         );
         // Apps that draw their own cursor (X11 ones among them) use the
         // theme and size Pila draws its own with; unset, they inherit
@@ -2181,7 +2265,7 @@ impl Pila {
     pub fn spawn(&mut self, command: &str) {
         info!(command, "spawning");
         let mut cmd = Command::new("/bin/sh");
-        cmd.arg("-c").arg(command);
+        cmd.arg("-c").arg(self.with_tool_configs(command));
         self.session_env(&mut cmd);
         // The output under the pointer, for commands that act on "this
         // screen" (e.g. `grim -o "$PILA_OUTPUT"`).
@@ -2198,6 +2282,32 @@ impl Pila {
             }
             Err(err) => warn!(command, ?err, "failed to spawn"),
         }
+    }
+
+    /// `command` as Pila runs it: one of the example's own (as written) with
+    /// Pila's configuration for its tools, where `tool-configs` is on and the
+    /// user has none of their own (`tool_configs.rs`).
+    fn with_tool_configs(&self, command: &str) -> String {
+        if !self.config.tool_configs || !crate::config::is_example_command(command) {
+            return command.to_string();
+        }
+        let colors = self.config.colors;
+        let dir = self
+            .tool_configs_dir
+            .get_or_init(|| crate::tool_configs::prepare_for_session(&colors));
+        let Some(dir) = dir else {
+            return command.to_string();
+        };
+        let run = crate::tool_configs::with_configs(
+            command,
+            dir,
+            &colors,
+            crate::tool_configs::user_has_config,
+        );
+        if run != command {
+            debug!(command = run.as_str(), "with Pila's tool configs");
+        }
+        run
     }
 
     /// Reap the programs pila started that exited (on SIGCHLD, `main.rs`).
@@ -2526,8 +2636,88 @@ impl ClientData for ClientState {
     }
 }
 
+/// The value of each of `names` that a program Pila starts gets: the last
+/// word on it in `spawned` (`Pila::spawned_env`; `None`, removed), else
+/// `inherited`'s (Pila's own environment). A name it doesn't get is left out,
+/// and each comes once.
+fn exported_vars(
+    names: &[&str],
+    spawned: &[(String, Option<String>)],
+    inherited: impl Fn(&str) -> Option<String>,
+) -> Vec<(String, String)> {
+    let mut vars: Vec<(String, String)> = Vec::new();
+    for &name in names {
+        if vars.iter().any(|(known, _)| known == name) {
+            continue;
+        }
+        let value = match spawned.iter().rev().find(|(known, _)| known == name) {
+            Some((_, value)) => value.clone(),
+            None => inherited(name),
+        };
+        if let Some(value) = value {
+            vars.push((name.to_string(), value));
+        }
+    }
+    vars
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_bus_gets_what_programs_get() {
+        let set = |name: &str, value: Option<&str>| (name.to_string(), value.map(String::from));
+        let spawned = [
+            set("QT_QPA_PLATFORM", Some("wayland")),
+            set("WAYLAND_DISPLAY", Some("wayland-1")),
+            set("DISPLAY", Some(":1")),
+            set("XAUTHORITY", Some("/run/user/1000/pila-xauthority-1")),
+            set("PILA_SOCKET", None),
+            // The last word counts.
+            set("QT_QPA_PLATFORM", Some("wayland;xcb")),
+        ];
+        let host = |name: &str| match name {
+            "PILA_SOCKET" => Some("/elsewhere".to_string()),
+            "XDG_CURRENT_DESKTOP" => Some("host".to_string()),
+            _ => None,
+        };
+        let names = [
+            "WAYLAND_DISPLAY",
+            "DISPLAY",
+            "XAUTHORITY",
+            "XDG_CURRENT_DESKTOP",
+            "PILA_SOCKET",
+            "QT_QPA_PLATFORM",
+            "XDG_SESSION_TYPE",
+            "DISPLAY",
+        ];
+        let vars = super::exported_vars(&names, &spawned, host);
+        let pair = |name: &str, value: &str| (name.to_string(), value.to_string());
+        assert_eq!(
+            vars,
+            [
+                pair("WAYLAND_DISPLAY", "wayland-1"),
+                pair("DISPLAY", ":1"),
+                pair("XAUTHORITY", "/run/user/1000/pila-xauthority-1"),
+                // Not set by Pila: as Pila has it.
+                pair("XDG_CURRENT_DESKTOP", "host"),
+                // PILA_SOCKET, removed for programs, isn't the host's
+                // either; XDG_SESSION_TYPE is set nowhere; the last word
+                // counts.
+                pair("QT_QPA_PLATFORM", "wayland;xcb"),
+            ]
+        );
+    }
+
+    #[test]
+    fn without_xwayland_the_bus_gets_no_display_or_cookie() {
+        let spawned = [
+            ("DISPLAY".to_string(), None),
+            ("XAUTHORITY".to_string(), None),
+        ];
+        let host = |_: &str| Some("the host's".to_string());
+        assert!(super::exported_vars(&["DISPLAY", "XAUTHORITY"], &spawned, host).is_empty());
+    }
+
     use super::*;
 
     #[test]

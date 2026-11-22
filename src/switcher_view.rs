@@ -2,7 +2,8 @@
 //! is held past `DELAY`, a panel in the middle of the switch's output shows
 //! its windows in their order (`switcher.rs` does the switching; this only
 //! shows it), each as a live preview over its title, the selected one in the
-//! accent color; a click on one ends the switch there.
+//! accent color; a click on one ends the switch there. The panel has the
+//! windows' corners (`corner-radius`, `rounded-corners`).
 //!
 //! The panel is laid out from the switch as it is (`Pila::switcher_layout`):
 //! tiles of `COLUMNS` to a row, `ROWS` rows shown with the selected one's in
@@ -109,6 +110,9 @@ pub struct SceneSwitcher {
     pub output: String,
     pub rect: Rectangle<i32, Logical>,
     pub tiles: Vec<SceneTile>,
+    /// Its corners, the windows' (`corner-radius`, `rounded-corners`);
+    /// `None`: square.
+    pub rounding: Option<(f64, crate::rounded::Corners)>,
     buffers: Rc<RefCell<Buffers>>,
 }
 
@@ -262,6 +266,10 @@ impl Pila {
             output,
             rect,
             tiles,
+            rounding: (self.config.corner_radius > 0).then_some((
+                f64::from(self.config.corner_radius),
+                self.config.rounded_corners,
+            )),
             buffers: self.switcher_view.buffers.clone(),
         })
     }
@@ -310,7 +318,7 @@ impl Pila {
 }
 
 /// An opaque version of a premultiplied color.
-fn opaque(color: [f32; 4]) -> [f32; 4] {
+pub(crate) fn opaque(color: [f32; 4]) -> [f32; 4] {
     let a = color[3];
     if a <= 0.0 {
         return [0.0, 0.0, 0.0, 1.0];
@@ -418,12 +426,30 @@ pub fn elements(
             ));
         }
     }
+    // The panel and one pixel around it, with the windows' corners (the
+    // border's a pixel wider, to follow the curve), if their shaders
+    // compiled; else square.
+    let shaders = view
+        .rounding
+        .and_then(|_| crate::rounded::Shaders::get(renderer));
+    let shaped = |element: SolidColorRenderElement, grow: i32| match (view.rounding, &shaders) {
+        (Some((radius, corners)), Some(shaders)) => {
+            PilaRenderElement::RoundedSolid(crate::rounded::RoundedSolid::new(
+                element,
+                shaders,
+                radius + f64::from(grow),
+                corners,
+                scale,
+            ))
+        }
+        _ => PilaRenderElement::Solid(element),
+    };
     let background = solid(
         &mut buffers.background,
         view.rect.size,
         opaque(colors.bar_inactive),
     );
-    elements.push(PilaRenderElement::Solid(
+    elements.push(shaped(
         SolidColorRenderElement::from_buffer(
             &background,
             physical(view.rect.loc),
@@ -431,14 +457,14 @@ pub fn elements(
             1.0,
             Kind::Unspecified,
         ),
+        0,
     ));
-    // Square, one pixel around it.
     let outer = Rectangle::new(
         view.rect.loc - Point::from((BORDER, BORDER)),
         view.rect.size + Size::from((2 * BORDER, 2 * BORDER)),
     );
     let border = solid(&mut buffers.border, outer.size, rgb(colors.hover));
-    elements.push(PilaRenderElement::Solid(
+    elements.push(shaped(
         SolidColorRenderElement::from_buffer(
             &border,
             physical(outer.loc),
@@ -446,6 +472,7 @@ pub fn elements(
             1.0,
             Kind::Unspecified,
         ),
+        BORDER,
     ));
     elements
 }

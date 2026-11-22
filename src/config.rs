@@ -52,6 +52,9 @@ use crate::snap::{Direction, KEYBOARD_STEP};
 /// further limited by its size and the title bar's height (`rounded.rs`).
 pub const MAX_CORNER_RADIUS: u32 = 64;
 
+/// The largest `gaps` (logical pixels).
+pub const MAX_GAPS: u32 = 128;
+
 /// The most workspaces `workspaces` may ask for.
 pub const MAX_WORKSPACES: usize = 32;
 
@@ -315,6 +318,10 @@ pub enum Action {
     ToggleAllWorkspaces,
     /// Minimize the workspace's windows, or bring them back (`minimize.rs`).
     ShowDesktop,
+    /// Show Pila's shortcuts cheatsheet, or hide it (`shortcuts_view.rs`).
+    ShowShortcuts,
+    /// Open or close the overview (`overview.rs`).
+    Overview(OverviewAction),
     /// Go to another output, or send the focused window there (`stacking.rs`).
     FocusOutput(OutputTarget),
     MoveToOutput(OutputTarget),
@@ -326,6 +333,15 @@ pub enum Action {
     PowerOnMonitors,
     /// Switch to virtual terminal N (Ctrl+Alt+F<N> on a TTY; not configurable).
     ChangeVt(i32),
+}
+
+/// What `overview` does: open it if it's closed and close it if it's open,
+/// or only one of them (`overview open`, `overview close`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverviewAction {
+    Toggle,
+    Open,
+    Close,
 }
 
 /// Which output an output action goes to: by position, around the end.
@@ -439,6 +455,14 @@ impl Action {
                 };
             }
         }
+        // "overview open", "overview close" ("overview" toggles).
+        if let Some(what) = text.strip_prefix("overview ") {
+            return match what.trim() {
+                "open" => Ok(Some(Action::Overview(OverviewAction::Open))),
+                "close" => Ok(Some(Action::Overview(OverviewAction::Close))),
+                other => Err(format!("overview {other:?}: must be open or close")),
+            };
+        }
         if text == "none" {
             return Ok(None);
         }
@@ -483,6 +507,8 @@ const NAMED_ACTIONS: &[(&str, Action)] = &[
     ("toggle-always-on-top", Action::ToggleAlwaysOnTop),
     ("toggle-all-workspaces", Action::ToggleAllWorkspaces),
     ("show-desktop", Action::ShowDesktop),
+    ("show-shortcuts", Action::ShowShortcuts),
+    ("overview", Action::Overview(OverviewAction::Toggle)),
     ("power-off-monitors", Action::PowerOffMonitors),
     ("power-on-monitors", Action::PowerOnMonitors),
     ("quit", Action::Quit),
@@ -498,6 +524,7 @@ const ACTIONS_WITH_ARGUMENT: &[&str] = &[
     "move-to-workspace <n|next|prev>",
     "switch-layout <n|next|prev>",
     "snap <left|right|up|down>",
+    "overview <open|close>",
 ];
 
 /// Every action as a config may write it, for messages.
@@ -560,6 +587,8 @@ action_examples! {
     Action::ToggleAlwaysOnTop => Action::ToggleAlwaysOnTop,
     Action::ToggleAllWorkspaces => Action::ToggleAllWorkspaces,
     Action::ShowDesktop => Action::ShowDesktop,
+    Action::ShowShortcuts => Action::ShowShortcuts,
+    Action::Overview(_) => Action::Overview(OverviewAction::Toggle),
     Action::FocusOutput(_) => Action::FocusOutput(OutputTarget::Next),
     Action::MoveToOutput(_) => Action::MoveToOutput(OutputTarget::Next),
     Action::SwitchLayout(_) => Action::SwitchLayout(LayoutTarget::Next),
@@ -804,16 +833,19 @@ pub enum AnimationKind {
     Layer,
     /// The workspace changes.
     Workspace,
+    /// The overview opens or closes.
+    Overview,
 }
 
 impl AnimationKind {
-    const ALL: [AnimationKind; 6] = [
+    const ALL: [AnimationKind; 7] = [
         AnimationKind::WindowOpen,
         AnimationKind::WindowClose,
         AnimationKind::Minimize,
         AnimationKind::Maximize,
         AnimationKind::Layer,
         AnimationKind::Workspace,
+        AnimationKind::Overview,
     ];
 
     /// Its key in `[animations]`.
@@ -825,6 +857,7 @@ impl AnimationKind {
             AnimationKind::Maximize => "maximize",
             AnimationKind::Layer => "layer",
             AnimationKind::Workspace => "workspace",
+            AnimationKind::Overview => "overview",
         }
     }
 }
@@ -839,7 +872,7 @@ const ANIMATION_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=4.0;
 pub struct AnimationsConfig {
     /// Each kind's duration in milliseconds (`AnimationKind::ALL` order);
     /// 0 when it's off.
-    durations: [u32; 6],
+    durations: [u32; 7],
     /// Multiplies every duration (2: twice as slow).
     speed: f64,
     /// `enabled`: off, everything that would animate changes at once.
@@ -895,6 +928,7 @@ struct AnimationsFile {
     maximize: Option<AnimationFile>,
     layer: Option<AnimationFile>,
     workspace: Option<AnimationFile>,
+    overview: Option<AnimationFile>,
 }
 
 impl AnimationsFile {
@@ -913,6 +947,7 @@ impl AnimationsFile {
             maximize: entry(self.maximize, example.maximize),
             layer: entry(self.layer, example.layer),
             workspace: entry(self.workspace, example.workspace),
+            overview: entry(self.overview, example.overview),
         }
     }
 
@@ -933,8 +968,9 @@ impl AnimationsFile {
             self.maximize,
             self.layer,
             self.workspace,
+            self.overview,
         ];
-        let mut durations = [0; 6];
+        let mut durations = [0; 7];
         for ((kind, entry), duration) in AnimationKind::ALL.iter().zip(entries).zip(&mut durations)
         {
             let key = format!("animations.{}", kind.key());
@@ -980,7 +1016,7 @@ const MAX_WHEEL_BINDING_COOLDOWN: u32 = 1000;
 
 /// `[[output]]`: settings for one monitor, matched by connector name
 /// (`eDP-1`, `DP-1`, `HDMI-A-1`, ...; `winit` is the nested window) or by the
-/// monitor's make and model, with or without its serial (`LEN P27h-30`).
+/// monitor's make and model, with or without its serial (`GSM 27GL850`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputConfig {
     pub name: String,
@@ -1219,9 +1255,10 @@ enum EnvFile {
 /// The variables Pila gives what it starts itself (`Pila::session_env`,
 /// `Pila::spawn`), which `[environment]` can't change: the session needs
 /// them as they are.
-pub const PILA_ENV: [&str; 6] = [
+pub const PILA_ENV: [&str; 7] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
+    "XAUTHORITY",
     "XDG_CURRENT_DESKTOP",
     "XDG_SESSION_TYPE",
     "PILA_SOCKET",
@@ -1301,15 +1338,19 @@ struct ConfigFile {
     input: InputFile,
     workspaces: Option<usize>,
     corner_radius: Option<u32>,
+    rounded_corners: Option<String>,
+    gaps: Option<u32>,
     other_gpus: Option<bool>,
     direct_scanout: Option<bool>,
     tearing: Option<bool>,
     render_late: Option<bool>,
+    tool_configs: Option<bool>,
     shadow: ShadowFile,
     colors: ColorsFile,
     animations: AnimationsFile,
     cursor: CursorFile,
     xwayland: XwaylandFile,
+    overview: OverviewFile,
     idle: IdleFile,
     wallpaper: WallpaperFile,
     environment: BTreeMap<String, EnvFile>,
@@ -1556,15 +1597,31 @@ impl XwaylandFile {
     }
 }
 
-/// The `[idle]` `monitors-off` times Pila takes, in seconds.
-pub const MONITORS_OFF_TIMES: std::ops::RangeInclusive<u32> = 1..=86400;
-
-/// `[idle]`: what Pila does itself when there's no input (`idle.rs`).
+/// `[overview]` (`overview.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdleConfig {
-    /// Turn the monitors off after this many seconds without input (none
-    /// while an idle inhibitor is visible); `None` never.
-    pub monitors_off: Option<u32>,
+pub struct OverviewConfig {
+    /// The pointer pushed into an output's top-left corner opens it (or
+    /// closes it).
+    pub hot_corner: bool,
+}
+
+/// `[overview]` as written.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+struct OverviewFile {
+    hot_corner: Option<bool>,
+}
+
+impl OverviewFile {
+    fn or_example(self, example: Self) -> Self {
+        or_example!(self, example, OverviewFile { hot_corner })
+    }
+
+    fn validate(self) -> Result<OverviewConfig, String> {
+        Ok(OverviewConfig {
+            hot_corner: need(self.hot_corner, "overview.hot-corner")?,
+        })
+    }
 }
 
 /// A time in seconds as written, or `false` for never.
@@ -1578,7 +1635,9 @@ enum SecondsFile {
     Seconds(u32),
 }
 
-/// `[idle]` as written.
+/// `[idle]` as written: an old file's. Turning the monitors off after a
+/// while is swayidle's job (the example's `autostart`); the key is still
+/// read, so such a file keeps working, and a time in it gets a warning.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct IdleFile {
@@ -1586,69 +1645,25 @@ struct IdleFile {
 }
 
 impl IdleFile {
-    fn or_example(self, example: Self) -> Self {
-        or_example!(self, example, IdleFile { monitors_off })
-    }
-
-    fn validate(self) -> Result<IdleConfig, String> {
-        let monitors_off = match need(self.monitors_off, "idle.monitors-off")? {
-            SecondsFile::Never(false) => None,
-            SecondsFile::Never(true) => {
-                return Err(
-                    "idle.monitors-off = true: give the seconds (e.g. 600), or false".into(),
-                )
-            }
-            SecondsFile::Seconds(seconds) if !MONITORS_OFF_TIMES.contains(&seconds) => {
-                return Err(format!(
-                    "idle.monitors-off = {seconds}: must be {} to {} seconds, or false",
-                    MONITORS_OFF_TIMES.start(),
-                    MONITORS_OFF_TIMES.end()
-                ))
-            }
-            SecondsFile::Seconds(seconds) => Some(seconds),
+    /// The warning for a time Pila no longer acts on, with the swayidle
+    /// command that does it.
+    fn warning(&self) -> Option<String> {
+        let seconds = match self.monitors_off? {
+            SecondsFile::Never(false) => return None,
+            SecondsFile::Never(true) => 600,
+            SecondsFile::Seconds(seconds) => seconds,
         };
-        Ok(IdleConfig { monitors_off })
+        Some(format!(
+            "idle.monitors-off: Pila no longer turns the monitors off itself, swayidle does: \
+             remove [idle] and put \"swayidle -w timeout {seconds} 'pila msg action \
+             power-off-monitors'\" in `autostart` (the example's also locks the screen)"
+        ))
     }
 }
 
-/// How the wallpaper covers a monitor (`[wallpaper] fit`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WallpaperFit {
-    /// The whole monitor, the image cropped to its shape.
-    Fill,
-    /// The whole image, `[colors] background` around it.
-    Fit,
-    /// The whole monitor and the whole image, out of shape.
-    Stretch,
-    /// The image at its size, in the middle.
-    Center,
-}
-
-impl WallpaperFit {
-    const NAMES: [(&'static str, WallpaperFit); 4] = [
-        ("fill", WallpaperFit::Fill),
-        ("fit", WallpaperFit::Fit),
-        ("stretch", WallpaperFit::Stretch),
-        ("center", WallpaperFit::Center),
-    ];
-
-    pub fn name(self) -> &'static str {
-        Self::NAMES
-            .iter()
-            .find(|(_, fit)| *fit == self)
-            .map_or("fill", |(name, _)| name)
-    }
-}
-
-/// `[wallpaper]`: the picture Pila draws behind everything (`wallpaper.rs`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WallpaperConfig {
-    /// An absolute path (`~/` expanded); none: `[colors] background`.
-    pub image: Option<std::path::PathBuf>,
-    pub fit: WallpaperFit,
-}
-
-/// `[wallpaper]` as written.
+/// `[wallpaper]` as written: an old file's. The wallpaper is swaybg's job
+/// (`autostart`); the section is still read, so such a file keeps working,
+/// and an image in it gets a warning with the swaybg line that draws it.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 struct WallpaperFile {
@@ -1657,49 +1672,21 @@ struct WallpaperFile {
 }
 
 impl WallpaperFile {
-    fn or_example(self, example: Self) -> Self {
-        or_example!(self, example, WallpaperFile { image, fit })
-    }
-
-    /// The section, and a warning if the image isn't there (yet).
-    fn validate(self, home: Option<&str>) -> Result<(WallpaperConfig, Option<String>), String> {
-        let name = need(self.fit, "wallpaper.fit")?;
-        let fit = WallpaperFit::NAMES
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, fit)| *fit)
-            .ok_or_else(|| {
-                format!("wallpaper.fit = {name:?}: must be fill, fit, stretch or center")
-            })?;
-        let image = match self.image.as_deref() {
-            None | Some("") => None,
-            Some(text) => Some(wallpaper_path(text, home)?),
+    fn warning(&self) -> Option<String> {
+        let image = self.image.as_deref().filter(|image| !image.is_empty())?;
+        // `~/` outside the quotes, for the shell to expand.
+        let (tilde, path) = match image.strip_prefix("~/") {
+            Some(rest) => ("~/", rest),
+            None => ("", image),
         };
-        let warning = image
-            .as_ref()
-            .filter(|path| !path.is_file())
-            .map(|path| format!("wallpaper.image: {} isn't there", path.display()));
-        Ok((WallpaperConfig { image, fit }, warning))
+        let quoted = format!("{tilde}'{}'", path.replace('\'', r"'\''"));
+        // swaybg's modes have the names `fit` took.
+        let mode = self.fit.as_deref().unwrap_or("fill");
+        Some(format!(
+            "[wallpaper]: Pila no longer draws the wallpaper, swaybg does: remove [wallpaper] \
+             and put \"swaybg -i {quoted} -m {mode}\" in `autostart`"
+        ))
     }
-}
-
-/// `[wallpaper] image` as a path: absolute, or `~/...` in `home`.
-fn wallpaper_path(text: &str, home: Option<&str>) -> Result<std::path::PathBuf, String> {
-    let path = match text.strip_prefix("~/") {
-        Some(rest) => {
-            let home = home
-                .filter(|h| !h.is_empty())
-                .ok_or_else(|| format!("wallpaper.image = {text:?}: HOME isn't set to expand ~"))?;
-            std::path::Path::new(home).join(rest)
-        }
-        None => std::path::PathBuf::from(text),
-    };
-    if !path.is_absolute() {
-        return Err(format!(
-            "wallpaper.image = {text:?}: must be an absolute path or start with ~/"
-        ));
-    }
-    Ok(path)
 }
 
 /// The largest `[shadow]` `size` and, either way, `offset` (logical pixels).
@@ -1789,10 +1776,10 @@ pub struct Config {
     /// `None`: the first of `TERMINALS` that is installed (`terminal_command`).
     pub terminal: Option<String>,
     /// `None`: no launcher (`launcher = ""`; unset, `EXAMPLE`'s
-    /// `pila-launcher`).
+    /// `fuzzel`).
     pub launcher: Option<String>,
     /// Commands run at startup (when no `-c` is given; unset, `EXAMPLE`'s
-    /// `pila-bar`).
+    /// `waybar`).
     pub autostart: Vec<String>,
     pub keyboard: KeyboardConfig,
     pub bindings: Vec<Binding>,
@@ -1804,6 +1791,12 @@ pub struct Config {
     pub workspaces: usize,
     /// Window corner radius in logical pixels; 0 is square (`rounded.rs`).
     pub corner_radius: u32,
+    /// Which of a window's corners it rounds: the top ones (as GTK's own
+    /// windows) or all four.
+    pub rounded_corners: crate::rounded::Corners,
+    /// Room around maximized windows, and around and between snapped ones,
+    /// in logical pixels (`snap::side_rect`, `snap::gapped`).
+    pub gaps: u32,
     /// Whether monitors on the seat's other GPUs are used, drawn on the
     /// primary and copied over (`udev/secondary.rs`). Off in `EXAMPLE`:
     /// untried on real hardware.
@@ -1819,6 +1812,9 @@ pub struct Config {
     /// Whether a frame is drawn as close to its vblank as it safely can be,
     /// for less latency (`udev/render_late.rs`).
     pub render_late: bool,
+    /// Whether Pila writes its own configuration for the tools it starts
+    /// where the user has none, at startup (`tool_configs.rs`).
+    pub tool_configs: bool,
     pub shadow: ShadowConfig,
     pub colors: Colors,
     /// Which animations play and how long they last (`animation.rs`).
@@ -1827,10 +1823,8 @@ pub struct Config {
     pub cursor: CursorConfig,
     /// `[xwayland]`: stopping it when unused.
     pub xwayland: XwaylandConfig,
-    /// `[idle]`: the monitors off after a while without input.
-    pub idle: IdleConfig,
-    /// `[wallpaper]`: the picture behind everything (`wallpaper.rs`).
-    pub wallpaper: WallpaperConfig,
+    /// `[overview]`: how it opens besides its binding (`overview.rs`).
+    pub overview: OverviewConfig,
     /// `[[window-rule]]` and `[[layer-rule]]`, in order (`rules.rs`).
     pub window_rules: Vec<crate::rules::WindowRule>,
     pub layer_rules: Vec<crate::rules::LayerRule>,
@@ -1889,6 +1883,42 @@ pub const EXAMPLE: &str = include_str!("../config.example.toml");
 /// there already (a file, or a symlink, even a broken one). `Ok(true)` when it
 /// wrote it.
 pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
+    create_new_file(path, EXAMPLE)
+}
+
+/// `EXAMPLE`'s own `launcher` and `autostart` commands, parsed once.
+#[derive(Default, Deserialize)]
+struct ExampleCommands {
+    #[serde(default)]
+    launcher: Option<String>,
+    #[serde(default)]
+    autostart: Vec<String>,
+}
+
+fn example_commands_parsed() -> &'static ExampleCommands {
+    static PARSED: std::sync::OnceLock<ExampleCommands> = std::sync::OnceLock::new();
+    // Tested to parse (`example_config_is_valid`); the rest is ignored here.
+    PARSED.get_or_init(|| toml::from_str(EXAMPLE).unwrap_or_default())
+}
+
+/// `EXAMPLE`'s own `autostart` commands: the defaults, which a file made from
+/// it (`create_default_file`) holds too, as opposed to commands the user
+/// chose (`Pila::autostart_installed`).
+pub fn example_autostart() -> &'static [String] {
+    &example_commands_parsed().autostart
+}
+
+/// Whether `command` is, as written, one of `EXAMPLE`'s own commands: its
+/// `launcher` or one of its `autostart` (`tool_configs::with_configs`).
+pub fn is_example_command(command: &str) -> bool {
+    let example = example_commands_parsed();
+    example.launcher.as_deref() == Some(command) || example.autostart.iter().any(|c| c == command)
+}
+
+/// Write `contents` to `path`, creating its directories, unless something is
+/// there already (a file, or a symlink, even a broken one). `Ok(true)` when it
+/// wrote it.
+pub fn create_new_file(path: &Path, contents: &str) -> std::io::Result<bool> {
     use std::io::Write;
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;
@@ -1904,18 +1934,22 @@ pub fn create_default_file(path: &Path) -> std::io::Result<bool> {
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
         Err(err) => return Err(err),
     };
-    file.write_all(EXAMPLE.as_bytes())?;
+    file.write_all(contents.as_bytes())?;
     Ok(true)
+}
+
+/// The user's configuration directory: `$XDG_CONFIG_HOME`, else `~/.config`.
+pub fn config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
 }
 
 impl Config {
     /// The config file pila reads without `--config`.
     pub fn default_path() -> Option<PathBuf> {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-        Some(base.join("pila/config.toml"))
+        Some(config_home()?.join("pila/config.toml"))
     }
 
     /// The file pila reads: `explicit` (`--config`) or the default path.
@@ -2017,6 +2051,24 @@ impl Config {
                 ))
             }
         };
+        let gaps = match need(file.gaps.or(example.gaps), "gaps")? {
+            g @ 0..=MAX_GAPS => g,
+            g => return Err(format!("gaps = {g}: must be 0 to {MAX_GAPS}")),
+        };
+        let rounded_corners = match need(
+            file.rounded_corners.or(example.rounded_corners),
+            "rounded-corners",
+        )?
+        .as_str()
+        {
+            "top" => crate::rounded::Corners::Top,
+            "all" => crate::rounded::Corners::All,
+            other => {
+                return Err(format!(
+                    "rounded-corners = {other:?}: must be \"top\" or \"all\""
+                ))
+            }
+        };
         let flag = |user: Option<bool>, example: Option<bool>, key| need(user.or(example), key);
         let other_gpus = flag(file.other_gpus, example.other_gpus, "other-gpus")?;
         let direct_scanout = flag(
@@ -2026,6 +2078,7 @@ impl Config {
         )?;
         let tearing = flag(file.tearing, example.tearing, "tearing")?;
         let render_late = flag(file.render_late, example.render_late, "render-late")?;
+        let tool_configs = flag(file.tool_configs, example.tool_configs, "tool-configs")?;
 
         let keyboard = file.keyboard.or_example(example.keyboard).validate()?;
         let shadow = file.shadow.or_example(example.shadow).validate()?;
@@ -2033,11 +2086,9 @@ impl Config {
         let animations = file.animations.or_example(example.animations).validate()?;
         let cursor = file.cursor.or_example(example.cursor).validate()?;
         let xwayland = file.xwayland.or_example(example.xwayland).validate()?;
-        let idle = file.idle.or_example(example.idle).validate()?;
-        let (wallpaper, wallpaper_warning) = file
-            .wallpaper
-            .or_example(example.wallpaper)
-            .validate(env("HOME").as_deref())?;
+        let overview = file.overview.or_example(example.overview).validate()?;
+        let idle_warning = file.idle.warning();
+        let wallpaper_warning = file.wallpaper.warning();
         let window_rules = file
             .window_rules
             .into_iter()
@@ -2129,6 +2180,7 @@ impl Config {
         entries.extend(file.environment);
         let environment = environment(entries, &mut warnings)?;
         warnings.extend(wallpaper_warning);
+        warnings.extend(idle_warning);
         for (i, output) in outputs.iter().enumerate() {
             // Once a name, at its second section.
             let before = outputs[..i].iter().filter(|o| o.name == output.name);
@@ -2179,17 +2231,19 @@ impl Config {
             input,
             workspaces,
             corner_radius,
+            rounded_corners,
+            gaps,
             other_gpus,
             direct_scanout,
             tearing,
             render_late,
+            tool_configs,
             shadow,
             colors,
             animations,
             cursor,
             xwayland,
-            idle,
-            wallpaper,
+            overview,
             window_rules,
             layer_rules: file.layer_rules,
             warnings,
@@ -2379,7 +2433,7 @@ mod tests {
         }
         assert_eq!(Action::parse("none"), Ok(None));
         let err = Action::parse("explode").unwrap_err();
-        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev>, snap <left|right|up|down> or none)"), "{err}");
+        assert!(err.contains("spawn <command>, terminal,") && err.ends_with("quit, focus-output <next|prev>, move-to-output <next|prev>, workspace <n|next|prev>, move-to-workspace <n|next|prev>, switch-layout <n|next|prev>, snap <left|right|up|down>, overview <open|close> or none)"), "{err}");
         assert_eq!(
             Action::parse("snap up"),
             Ok(Some(Action::SnapToward(Direction::Up)))
@@ -2456,11 +2510,20 @@ mod tests {
 
     #[test]
     fn launcher_and_autostart_left_out_are_the_examples() {
-        // As every setting: pila-launcher and pila-bar come from
-        // config.example.toml, not the code.
+        // As every setting: fuzzel, swaybg, waybar, mako and swayidle come
+        // from config.example.toml, not the code.
         let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.launcher.as_deref(), Some("pila-launcher"));
-        assert_eq!(config.autostart, ["pila-bar"]);
+        assert_eq!(config.launcher.as_deref(), Some("fuzzel"));
+        let programs: Vec<_> = config
+            .autostart
+            .iter()
+            .filter_map(|command| command.split_whitespace().next())
+            .collect();
+        assert_eq!(programs, ["swaybg", "waybar", "mako", "swayidle"]);
+        // swaybg alone: Pila gives it its wallpaper (`tool_configs.rs`).
+        assert_eq!(config.autostart[0], "swaybg");
+        assert!(config.autostart[3].contains("'swaylock -f'"));
+        assert!(config.autostart[3].contains("'pila msg action power-off-monitors'"));
         // "" (or blank) is no launcher, and [] starts nothing; PILA_LAUNCHER
         // still wins over the file.
         for text in [r#"launcher = """#, r#"launcher = "  ""#] {
@@ -2923,16 +2986,14 @@ mod tests {
         };
         assert_eq!(
             spawned(config.action_for(Keysym::s, &alt_shift)),
-            "pila-shot region"
+            "grim -g \"$(slurp)\" - | wl-copy"
         );
-        assert_eq!(
-            spawned(config.action_for(Keysym::s, &alt_ctrl)),
-            "pila-shot output"
-        );
+        assert!(spawned(config.action_for(Keysym::s, &alt_ctrl))
+            .contains("grim -o \"$PILA_OUTPUT\" ~/Pictures/screenshot-"));
     }
 
     #[test]
-    fn pilas_own_tools_are_defaults_a_file_can_swap() {
+    fn the_default_tools_are_ones_a_file_can_swap() {
         let spawned = |config: &Config| -> Vec<String> {
             config
                 .bindings
@@ -2943,38 +3004,49 @@ mod tests {
                 })
                 .collect()
         };
-        let pilas = |config: &Config| -> Vec<String> {
+        const TOOLS: [&str; 8] = [
+            "fuzzel",
+            "waybar",
+            "wpctl",
+            "brightnessctl",
+            "playerctl",
+            "grim",
+            "slurp",
+            "wl-copy",
+        ];
+        let named = |config: &Config| -> Vec<String> {
             let mut named: Vec<String> = spawned(config);
             named.extend(config.launcher.clone());
             named.extend(config.autostart.clone());
-            named.retain(|command| command.contains("pila-"));
+            named.retain(|command| TOOLS.iter().any(|tool| command.contains(tool)));
             named
         };
-        // By default, every one of them.
+        // By default, every one of them: standard tools, none of Pila's own.
         let defaults = Config::from_toml("", &no_env).unwrap();
-        let named = pilas(&defaults).join("\n");
-        for tool in ["pila-launcher", "pila-bar", "pila-osd", "pila-shot"] {
-            assert!(named.contains(tool), "{tool} isn't a default: {named}");
+        let all = named(&defaults).join("\n");
+        for tool in TOOLS {
+            assert!(all.contains(tool), "{tool} isn't a default: {all}");
         }
+        assert!(!all.contains("pila-"), "{all}");
         // One key of its own: that key's tool goes, the others stay.
         let own = Config::from_toml(
-            "[bindings]\n\"Mod+Shift+S\" = \"spawn grim -g \\\"$(slurp)\\\" - | wl-copy\"\n",
+            "[bindings]\n\"Mod+Shift+S\" = \"spawn flameshot gui\"\n",
             &no_env,
         )
         .unwrap();
         let alt_shift = mods(false, true, true, false);
         assert_eq!(
             own.action_for(Keysym::s, &alt_shift),
-            Some(Action::Spawn("grim -g \"$(slurp)\" - | wl-copy".into()))
+            Some(Action::Spawn("flameshot gui".into()))
         );
-        assert!(spawned(&own).iter().any(|c| c.contains("pila-osd")));
+        assert!(spawned(&own).iter().any(|c| c.contains("playerctl")));
         // All of them swapped: none is left, and the file still checks.
         let swapped = Config::from_toml(
-            "launcher = \"fuzzel\"\nautostart = [\"waybar\"]\ndefault-bindings = false\n",
+            "launcher = \"wofi --show drun\"\nautostart = [\"yambar\"]\ndefault-bindings = false\n",
             &no_env,
         )
         .unwrap();
-        assert_eq!(pilas(&swapped), Vec::<String>::new());
+        assert_eq!(named(&swapped), Vec::<String>::new());
     }
 
     #[test]
@@ -3074,64 +3146,56 @@ mod tests {
     }
 
     #[test]
-    fn monitors_go_off_after_ten_minutes_by_default_and_never_with_false() {
-        let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.idle.monitors_off, Some(600));
+    fn idle_monitors_off_is_left_to_swayidle_with_a_warning() {
+        // Not in the example: no warning for a file without it.
+        assert!(Config::from_toml("", &no_env).unwrap().warnings.is_empty());
         let idle = |text: &str| Config::from_toml(&format!("[idle]\n{text}"), &no_env);
-        assert_eq!(
-            idle("monitors-off = 30").unwrap().idle.monitors_off,
-            Some(30)
-        );
-        assert_eq!(
-            idle("monitors-off = false").unwrap().idle.monitors_off,
-            None
-        );
+        // `false` asked for what Pila does now: nothing to say.
+        assert!(idle("monitors-off = false").unwrap().warnings.is_empty());
         for text in [
+            "monitors-off = 600",
             "monitors-off = 0",
-            "monitors-off = 86401",
             "monitors-off = true",
         ] {
-            let error = idle(text).unwrap_err();
-            assert!(error.contains("idle.monitors-off"), "{text}: {error}");
+            let config = idle(text).unwrap();
+            assert_eq!(config.warnings.len(), 1, "{text}: {:?}", config.warnings);
+            let warning = &config.warnings[0];
+            assert!(
+                warning.contains("idle.monitors-off") && warning.contains("swayidle"),
+                "{text}: {warning}"
+            );
         }
         assert!(idle("monitors-off = \"soon\"").is_err());
+        assert!(idle("lock = 300").is_err());
     }
 
     #[test]
-    fn the_wallpaper_is_an_absolute_path_and_a_fit() {
-        let config = Config::from_toml("", &no_env).unwrap();
-        assert_eq!(config.wallpaper.image, None);
-        assert_eq!(config.wallpaper.fit, WallpaperFit::Fill);
-        let home = |name: &str| (name == "HOME").then(|| "/home/someone".to_string());
-        let wallpaper = |text: &str| Config::from_toml(&format!("[wallpaper]\n{text}"), &home);
-        let config = wallpaper("image = \"~/Pictures/a.jpg\"\nfit = \"center\"").unwrap();
-        assert_eq!(
-            config.wallpaper.image.as_deref(),
-            Some(std::path::Path::new("/home/someone/Pictures/a.jpg"))
-        );
-        assert_eq!(config.wallpaper.fit, WallpaperFit::Center);
-        // Not there: a warning, as it may come later.
-        assert!(
-            config
-                .warnings
-                .iter()
-                .any(|w| w.contains("wallpaper.image")),
-            "{:?}",
-            config.warnings
-        );
-        assert_eq!(wallpaper("image = \"\"").unwrap().wallpaper.image, None);
-        for (text, what) in [
-            ("image = \"pictures/a.jpg\"", "absolute"),
-            ("fit = \"tile\"", "wallpaper.fit"),
+    fn the_wallpaper_is_left_to_swaybg_with_a_warning() {
+        let wallpaper = |text: &str| Config::from_toml(&format!("[wallpaper]\n{text}"), &no_env);
+        // No image, nothing lost: nothing to say.
+        for text in ["", "image = \"\"", "fit = \"fit\""] {
+            let config = wallpaper(text).unwrap();
+            assert!(config.warnings.is_empty(), "{text}: {:?}", config.warnings);
+        }
+        // The swaybg line that draws it, quoted for the shell (~ still
+        // expands), in swaybg's mode of the same name.
+        for (text, line) in [
+            (
+                "image = \"~/Pictures/a b.jpg\"\nfit = \"center\"",
+                "swaybg -i ~/'Pictures/a b.jpg' -m center",
+            ),
+            (
+                "image = \"/srv/it's.png\"",
+                r#"swaybg -i '/srv/it'\''s.png' -m fill"#,
+            ),
         ] {
-            let error = wallpaper(text).unwrap_err();
-            assert!(error.contains(what), "{text}: {error}");
+            let config = wallpaper(text).unwrap();
+            assert_eq!(config.warnings.len(), 1, "{text}: {:?}", config.warnings);
+            let warning = &config.warnings[0];
+            assert!(warning.contains("[wallpaper]"), "{warning}");
+            assert!(warning.contains(line), "{text}: {warning}");
         }
-        let error = Config::from_toml("[wallpaper]\nimage = \"~/a.png\"", &no_env).unwrap_err();
-        assert!(error.contains("HOME"), "{error}");
-        for (name, fit) in WallpaperFit::NAMES {
-            assert_eq!(fit.name(), name);
-        }
+        assert!(wallpaper("picture = \"/a.png\"").is_err());
     }
 
     #[test]
@@ -3183,12 +3247,34 @@ mod tests {
     }
 
     #[test]
-    fn corner_radius_defaults_to_square_and_is_bounded() {
-        assert_eq!(Config::from_toml("", &no_env).unwrap().corner_radius, 0);
+    fn corners_default_to_gtks_and_are_bounded() {
+        // GTK's own windows: 8 px, the top corners only.
+        let config = Config::from_toml("", &no_env).unwrap();
+        assert_eq!(config.corner_radius, 8);
+        assert_eq!(config.rounded_corners, crate::rounded::Corners::Top);
         let config = Config::from_toml("corner-radius = 12", &no_env).unwrap();
         assert_eq!(config.corner_radius, 12);
+        let config = Config::from_toml("rounded-corners = \"all\"", &no_env).unwrap();
+        assert_eq!(config.rounded_corners, crate::rounded::Corners::All);
+        let err = Config::from_toml("rounded-corners = \"bottom\"", &no_env).unwrap_err();
+        assert!(err.contains("\"top\" or \"all\""), "{err}");
+        assert!(
+            Config::from_toml("corner-radius = 0", &no_env)
+                .unwrap()
+                .corner_radius
+                == 0
+        );
         assert!(Config::from_toml("corner-radius = 65", &no_env).is_err());
         assert!(Config::from_toml("corner-radius = -1", &no_env).is_err());
+    }
+
+    #[test]
+    fn gaps_default_to_none_and_are_bounded() {
+        assert_eq!(Config::from_toml("", &no_env).unwrap().gaps, 0);
+        assert_eq!(Config::from_toml("gaps = 12", &no_env).unwrap().gaps, 12);
+        let err = Config::from_toml("gaps = 129", &no_env).unwrap_err();
+        assert!(err.contains("gaps = 129: must be 0 to 128"), "{err}");
+        assert!(Config::from_toml("gaps = -1", &no_env).is_err());
     }
 
     #[test]
@@ -3430,18 +3516,18 @@ mod tests {
             name = "DP-1"
             scale = 1.25
             [[output]]
-            name = "LEN P27h-30"
+            name = "GSM 27GL850"
             scale = 1.5
             [[output]]
-            name = "LEN P27h-30 ABC"
+            name = "GSM 27GL850 ABC"
             scale = 2.0
             "#,
             &no_env,
         )
         .unwrap();
         let monitor = |serial: Option<&str>| Monitor {
-            make: "LEN".into(),
-            model: "P27h-30".into(),
+            make: "GSM".into(),
+            model: "27GL850".into(),
             serial: serial.map(str::to_string),
         };
         let scale = |name: &str, monitor: Option<&Monitor>| {
@@ -3459,18 +3545,6 @@ mod tests {
             serial: None,
         };
         assert_eq!(scale("DP-1", Some(&other)), Some(1.25));
-    }
-
-    #[test]
-    fn pila_launcher_tries_the_same_terminals() {
-        // Its own copy (`launcher/src/exec.rs`: it shares no code with Pila).
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/launcher/src/exec.rs");
-        let source = std::fs::read_to_string(path).unwrap();
-        let list: String = TERMINALS.iter().map(|t| format!("    {t:?},\n")).collect();
-        assert!(
-            source.contains(&format!("pub const TERMINALS: &[&str] = &[\n{list}];")),
-            "launcher/src/exec.rs's TERMINALS isn't {TERMINALS:?}"
-        );
     }
 
     #[test]
@@ -3656,7 +3730,7 @@ mod tests {
             .bindings
             .iter()
             .any(|b| b.action == Action::Spawn("kitty -e htop".into())));
-        let text = uncomment(r#"# "swipe-4-up" = "snap-left""#);
+        let text = uncomment(r#"# "swipe-5-left" = "snap-left""#);
         if let Err(err) = Config::from_toml(&text, &no_env) {
             panic!("an example gesture uncommented: {err}");
         }

@@ -1,5 +1,5 @@
 //! Telling the user when a command Pila ran needs a program that isn't
-//! installed: a binding's (`wpctl ... && pila-osd volume`), the
+//! installed: a binding's (`brightnessctl -q set 5%+`), the
 //! terminal, the launcher or `autostart`'s. The shell says "command not
 //! found" only to Pila's log; a key that silently does nothing is the first
 //! thing a new user meets.
@@ -218,6 +218,38 @@ impl Pila {
         }
     }
 
+    /// `autostart` as Pila runs it: without the example's own commands
+    /// (`config::example_autostart`, also in a file made from it) whose
+    /// programs aren't installed, which only the log mentions. Those are
+    /// the defaults, not the user's choice: the tools of a full desktop
+    /// (waybar, mako, swayidle) that a package such as `pila-desktop` brings,
+    /// and that a user may leave out. A command of the user's own still runs,
+    /// and its missing program is still notified (`notify_missing_programs`).
+    pub fn autostart_installed(&self) -> Vec<String> {
+        let defaults = crate::config::example_autostart();
+        let path = self.spawn_path();
+        self.config
+            .autostart
+            .iter()
+            .filter(|command| {
+                if !defaults.contains(*command) {
+                    return true;
+                }
+                let missing = missing(command, path.as_deref());
+                if missing.is_empty() {
+                    return true;
+                }
+                tracing::info!(
+                    command = command.as_str(),
+                    ?missing,
+                    "not starting the example's autostart command: not installed"
+                );
+                false
+            })
+            .cloned()
+            .collect()
+    }
+
     /// The `PATH` the programs Pila starts get: `[environment]`'s, else
     /// Pila's own.
     fn spawn_path(&self) -> Option<String> {
@@ -246,8 +278,8 @@ mod tests {
     fn the_programs_a_command_line_runs() {
         let cases: &[(&str, &[&str])] = &[
             (
-                "brightnessctl -q set 5%+ && pila-osd brightness",
-                &["brightnessctl", "pila-osd"],
+                "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && notify-send v",
+                &["wpctl", "notify-send"],
             ),
             ("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", &["wpctl"]),
             ("foot", &["foot"]),

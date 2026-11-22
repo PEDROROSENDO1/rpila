@@ -10,8 +10,7 @@ priority: optional
 maintainer: Ignacio Galmarino <igalmarino@gmail.com>
 description: A stacking Wayland compositor built on Smithay
 homepage: https://github.com/igalmarino/pila
-# Apache-2.0: the icons built into pila-bar and pila-osd (bar/icons).
-license: GPL-3.0-or-later AND Apache-2.0
+license: GPL-3.0-or-later
 
 contents:
   - src: stage/usr/bin/*
@@ -51,19 +50,17 @@ overrides:
       - libudev1
       - libxkbcommon0
     # X11 apps: Pila runs without (and with [xwayland] enabled = false).
+    # The rest is how apps work with any compositor: portals and xdg-open.
     recommends:
       - xwayland
-      - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The volume keys' default bindings (pila-osd sets the brightness and
-      # tells the media players itself).
-      - wireplumber
-    # Not installed by default: a desktop shell may have its own lock
-    # screen.
+    # The desktop's tools (bar, launcher, notifications, lock, the keys'
+    # programs) are pila-desktop's (nfpm-desktop.yaml): Pila alone is the
+    # compositor, and the defaults that aren't installed are skipped.
     suggests:
-      - swaylock
+      - pila-desktop
   # Built on the oldest Fedora maintained, 44: its glibc is the minimum.
   rpm:
     depends:
@@ -77,14 +74,8 @@ overrides:
       - libxkbcommon
     recommends:
       - xorg-x11-server-Xwayland
-      - kitty
       - xdg-desktop-portal-wlr
       - xdg-desktop-portal-gtk
       - xdg-utils
-      # The volume keys' default bindings (pila-osd sets the brightness and
-      # tells the media players itself).
-      - wireplumber
-    # Not installed by default: a desktop shell may have its own lock
-    # screen.
     suggests:
-      - swaylock
+      - pila-desktop

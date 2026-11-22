@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # A demo video of Pila: a sealed headless Pila (one 1920x1080 output at
-# scale 1.5, its default looks, pila-bar, swaybg on a generated gradient,
-# mako) where scripts/demo-scenes plays scenes with real input (windows opening,
-# moved, resized, snapped, maximized, minimized, Mod+Tab, blur, the
-# launcher, workspaces, the config applied as it's saved, shake to find,
+# scale 1.5, its default looks: waybar, mako and fuzzel with Pila's
+# configuration for them, swaybg with Pila's wallpaper) where
+# scripts/demo-scenes plays scenes with real input (windows opening, moved,
+# resized, snapped, maximized, minimized, Mod+Tab, blur, the launcher, the
+# shortcuts, workspaces, the config applied as it's saved, shake to find,
 # always on top, a notification), recorded by scripts/demo-record and
 # captioned by ffmpeg.
 #
@@ -23,9 +24,7 @@
 # Needs: kitty, vim, gtk4-demo and gtk4-print-editor (package gtk4-demos on
 # some distros), swaybg, mako, grim, wtype, notify-send (package libnotify),
 # python3, dbus-run-session (package dbus), and ffmpeg and libwebp but for
-# --shots. Uses target/release/pila, or PILA_BIN, and pila-bar and
-# pila-launcher from launcher/target/release (cargo build --release
-# --manifest-path launcher/Cargo.toml), or PILA_UI_DIR.
+# --shots, waybar and fuzzel. Uses target/release/pila, or PILA_BIN.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -48,7 +47,7 @@ if [ "$mode" = encode ]; then
     exec scripts/demo-scenes encode "$out" "$here"
 fi
 
-tools=(kitty vim gtk4-demo gtk4-print-editor swaybg mako grim wtype notify-send python3 dbus-run-session)
+tools=(kitty vim gtk4-demo gtk4-print-editor swaybg waybar fuzzel mako grim wtype notify-send python3 dbus-run-session)
 [ "$mode" = record ] && tools+=(ffmpeg)
 for tool in "${tools[@]}"; do
     if ! command -v "$tool" >/dev/null; then
@@ -62,66 +61,24 @@ if [ ! -x "$bin" ]; then
     exit 1
 fi
 bin=$(realpath "$bin")
-ui="${PILA_UI_DIR:-launcher/target/release}"
-for tool in pila-bar pila-launcher; do
-    if [ ! -x "$ui/$tool" ]; then
-        echo "$ui/$tool not found; build it first: cargo build --release --manifest-path launcher/Cargo.toml, or set PILA_UI_DIR" >&2
-        exit 1
-    fi
-done
-ui=$(realpath "$ui")
 
 sealed=$(mktemp -d)
 trap 'chmod -R u+w "${sealed:?}" 2>/dev/null || true; rm -rf "${sealed:?}"' EXIT
 home="$sealed/home"
 mkdir -p "$home/.config/pila" "$sealed/run" "$sealed/bin"
 chmod 700 "$sealed/run"
-# `pila msg` in the terminals runs this Pila, and the bar and the launcher
-# are the ones built here.
+# `pila msg` in the terminals runs this Pila.
 ln -s "$bin" "$sealed/bin/pila"
-ln -s "$ui/pila-bar" "$ui/pila-launcher" "$sealed/bin/"
 rm -rf "$out"
 mkdir -p "$out"
-
-# A quiet dark gradient, standard library only.
-python3 -I - "$out/wallpaper.png" <<'EOF'
-import math, struct, sys, zlib
-W, H = 1920, 1080
-rows = []
-for y in range(H):
-    row = bytearray([0])
-    for x in range(W):
-        t = (x / W) * 0.6 + (y / H) * 0.4
-        glow = math.exp(-(((x - W * 0.72) / (W * 0.45)) ** 2 + ((y - H * 0.3) / (H * 0.55)) ** 2))
-        row += bytes((int(18 + 22 * t + 30 * glow), int(22 + 26 * t + 34 * glow), int(34 + 40 * t + 52 * glow)))
-    rows.append(bytes(row))
-def chunk(kind, data):
-    body = kind + data
-    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
-with open(sys.argv[1], "wb") as out:
-    out.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
-              + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
-EOF
-
-# Notifications that go by themselves, in the title bars' colors.
-mkdir -p "$home/.config/mako"
-cat >"$home/.config/mako/config" <<'EOF'
-default-timeout=3500
-font=DejaVu Sans 11
-background-color=#2f3136
-text-color=#e6e6e6
-border-color=#4a4d55
-border-size=1
-margin=12
-EOF
 
 # Pila's config, which a scene edits in vim: what it changes comes first.
 cat >"$home/.config/pila/config.toml" <<'EOF'
 # Pila applies this file as soon as it's saved.
 mod = "super"
 terminal = "kitty"
-launcher = "pila-launcher"
-corner-radius = 0
+launcher = "fuzzel"
+corner-radius = 8
 
 [colors]
 bar = "#2f3136"

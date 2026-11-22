@@ -521,12 +521,12 @@ fn mod_d_runs_the_launcher_and_pila_launcher_overrides_it() {
 }
 
 #[test]
-fn pila_bar_and_pila_launcher_come_from_the_example_config() {
+fn the_bar_and_the_launcher_come_from_the_example_config() {
     use std::os::unix::fs::PermissionsExt;
-    // A pila-bar and a pila-launcher on PATH that say they ran.
-    let bin = std::env::temp_dir().join(format!("pila-own-bin-{}", std::process::id()));
+    // A waybar, a mako and a fuzzel on PATH that say they ran.
+    let bin = std::env::temp_dir().join(format!("pila-tools-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["pila-bar", "pila-launcher"] {
+    for name in ["waybar", "mako", "fuzzel"] {
         let script = bin.join(name);
         std::fs::write(
             &script,
@@ -545,9 +545,10 @@ fn pila_bar_and_pila_launcher_come_from_the_example_config() {
         ..Options::default()
     });
     pila.wait_log("created the config from the example");
-    assert_eq!(pila.wait_file("pila-bar"), "pila-bar\n");
+    assert_eq!(pila.wait_file("waybar"), "waybar\n");
+    assert_eq!(pila.wait_file("mako"), "mako\n");
     pila.combo("Super+d");
-    assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
+    assert_eq!(pila.wait_file("fuzzel"), "fuzzel\n");
 
     // A file of one's own that leaves them out: the built-in example's, as
     // every setting it leaves out.
@@ -557,9 +558,10 @@ fn pila_bar_and_pila_launcher_come_from_the_example_config() {
         env: vec![("PATH".into(), path.clone())],
         ..Options::default()
     });
-    assert_eq!(pila.wait_file("pila-bar"), "pila-bar\n");
+    assert_eq!(pila.wait_file("waybar"), "waybar\n");
+    assert_eq!(pila.wait_file("mako"), "mako\n");
     pila.combo("Super+d");
-    assert_eq!(pila.wait_file("pila-launcher"), "pila-launcher\n");
+    assert_eq!(pila.wait_file("fuzzel"), "fuzzel\n");
 
     // `launcher = ""` and `autostart = []`: neither, though both are installed.
     let mut pila = TestPila::start_with(Options {
@@ -891,31 +893,41 @@ fn bindings_ignore_unfocused_state_without_a_window() {
     assert!(pila.alive());
 }
 
-/// The two screenshot bindings run pila-shot: Mod+Ctrl+S the output under
-/// the pointer (`PILA_OUTPUT`) to a file, Mod+Shift+S a region to the
-/// clipboard. A stand-in on the `PATH` logs how it's called (pila-shot
-/// itself is `scripts/apps shot`'s).
+/// The two screenshot bindings run grim: Mod+Ctrl+S the output under the
+/// pointer (`PILA_OUTPUT`) to a file in ~/Pictures, Mod+Shift+S a region
+/// picked with slurp to the clipboard (wl-copy). Stand-ins on the `PATH` log
+/// how they're called.
 #[test]
-fn the_screenshot_bindings_run_pila_shot() {
+fn the_screenshot_bindings_run_grim() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("pila-shots-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("pila-screenshots-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let bin = dir.join("bin");
     std::fs::create_dir_all(&bin).unwrap();
-    let path = bin.join("pila-shot");
-    std::fs::write(
-        &path,
-        "#!/bin/sh\necho \"pila-shot $* on $PILA_OUTPUT\" >> \"$XDG_RUNTIME_DIR/shots\"\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    for (name, script) in [
+        ("grim", "echo \"grim $*\" >> \"$XDG_RUNTIME_DIR/shots\""),
+        ("slurp", "echo 1,2 3x4"),
+        (
+            "wl-copy",
+            "cat >/dev/null; echo wl-copy >> \"$XDG_RUNTIME_DIR/shots\"",
+        ),
+    ] {
+        let path = bin.join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let home = dir.join("home");
+    std::fs::create_dir_all(&home).unwrap();
     let path = format!(
         "{}:{}",
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
     let mut pila = TestPila::start_with(Options {
-        env: vec![("PATH".into(), path)],
+        env: vec![
+            ("PATH".into(), path),
+            ("HOME".into(), home.display().to_string()),
+        ],
         ..Options::default()
     });
     let shots = pila.dir.join("shots");
@@ -932,9 +944,15 @@ fn the_screenshot_bindings_run_pila_shot() {
     };
 
     pila.combo("Super+Ctrl+s");
-    logged("pila-shot output on HEADLESS-1\n");
+    let log = logged("grim -o HEADLESS-1 ");
+    let file = log.trim().rsplit(' ').next().unwrap().to_string();
+    assert!(
+        file.starts_with(&format!("{}/Pictures/screenshot-", home.display())),
+        "{log}"
+    );
+    assert!(home.join("Pictures").is_dir());
     pila.combo("Super+Shift+s");
-    logged("pila-shot region on HEADLESS-1\n");
+    logged("grim -g 1,2 3x4 -\nwl-copy\n");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1073,25 +1091,19 @@ fn another_key_stops_a_repeating_binding() {
     pila.key_release("Super");
 }
 
-/// The volume keys' default bindings run wpctl, then `pila-osd` to show the
-/// level; when the change fails (no PipeWire), nothing is shown. The
-/// brightness and media keys need no program but `pila-osd`, which changes
-/// the brightness and tells the player itself.
+/// The volume keys' default bindings run wpctl, the brightness keys
+/// brightnessctl and the media keys playerctl.
 #[test]
-fn volume_brightness_and_media_keys_run_wpctl_and_pila_osd() {
+fn volume_brightness_and_media_keys_run_wpctl_brightnessctl_and_playerctl() {
     use std::os::unix::fs::PermissionsExt;
-    // Programs on PATH that write their arguments to a file of their name;
-    // wpctl fails while `wpctl-fails` is there.
+    // Programs on PATH that write their arguments to a file of their name.
     let bin = std::env::temp_dir().join(format!("pila-media-bin-{}", std::process::id()));
     std::fs::create_dir_all(&bin).unwrap();
-    for name in ["wpctl", "pila-osd"] {
+    for name in ["wpctl", "brightnessctl", "playerctl"] {
         let script = bin.join(name);
         std::fs::write(
             &script,
-            format!(
-                "#!/bin/sh\necho \"$@\" >> \"$XDG_RUNTIME_DIR/{name}\"\n\
-                 [ ! -e \"$XDG_RUNTIME_DIR/{name}-fails\" ]\n"
-            ),
+            format!("#!/bin/sh\necho \"$@\" >> \"$XDG_RUNTIME_DIR/{name}\"\n"),
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1113,38 +1125,22 @@ fn volume_brightness_and_media_keys_run_wpctl_and_pila_osd() {
         }
     };
     let volume_up = "set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+";
-    ran(
-        &mut pila,
-        "XF86AudioRaiseVolume",
-        &[("wpctl", volume_up), ("pila-osd", "volume")],
-    );
+    ran(&mut pila, "XF86AudioRaiseVolume", &[("wpctl", volume_up)]);
     let volume_down = "set-volume @DEFAULT_AUDIO_SINK@ 5%-";
-    ran(
-        &mut pila,
-        "XF86AudioLowerVolume",
-        &[("wpctl", volume_down), ("pila-osd", "volume")],
-    );
+    ran(&mut pila, "XF86AudioLowerVolume", &[("wpctl", volume_down)]);
     let mute = "set-mute @DEFAULT_AUDIO_SINK@ toggle";
-    ran(
-        &mut pila,
-        "XF86AudioMute",
-        &[("wpctl", mute), ("pila-osd", "volume")],
-    );
+    ran(&mut pila, "XF86AudioMute", &[("wpctl", mute)]);
     let mic = "set-mute @DEFAULT_AUDIO_SOURCE@ toggle";
-    ran(
-        &mut pila,
-        "XF86AudioMicMute",
-        &[("wpctl", mic), ("pila-osd", "mic")],
-    );
+    ran(&mut pila, "XF86AudioMicMute", &[("wpctl", mic)]);
     ran(
         &mut pila,
         "XF86MonBrightnessUp",
-        &[("pila-osd", "brightness +5%")],
+        &[("brightnessctl", "-q set 5%+")],
     );
     ran(
         &mut pila,
         "XF86MonBrightnessDown",
-        &[("pila-osd", "brightness -5%")],
+        &[("brightnessctl", "-q -n set 5%-")],
     );
     for (key, args) in [
         ("XF86AudioPlay", "play-pause"),
@@ -1153,18 +1149,8 @@ fn volume_brightness_and_media_keys_run_wpctl_and_pila_osd() {
         ("XF86AudioPrev", "previous"),
         ("XF86AudioStop", "stop"),
     ] {
-        ran(&mut pila, key, &[("pila-osd", args)]);
+        ran(&mut pila, key, &[("playerctl", args)]);
     }
-
-    // A change that fails shows nothing.
-    std::fs::write(pila.dir.join("wpctl-fails"), "").unwrap();
-    ran(&mut pila, "XF86AudioMute", &[("wpctl", mute)]);
-    let osd = pila.dir.join("pila-osd");
-    pila.stays(
-        "no pila-osd after wpctl failed",
-        std::time::Duration::from_millis(300),
-        |_| !osd.exists(),
-    );
     let _ = std::fs::remove_dir_all(&bin);
 }
 

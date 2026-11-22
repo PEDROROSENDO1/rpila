@@ -47,7 +47,7 @@ use smithay::{
             Bind, Color32F, Frame, Offscreen, Renderer, Texture,
         },
     },
-    desktop::{LayerSurface, PopupManager, Window},
+    desktop::{LayerSurface, PopupKind, PopupManager, Window},
     reexports::{
         wayland_protocols::ext::background_effect::v1::server::{
             ext_background_effect_manager_v1::{
@@ -65,6 +65,7 @@ use smithay::{
     wayland::alpha_modifier::AlphaModifierSurfaceCachedState,
     wayland::compositor::{
         get_region_attributes, with_states, Cacheable, RectangleKind, RegionAttributes,
+        SurfaceAttributes,
     },
     wayland::seat::WaylandFocus,
 };
@@ -72,7 +73,7 @@ use tracing::{debug, warn};
 
 use crate::{
     render::{self, Behind, PilaRenderElement, PopupBlur, Scene},
-    rounded::Rounding,
+    rounded::{Corners, Rounding},
     Pila,
 };
 
@@ -188,19 +189,30 @@ pub fn window_blur_rects(
     }
 }
 
-/// The popups of a window that ask for blur (`render::PopupBlur`), unless a
-/// rule refuses it the window's blur (`blur = false`). `render_location` as in
-/// `window_blur_rects`.
+/// The popups of a window to blur behind (`render::PopupBlur`): those that
+/// ask, unless a rule refuses it the window's blur (`blur = false`); a rule's
+/// `popup-blur` decides for them alone: `true` blurs behind each one's
+/// geometry (not a shadow the client draws around it) or its input region
+/// there (`PopupArea::Geometry`), rounded by `popup-corner-radius`, `false`
+/// behind none. `render_location` as in `window_blur_rects`.
 pub fn window_popup_blurs(window: &Window, render_location: Point<i32, Logical>) -> Vec<PopupBlur> {
     let Some(toplevel) = window.toplevel() else {
         return Vec::new();
     };
-    if crate::rules::with_window_props(window, |props| props.blur) == Some(false) {
-        return Vec::new();
-    }
+    let (blur, popup_blur, radius) = crate::rules::with_window_props(window, |props| {
+        (props.blur, props.popup_blur, props.popup_corner_radius)
+    });
+    let area = match popup_blur.or(blur.filter(|blur| !blur)) {
+        Some(false) => return Vec::new(),
+        Some(true) => PopupArea::Geometry {
+            radius: radius.unwrap_or(0),
+        },
+        None => PopupArea::Client,
+    };
     popup_blurs(
         toplevel.wl_surface(),
         render_location + window.geometry().loc,
+        area,
     )
 }
 
@@ -210,33 +222,91 @@ pub fn layer_popup_blurs(layer: &LayerSurface, location: Point<i32, Logical>) ->
     if crate::rules::layer_props(layer).blur == Some(false) {
         return Vec::new();
     }
-    popup_blurs(layer.wl_surface(), location)
+    popup_blurs(layer.wl_surface(), location, PopupArea::Client)
 }
 
-/// The popups of `root` that ask for blur, menus and an input method's
-/// candidate window alike, their regions in space coordinates: their offsets
-/// are from `origin` (a window's geometry, a layer surface's top-left), as
+/// Where popups are blurred behind.
+#[derive(Clone, Copy)]
+enum PopupArea {
+    /// The client's region of each (none if it asks for none).
+    Client,
+    /// Each one's geometry, or the part of it the popup takes input in if
+    /// it set an input region (its shape: GTK's), the corners of that
+    /// geometry rounded by `radius` (0: square).
+    Geometry { radius: u32 },
+}
+
+/// The popups of `root` to blur behind, menus and an input method's candidate
+/// window alike, their regions in space coordinates: their offsets are from
+/// `origin` (a window's geometry, a layer surface's top-left), as
 /// `render::popup_elements` places them. A rule's `blur = true` is for its
-/// window or layer surface: a popup's is the client's region.
-fn popup_blurs(root: &WlSurface, origin: Point<i32, Logical>) -> Vec<PopupBlur> {
+/// window or layer surface: a popup's is `area`.
+fn popup_blurs(root: &WlSurface, origin: Point<i32, Logical>, area: PopupArea) -> Vec<PopupBlur> {
     PopupManager::popups_for_surface(root)
         .enumerate()
         .filter_map(|(index, (popup, offset))| {
             let surface = popup.wl_surface();
             let (region, size) = client_region(surface)?;
+            // Its surface's top-left.
             let loc = origin + offset - popup.geometry().loc;
-            let rects: Vec<Rectangle<i32, Logical>> =
-                region_rects(&region?, Rectangle::from_size(size))
+            let (rects, rounding) = match area {
+                PopupArea::Client => {
+                    let rects: Vec<Rectangle<i32, Logical>> =
+                        region_rects(&region?, Rectangle::from_size(size))
+                            .into_iter()
+                            .map(|rect| Rectangle::new(rect.loc + loc, rect.size))
+                            .collect();
+                    (rects, None)
+                }
+                PopupArea::Geometry { radius } => {
+                    let frame = popup_frame(&popup, size);
+                    let rects: Vec<Rectangle<i32, Logical>> = match input_region(surface) {
+                        Some(input) => region_rects(&input, frame),
+                        None => vec![frame],
+                    }
                     .into_iter()
+                    .filter(|rect| !rect.is_empty())
                     .map(|rect| Rectangle::new(rect.loc + loc, rect.size))
                     .collect();
+                    let rect = Rectangle::new(loc + frame.loc, frame.size);
+                    (
+                        rects,
+                        Rounding::new(rect, None, radius, Corners::All, false),
+                    )
+                }
+            };
             (!rects.is_empty()).then(|| PopupBlur {
                 surface: surface.clone(),
                 index,
                 rects,
+                rounding,
             })
         })
         .collect()
+}
+
+/// The input region `surface` set, if any (unset: all of it). GTK gives a
+/// popover's shape this way, arrow and rounded corners, in strips.
+fn input_region(surface: &WlSurface) -> Option<RegionAttributes> {
+    with_states(surface, |states| {
+        states
+            .cached_state
+            .get::<SurfaceAttributes>()
+            .current()
+            .input_region
+            .clone()
+    })
+}
+
+/// What a popup shows, surface-local: its geometry, or all of it (`size`)
+/// without one (Smithay's is then empty) or for an input method's (Smithay's
+/// is the text cursor's rectangle).
+fn popup_frame(popup: &PopupKind, size: Size<i32, Logical>) -> Rectangle<i32, Logical> {
+    match popup {
+        PopupKind::Xdg(_) => Some(popup.geometry()).filter(|geometry| !geometry.is_empty()),
+        PopupKind::InputMethod(_) => None,
+    }
+    .unwrap_or_else(|| Rectangle::from_size(size))
 }
 
 /// Whether nothing shows through `window`'s geometry: its main surface says
@@ -290,7 +360,7 @@ const SHAPE_UNIFORMS: &str = "\
 uniform vec2 target_size;
 uniform vec2 shape_loc;
 uniform vec2 shape_size;
-uniform float radius;
+uniform vec4 radii;
 ";
 
 const DOWN_FRAG: &str = "\
@@ -360,7 +430,7 @@ impl Shaders {
                 UP_FRAG.replace(
                     "(sum / 12.0) * alpha",
                     "(sum / 12.0) * alpha * rounding_alpha(\
-                     v_coords * target_size - shape_loc, shape_size, vec4(radius))",
+                     v_coords * target_size - shape_loc, shape_size, radii)",
                 ),
             ),
             &[
@@ -370,7 +440,7 @@ impl Shaders {
                 UniformName::new("target_size", UniformType::_2f),
                 UniformName::new("shape_loc", UniformType::_2f),
                 UniformName::new("shape_size", UniformType::_2f),
-                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("radii", UniformType::_4f),
             ],
         );
         match (down, up, up_rounded) {
@@ -392,7 +462,8 @@ impl Shaders {
 struct Shape {
     loc: Point<i32, Physical>,
     size: Size<i32, Physical>,
-    radius: f32,
+    /// Top-left, top-right, bottom-right, bottom-left.
+    radii: [f32; 4],
 }
 
 /// The blurred backdrop of one surface on one output.
@@ -570,7 +641,7 @@ fn pass(
             Uniform::new("target_size", target_size),
             Uniform::new("shape_loc", (shape.loc.x as f32, shape.loc.y as f32)),
             Uniform::new("shape_size", (shape.size.w as f32, shape.size.h as f32)),
-            Uniform::new("radius", shape.radius),
+            Uniform::new("radii", shape.radii),
         ]);
     }
     let mut target = renderer.bind(dst)?;
@@ -671,7 +742,7 @@ impl BlurCache {
                             &popup.surface,
                             Behind::WindowPopup(index, popup.index),
                             &popup.rects,
-                            None,
+                            popup.rounding.as_ref(),
                         );
                     }
                 }
@@ -697,7 +768,7 @@ impl BlurCache {
                         &popup.surface,
                         Behind::LayerPopup(index, popup.index),
                         &popup.rects,
-                        None,
+                        popup.rounding.as_ref(),
                     );
                 }
             }
@@ -742,7 +813,7 @@ impl BlurCache {
             Shape {
                 loc: shape.rect.loc,
                 size: shape.rect.size,
-                radius: shape.radius,
+                radii: shape.radii,
             }
         });
         if let Err(err) = self.prepare_entry(target, behind, &key, rect, size, rects, shape) {

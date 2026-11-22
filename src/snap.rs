@@ -212,22 +212,47 @@ pub fn snapped_side(window: &Window) -> Option<Side> {
     snap_state(window).map(|(side, _)| side)
 }
 
+/// `area` less `gap` on each side (`gaps`): what a maximized window fills.
+pub fn gapped(area: Rectangle<i32, Logical>, gap: u32) -> Rectangle<i32, Logical> {
+    let gap = gap as i32;
+    Rectangle::new(
+        (area.loc.x + gap, area.loc.y + gap).into(),
+        (
+            (area.size.w - 2 * gap).max(1),
+            (area.size.h - 2 * gap).max(1),
+        )
+            .into(),
+    )
+}
+
 /// The rectangle (window geometry, below a `bar`-high title bar) for the
-/// half or quarter of `area` that `side` names.
-pub fn side_rect(area: Rectangle<i32, Logical>, side: Side, bar: i32) -> Rectangle<i32, Logical> {
-    let left_w = area.size.w / 2;
-    let top_h = area.size.h / 2;
+/// half or quarter of `area` that `side` names, `gap` from the area's edges
+/// and from the other halves (`gaps`).
+pub fn side_rect(
+    area: Rectangle<i32, Logical>,
+    side: Side,
+    bar: i32,
+    gap: u32,
+) -> Rectangle<i32, Logical> {
+    let area = gapped(area, gap);
+    let gap = gap as i32;
+    // Each at least a pixel, whatever the gap (`MAX_GAPS` on a small output).
+    let left_w = ((area.size.w - gap) / 2).max(1);
+    let top_h = ((area.size.h - gap) / 2).max(1);
     let (x, w) = match (side.touches_left(), side.touches_right()) {
         (true, true) => (area.loc.x, area.size.w),
         (true, false) => (area.loc.x, left_w),
-        (false, _) => (area.loc.x + left_w, area.size.w - left_w),
+        (false, _) => (
+            area.loc.x + left_w + gap,
+            (area.size.w - left_w - gap).max(1),
+        ),
     };
     let (y, h) = match (side.touches_top(), side.touches_bottom()) {
         (true, true) => (area.loc.y, area.size.h),
         (true, false) => (area.loc.y, top_h),
-        (false, _) => (area.loc.y + top_h, area.size.h - top_h),
+        (false, _) => (area.loc.y + top_h + gap, (area.size.h - top_h - gap).max(1)),
     };
-    Rectangle::new((x, y + bar).into(), (w, h - bar).into())
+    Rectangle::new((x, y + bar).into(), (w, (h - bar).max(1)).into())
 }
 
 /// Which snap the pointer at `pos` asks for, given the output it's on.
@@ -278,8 +303,19 @@ impl Pila {
     }
 
     /// Give a window this geometry (location and size), tiled to `side` or
-    /// floating.
+    /// floating, and raise it.
     fn apply_rect(&mut self, window: &Window, rect: Rectangle<i32, Logical>, side: Option<Side>) {
+        self.place_rect(window, rect, side, true);
+    }
+
+    /// `apply_rect`, raising the window only with `raise`.
+    fn place_rect(
+        &mut self,
+        window: &Window,
+        rect: Rectangle<i32, Logical>,
+        side: Option<Side>,
+        raise: bool,
+    ) {
         if let Some(toplevel) = window.toplevel() {
             toplevel.with_pending_state(|state| {
                 use xdg_toplevel::State::*;
@@ -308,8 +344,12 @@ impl Pila {
         } else if let Some(x11) = window.x11_surface() {
             let _ = x11.configure(rect);
         }
-        self.map_window(window.clone(), rect.loc, true);
-        self.keep_transients_above(window);
+        if raise || self.space.element_location(window).is_none() {
+            self.map_window(window.clone(), rect.loc, true);
+            self.keep_transients_above(window);
+        } else {
+            self.move_window(window, rect.loc);
+        }
         self.x11_window_moved(window);
         self.queue_redraw();
     }
@@ -343,9 +383,41 @@ impl Pila {
         let Some(area) = self.usable_area_for(window) else {
             return;
         };
-        let rect = side_rect(area, side, decoration::layout_offset(window, false));
+        let rect = side_rect(
+            area,
+            side,
+            decoration::layout_offset(window, false),
+            self.config.gaps,
+        );
         set_snap_state(window, Some((side, before)));
         self.apply_rect(window, rect, Some(side));
+    }
+
+    /// Snapped windows on the `Space` to their half or quarter of the usable
+    /// area again, after it changed (a panel came, resized or went; the
+    /// output was resized), as `refit_to_usable_area` does maximized ones:
+    /// an app snapped at login before the bar was up stays under it
+    /// otherwise. Where they are in the stack stays.
+    pub(crate) fn refit_snapped(&mut self) {
+        let windows: Vec<(Window, Side)> = self
+            .space
+            .elements()
+            .filter_map(|window| snapped_side(window).map(|side| (window.clone(), side)))
+            .collect();
+        for (window, side) in windows {
+            let Some(area) = self.usable_area_for(&window) else {
+                continue;
+            };
+            let rect = side_rect(
+                area,
+                side,
+                decoration::layout_offset(&window, false),
+                self.config.gaps,
+            );
+            if self.window_rect(&window) != Some(rect) {
+                self.place_rect(&window, rect, Some(side), false);
+            }
+        }
     }
 
     /// If `window` is snapped: the same side of `area`, on another output, and it
@@ -362,7 +434,12 @@ impl Pila {
         before.loc = moved(before);
         self.animate_geometry(window);
         set_snap_state(window, Some((side, before)));
-        let rect = side_rect(area, side, decoration::layout_offset(window, false));
+        let rect = side_rect(
+            area,
+            side,
+            decoration::layout_offset(window, false),
+            self.config.gaps,
+        );
         self.apply_rect(window, rect, Some(side));
         true
     }
@@ -486,14 +563,14 @@ impl Pila {
         match target {
             SnapTarget::Side(side) => {
                 // The preview covers the title bar too.
-                let rect = side_rect(area, side, bar);
+                let rect = side_rect(area, side, bar, self.config.gaps);
                 Some(Rectangle::new(
                     (rect.loc.x, rect.loc.y - bar).into(),
                     (rect.size.w, rect.size.h + bar).into(),
                 ))
             }
             // Maximized, the bar is inside the area already.
-            SnapTarget::Maximize => Some(area),
+            SnapTarget::Maximize => Some(gapped(area, self.config.gaps)),
         }
     }
 
@@ -521,15 +598,39 @@ mod tests {
     #[test]
     fn halves_split_the_area_below_the_title_bar() {
         let area = Rectangle::new((0, 30).into(), (1921, 1050).into());
-        let left = side_rect(area, Side::Left, 28);
-        let right = side_rect(area, Side::Right, 28);
+        let left = side_rect(area, Side::Left, 28, 0);
+        let right = side_rect(area, Side::Right, 28, 0);
         assert_eq!(left, Rectangle::new((0, 58).into(), (960, 1022).into()));
         assert_eq!(right, Rectangle::new((960, 58).into(), (961, 1022).into()));
         // Top and bottom: the whole width, each its title bar.
-        let top = side_rect(area, Side::Top, 28);
-        let bottom = side_rect(area, Side::Bottom, 28);
+        let top = side_rect(area, Side::Top, 28, 0);
+        let bottom = side_rect(area, Side::Bottom, 28, 0);
         assert_eq!(top, Rectangle::new((0, 58).into(), (1921, 497).into()));
         assert_eq!(bottom, Rectangle::new((0, 583).into(), (1921, 497).into()));
+    }
+
+    #[test]
+    fn gaps_go_around_and_between_halves_and_quarters() {
+        let area = Rectangle::new((0, 30).into(), (1920, 1050).into());
+        assert_eq!(
+            gapped(area, 10),
+            Rectangle::new((10, 40).into(), (1900, 1030).into())
+        );
+        let left = side_rect(area, Side::Left, 28, 10);
+        let right = side_rect(area, Side::Right, 28, 10);
+        // 1900 less the gap between them, in two.
+        assert_eq!(left, Rectangle::new((10, 68).into(), (945, 1002).into()));
+        assert_eq!(right, Rectangle::new((965, 68).into(), (945, 1002).into()));
+        let top_left = side_rect(area, Side::TopLeft, 28, 10);
+        let bottom_left = side_rect(area, Side::BottomLeft, 28, 10);
+        assert_eq!(top_left, Rectangle::new((10, 68).into(), (945, 482).into()));
+        assert_eq!(
+            bottom_left,
+            Rectangle::new((10, 588).into(), (945, 482).into())
+        );
+        // Never smaller than a pixel, however large the gap.
+        let tiny = Rectangle::new((0, 0).into(), (100, 100).into());
+        assert!(!side_rect(tiny, Side::Left, 28, 128).is_empty());
     }
 
     #[test]

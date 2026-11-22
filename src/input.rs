@@ -211,6 +211,9 @@ impl Pila {
         // the window menu, a binding's repeat to start, a tap's action (run
         // once the client got the release).
         let mut menu_key = None;
+        // A key that hides the shortcuts cheatsheet (`shortcuts_view.rs`).
+        let mut hide_shortcuts = false;
+        let mut overview_key = None;
         let mut repeat_next = None;
         let mut tap_action = None;
         // `input_from_source`, but while locked a key that isn't Pila's goes
@@ -290,6 +293,26 @@ impl Pila {
                         let action = sym
                             .and_then(|sym| state.config.action_for(sym, mods))
                             .filter(|action| allowed(state, action));
+                        // The cheatsheet goes with any key but a modifier;
+                        // a binding still runs (`show-shortcuts` hides it
+                        // itself), any other key goes nowhere else.
+                        if state.shortcuts_shown() && !handle.modified_sym().is_modifier_key() {
+                            hide_shortcuts = action != Some(Action::ShowShortcuts);
+                            if action.is_none() {
+                                state.input.suppressed_keys.insert(keycode);
+                                return FilterResult::Intercept(None);
+                            }
+                        }
+                        // The overview takes every key that's no binding
+                        // (bindings close it or work in it: `run_action`).
+                        if action.is_none()
+                            && state.overview_open()
+                            && !handle.modified_sym().is_modifier_key()
+                        {
+                            state.input.suppressed_keys.insert(keycode);
+                            overview_key = Some(handle.modified_sym());
+                            return FilterResult::Intercept(None);
+                        }
                         if let Some(action) = action {
                             state.input.suppressed_keys.insert(keycode);
                             if sym.is_some_and(|sym| state.config.repeats(sym, mods)) {
@@ -337,6 +360,12 @@ impl Pila {
         if let Some(sym) = menu_key {
             self.window_menu_key(sym);
         }
+        if hide_shortcuts {
+            self.hide_shortcuts();
+        }
+        if let Some(sym) = overview_key {
+            self.overview_key(sym);
+        }
         if let Some(action) = action.flatten() {
             self.run_action(action, serial);
         }
@@ -344,6 +373,9 @@ impl Pila {
             self.start_binding_repeat(keycode, action);
         }
         if let Some(action) = tap_action {
+            if action != Action::ShowShortcuts {
+                self.hide_shortcuts();
+            }
             self.run_action(action, serial);
             acted = true;
         }
@@ -619,6 +651,8 @@ impl Pila {
         );
         pointer.frame(self);
         self.shake_cursor_motion(location);
+        self.overview_pointer_moved(location);
+        self.hot_corner(location, pointer.is_grabbed());
 
         if !pointer.is_grabbed() {
             // Over pila's own decorations no client sets the cursor, so pila does.
@@ -730,6 +764,14 @@ impl Pila {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
+        // The release of a press the overview took on a window picks or
+        // drops it, and goes nowhere else.
+        if button_state == ButtonState::Released
+            && self.overview_release(pointer.current_location(), button)
+        {
+            self.input.suppressed_buttons.remove(&button);
+            return;
+        }
         // A click that wakes the monitors does only that, release included.
         match button_state {
             ButtonState::Pressed if self.wake_monitors() => {
@@ -756,6 +798,16 @@ impl Pila {
                 at: std::time::Instant::now(),
             });
         }
+        // A click hides the shortcuts cheatsheet: on it, it does nothing else
+        // (its release neither).
+        if button_state == ButtonState::Pressed && self.shortcuts_shown() {
+            let on_it = self.shortcuts_view_covers(pointer.current_location());
+            self.hide_shortcuts();
+            if on_it {
+                self.input.suppressed_buttons.insert(button);
+                return;
+            }
+        }
         // A click on a tile of the switcher ends the switch on that window,
         // and does nothing else (its release neither).
         if button_state == ButtonState::Pressed {
@@ -768,6 +820,15 @@ impl Pila {
         // A click picks the window itself; a Mod+Tab in progress is over.
         if button_state == ButtonState::Pressed {
             self.end_switch();
+        }
+        // The overview takes a click on a window or beside them, and its
+        // release.
+        if button_state == ButtonState::Pressed
+            && !self.is_locked()
+            && self.overview_press(pointer.current_location(), button)
+        {
+            self.input.suppressed_buttons.insert(button);
+            return;
         }
 
         if button_state == ButtonState::Pressed && self.is_locked() {

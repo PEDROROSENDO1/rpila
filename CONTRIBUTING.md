@@ -16,8 +16,7 @@ too; see [Use of AI](README.md#use-of-ai) for the terms.
 - **No distro assumptions**: the code and the host-side scripts must work without systemd
   (elogind or seatd), on any distro, with configurable install paths.
 - Before sending a change: `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and
-  `cargo test`, and for the launcher and the bar (`launcher/` and `bar/`, a cargo workspace of their own) the same with
-  `--manifest-path launcher/Cargo.toml` (`cargo fmt --all`) (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu,
+  `cargo test` (CI runs them too, plus `shellcheck` on the scripts; builds on Debian, Ubuntu,
   Fedora and Nix, with the oldest supported Rust, and `cargo audit` run when dependencies, the
   Nix files, `scripts/install` or `resources/` change, and weekly). Every feature gets
   integration tests (`tests/*.rs`, on a headless Pila; a new test goes into `tests/FEATURES.md`), and unit tests cover pure
@@ -88,7 +87,7 @@ by hand) runs every target for a few minutes and keeps what crashed.
 
 Pila is developed in a dev container on any Linux host with Docker, from inside Pila itself
 (or another desktop, kept as a fallback session), with **Claude Code** running inside the
-container. (The author's host is Arch, with Pila as its only desktop.)
+container.
 
 - An Arch Linux image with Rust stable (rust-analyzer, clippy, rustfmt), mold, gdb, and
   every library Pila needs (winit, DRM/KMS, libinput)

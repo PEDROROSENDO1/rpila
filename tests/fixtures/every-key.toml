@@ -10,11 +10,14 @@ terminal = "kitty"
 launcher = "fuzzel"
 autostart = ["swaybg -c '#202020'", "waybar"]
 workspaces = 4
+gaps = 12
 corner-radius = 8
+rounded-corners = "top"
 other-gpus = false
 direct-scanout = true
 tearing = true
 render-late = true
+tool-configs = true
 default-bindings = true
 
 [environment]
@@ -50,6 +53,7 @@ minimize = true
 maximize = 220
 layer = 150
 workspace = 250
+overview = 250
 
 [cursor]
 theme = "Adwaita"
@@ -60,6 +64,9 @@ shake-magnification = 2.5
 [xwayland]
 idle-timeout = 30
 enabled = true
+
+[overview]
+hot-corner = false
 
 [idle]
 monitors-off = 900
@@ -130,6 +137,9 @@ click-method = "button-areas"
 "Mod+T" = "toggle-always-on-top"
 "Mod+P" = "toggle-all-workspaces"
 "Mod+H" = "show-desktop"
+"Mod+Shift+slash" = "show-shortcuts"
+"Mod+W" = "overview"
+"Mod+Shift+W" = "overview open"
 "Mod+F11" = "power-off-monitors"
 "Mod+F12" = "power-on-monitors"
 "Mod+Shift+E" = "quit"
@@ -199,6 +209,8 @@ title-bar = false
 corner-radius = 12
 opacity = 0.95
 blur = true
+popup-blur = true
+popup-corner-radius = 12
 shadow = false
 
 [[window-rule]]

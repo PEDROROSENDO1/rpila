@@ -60,6 +60,10 @@ impl Pila {
     /// layer. A Top surface that takes the keyboard (a launcher) stays above
     /// it, so what gets the keys is shown.
     pub fn top_layer_covered(&self, output: &Output) -> bool {
+        // The overview shrinks the fullscreen window.
+        if self.overview_open() || self.overview_moving() {
+            return false;
+        }
         let top = self
             .space
             .elements()
@@ -188,7 +192,7 @@ impl Pila {
             layer.layer_surface().send_configure();
         }
         if zone_changed {
-            self.refit_maximized();
+            self.refit_to_usable_area();
         }
         self.layer_committed(&layer);
 
@@ -236,7 +240,7 @@ impl Pila {
             self.queue_redraw_output(&output);
         }
         if zone_changed {
-            self.refit_maximized();
+            self.refit_to_usable_area();
         }
         if was_focused {
             self.focus_recent_window();

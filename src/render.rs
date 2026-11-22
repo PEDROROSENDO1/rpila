@@ -191,11 +191,17 @@ pub struct Scene {
     pub hidden_windows: Vec<WlSurface>,
     /// `corner-radius` from the config, for the snap preview.
     pub corner_radius: u32,
-    /// `[wallpaper]`'s picture, under everything (`wallpaper.rs`).
-    pub wallpaper: Option<crate::wallpaper::SceneWallpaper>,
+    /// `rounded-corners`, for the snap preview.
+    pub rounded_corners: rounded::Corners,
     /// The window switcher, in front of everything but the cursor
     /// (`switcher_view.rs`).
     pub switcher: Option<crate::switcher_view::SceneSwitcher>,
+    /// The shortcuts cheatsheet, in front of the switcher
+    /// (`shortcuts_view.rs`).
+    pub shortcuts: Option<crate::shortcuts_view::SceneShortcuts>,
+    /// The overview: its windows are among `windows`, mapped onto their
+    /// places; what it draws behind them is below them (`overview.rs`).
+    pub overview: Option<crate::overview::SceneOverview>,
     pub colors: Colors,
 }
 
@@ -216,8 +222,10 @@ impl Scene {
             window_menu: None,
             hidden_windows: Vec::new(),
             corner_radius: 0,
-            wallpaper: None,
+            rounded_corners: rounded::Corners::All,
             switcher: None,
+            shortcuts: None,
+            overview: None,
             colors,
         }
     }
@@ -230,6 +238,8 @@ impl Scene {
             || self.slide.is_some()
             || self.window_menu.is_some()
             || self.switcher.is_some()
+            || self.shortcuts.is_some()
+            || self.overview.is_some()
         {
             return false;
         }
@@ -256,9 +266,12 @@ pub struct PopupBlur {
     pub index: usize,
     /// Where it's blurred, in space coordinates.
     pub rects: Vec<Rectangle<i32, Logical>>,
+    /// The blur's rounded corners (a rule's `popup-corner-radius`).
+    pub rounding: Option<Rounding>,
 }
 
 /// A layer surface and where it's drawn, in space coordinates.
+#[derive(Clone)]
 pub struct SceneLayer {
     pub layer: LayerSurface,
     pub location: Point<i32, Logical>,
@@ -519,8 +532,15 @@ fn scene_elements_from(
                 ));
             }
             if let Some((buffer, rect)) = &scene.snap_preview {
-                let radius =
-                    Rounding::new(*rect, None, scene.corner_radius, false).map(|r| r.radius);
+                // Shaped as the window dropped there would be.
+                let radius = Rounding::new(
+                    *rect,
+                    None,
+                    scene.corner_radius,
+                    scene.rounded_corners,
+                    false,
+                )
+                .map(|r| (r.radius, r.corners));
                 elements.push(solid_element(
                     renderer,
                     buffer,
@@ -577,6 +597,16 @@ fn scene_elements_from(
             ));
         }
     }
+    if let Some(view) = &scene.overview {
+        elements.extend(crate::overview::overview_elements(
+            renderer,
+            view,
+            &scene.colors,
+            visible,
+            output_location,
+            scale,
+        ));
+    }
     elements.extend(layer_elements(
         renderer,
         &scene.lower,
@@ -585,13 +615,6 @@ fn scene_elements_from(
         visible,
         None,
     ));
-    if let Some(wallpaper) = &scene.wallpaper {
-        elements.extend(
-            wallpaper
-                .elements(output_location, scale, visible)
-                .map(PilaRenderElement::Texture),
-        );
-    }
     elements
 }
 
@@ -778,6 +801,48 @@ fn window_elements(
     elements
 }
 
+/// A workspace's thumbnail for the overview's strip (`overview.rs`): the
+/// output at `output` with `windows` (front to back) over `layers` (its
+/// wallpaper) and `background`, drawn into `target` at `scale` (the output's,
+/// times how much smaller the thumbnail is). Its own damage tracker redraws
+/// only what changed. No blur behind them: a thumbnail is small.
+pub(crate) fn draw_thumbnail(
+    renderer: &mut GlesRenderer,
+    target: &mut OffscreenWindow,
+    windows: &[SceneWindow],
+    layers: &[SceneLayer],
+    background: &SolidColorBuffer,
+    output: Rectangle<i32, Logical>,
+    scale: Scale<f64>,
+) -> bool {
+    let mut elements = window_elements(
+        renderer,
+        windows,
+        &[],
+        output.loc,
+        scale,
+        &mut |_, _, _, _| None,
+        Some(output),
+    );
+    elements.extend(layer_elements(
+        renderer,
+        layers,
+        output.loc,
+        scale,
+        Some(output),
+        None,
+    ));
+    elements.push(solid_element(
+        renderer,
+        background,
+        Point::default(),
+        None,
+        1.0,
+        scale,
+    ));
+    target.draw(renderer, &elements)
+}
+
 /// Where a window's surface elements come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Surfaces {
@@ -823,7 +888,7 @@ fn single_window_elements(
             renderer,
             buffer,
             rect.loc - output_location,
-            rounding.map(|r| r.radius),
+            rounding.map(|r| (r.radius, r.corners)),
             entry.alpha,
             scale,
         ));
@@ -1087,7 +1152,7 @@ pub fn warm_up(renderer: &mut GlesRenderer) {
             renderer,
             &buffer,
             origin,
-            Some(8.0),
+            Some((8.0, Corners::All)),
             0.5,
             scale,
         ));
@@ -1573,20 +1638,16 @@ fn solid_element(
     renderer: &mut GlesRenderer,
     buffer: &SolidColorBuffer,
     loc: Point<i32, Logical>,
-    radius: Option<f64>,
+    rounding: Option<(f64, Corners)>,
     alpha: f32,
     scale: Scale<f64>,
 ) -> PilaRenderElement {
     let loc: Point<i32, Physical> = loc.to_physical_precise_round(scale);
     let element =
         SolidColorRenderElement::from_buffer(buffer, loc, scale, alpha, Kind::Unspecified);
-    match radius.zip(radius.and_then(|_| rounded::Shaders::get(renderer))) {
-        Some((radius, shaders)) => PilaRenderElement::RoundedSolid(RoundedSolid::new(
-            element,
-            &shaders,
-            radius,
-            Corners::All,
-            scale,
+    match rounding.zip(rounding.and_then(|_| rounded::Shaders::get(renderer))) {
+        Some(((radius, corners), shaders)) => PilaRenderElement::RoundedSolid(RoundedSolid::new(
+            element, &shaders, radius, corners, scale,
         )),
         None => PilaRenderElement::Solid(element),
     }
@@ -1787,6 +1848,17 @@ pub fn output_elements(
         Some(view) => crate::switcher_view::elements(renderer, view, &scene.colors, origin, scale),
         None => Vec::new(),
     };
+    if let Some(view) = scene
+        .shortcuts
+        .as_ref()
+        .filter(|view| !scene.locked && view.output == output_name)
+    {
+        // In front of the switcher: it's first, front to back.
+        let mut front =
+            crate::shortcuts_view::elements(renderer, view, &scene.colors, origin, scale);
+        front.append(&mut elements);
+        elements = front;
+    }
     if let Some(menu) = scene.window_menu.as_ref().filter(|_| !scene.locked) {
         elements.extend(crate::window_menu::elements(
             renderer,
